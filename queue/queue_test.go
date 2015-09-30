@@ -7,8 +7,8 @@ import (
 	"time"
 
 	key "github.com/ipfs/go-ipfs/blocks/key"
-	peer "github.com/ipfs/go-ipfs/p2p/peer"
 	u "github.com/ipfs/go-ipfs/util"
+	peer "github.com/ipfs/go-libp2p/p2p/peer"
 
 	context "github.com/ipfs/go-ipfs/Godeps/_workspace/src/golang.org/x/net/context"
 )

@@ -11,9 +11,9 @@ import (
 	ma "github.com/ipfs/go-ipfs/Godeps/_workspace/src/github.com/jbenet/go-multiaddr"
 	mh "github.com/ipfs/go-ipfs/Godeps/_workspace/src/github.com/jbenet/go-multihash"
 
-	ic "github.com/ipfs/go-ipfs/p2p/crypto"
 	u "github.com/ipfs/go-ipfs/util"
 	logging "github.com/ipfs/go-ipfs/vendor/go-log-v1.0.0"
+	ic "github.com/ipfs/go-libp2p/p2p/crypto"
 )
 
 var log = logging.Logger("peer")

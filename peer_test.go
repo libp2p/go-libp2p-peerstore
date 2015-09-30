@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	ic "github.com/ipfs/go-ipfs/p2p/crypto"
-	. "github.com/ipfs/go-ipfs/p2p/peer"
 	u "github.com/ipfs/go-ipfs/util"
 	tu "github.com/ipfs/go-ipfs/util/testutil"
+	ic "github.com/ipfs/go-libp2p/p2p/crypto"
+	. "github.com/ipfs/go-libp2p/p2p/peer"
 
 	b58 "github.com/ipfs/go-ipfs/Godeps/_workspace/src/github.com/jbenet/go-base58"
 )
