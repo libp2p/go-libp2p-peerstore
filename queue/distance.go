@@ -7,7 +7,6 @@ import (
 
 	ks "Qma4vHVBYKDiKS5VpvtLNJHHDbL7S6VRsvxxmBnBFfKP3k/go-keyspace"
 	peer "github.com/ipfs/go-libp2p/p2p/peer"
-	key "github.com/whyrusleeping/go-key"
 )
 
 // peerMetric tracks a peer and its distance to something else.
@@ -93,9 +92,9 @@ func (pq *distancePQ) Dequeue() peer.ID {
 // NewXORDistancePQ returns a PeerQueue which maintains its peers sorted
 // in terms of their distances to each other in an XORKeySpace (i.e. using
 // XOR as a metric of distance).
-func NewXORDistancePQ(fromKey key.Key) PeerQueue {
+func NewXORDistancePQ(from string) PeerQueue {
 	return &distancePQ{
-		from: ks.XORKeySpace.Key([]byte(fromKey)),
+		from: ks.XORKeySpace.Key([]byte(from)),
 		heap: peerMetricHeap{},
 	}
 }
