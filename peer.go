@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"strings"
 
-	b58 "github.com/jbenet/go-base58"
-	ma "github.com/jbenet/go-multiaddr"
-	mh "github.com/jbenet/go-multihash"
+	b58 "QmNsoHoCVhgXcv1Yg45jtkMgimxorTAN36fV9AQMFXHHAQ/go-base58"
+	ma "QmaA6aDzeHjZiuqBtgYRz8ZXb1qMCoyMHgyDjBEYQniUKF/go-multiaddr"
+	mh "QmdeauTdyf38KDQB4Cc4CurPWRRb5pej27NCXPA7kbPTJy/go-multihash"
 
 	logging "QmWRypnfEwrgH4k93KEHN5hng7VjKYkWmzDYRuTZeh2Mgh/go-log"
 	ic "github.com/ipfs/go-libp2p/p2p/crypto"

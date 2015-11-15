@@ -11,7 +11,7 @@ import (
 	u "util"
 	tu "util/testutil"
 
-	b58 "github.com/jbenet/go-base58"
+	b58 "QmNsoHoCVhgXcv1Yg45jtkMgimxorTAN36fV9AQMFXHHAQ/go-base58"
 )
 
 var gen1 keyset // generated
