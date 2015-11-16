@@ -12,8 +12,8 @@ import (
 	mh "QmdsKjp5fcCT8PZ8JBMcdFsCbbmKwSLCU5xXbsnwb5DMxy/go-multihash"
 
 	logging "QmWRypnfEwrgH4k93KEHN5hng7VjKYkWmzDYRuTZeh2Mgh/go-log"
+	u "Qmah3kfjwhVxBM4qGnrqJTqGzrF8svwByyhExPipA2U6LE/go-ipfs-util"
 	ic "github.com/ipfs/go-libp2p/p2p/crypto"
-	u "util"
 )
 
 var log = logging.Logger("peer")

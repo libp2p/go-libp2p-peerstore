@@ -7,7 +7,7 @@ import (
 	"time"
 
 	peer "github.com/ipfs/go-libp2p/p2p/peer"
-	u "util"
+	u "Qmah3kfjwhVxBM4qGnrqJTqGzrF8svwByyhExPipA2U6LE/go-ipfs-util"
 
 	context "QmacZi9WygGK7Me8mH53pypyscHzU386aUZXpr28GZgUct/context"
 )
