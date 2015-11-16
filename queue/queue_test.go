@@ -9,7 +9,7 @@ import (
 	peer "github.com/ipfs/go-libp2p/p2p/peer"
 	u "util"
 
-	context "golang.org/x/net/context"
+	context "QmacZi9WygGK7Me8mH53pypyscHzU386aUZXpr28GZgUct/context"
 )
 
 func TestQueue(t *testing.T) {
