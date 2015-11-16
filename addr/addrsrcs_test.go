@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	ma "QmaA6aDzeHjZiuqBtgYRz8ZXb1qMCoyMHgyDjBEYQniUKF/go-multiaddr"
+	ma "QmbWxL1aXQhBjc1XGjGF1f2KGBMCBYSuT2ThA8YXnXJK83/go-multiaddr"
 )
 
 func newAddrOrFatal(t *testing.T, s string) ma.Multiaddr {

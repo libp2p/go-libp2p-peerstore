@@ -7,7 +7,7 @@ import (
 
 	ic "github.com/ipfs/go-libp2p/p2p/crypto"
 
-	ma "QmaA6aDzeHjZiuqBtgYRz8ZXb1qMCoyMHgyDjBEYQniUKF/go-multiaddr"
+	ma "QmbWxL1aXQhBjc1XGjGF1f2KGBMCBYSuT2ThA8YXnXJK83/go-multiaddr"
 	ds "github.com/jbenet/go-datastore"
 	dssync "github.com/jbenet/go-datastore/sync"
 )

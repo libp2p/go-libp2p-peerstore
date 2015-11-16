@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	ma "QmaA6aDzeHjZiuqBtgYRz8ZXb1qMCoyMHgyDjBEYQniUKF/go-multiaddr"
+	ma "QmbWxL1aXQhBjc1XGjGF1f2KGBMCBYSuT2ThA8YXnXJK83/go-multiaddr"
 )
 
 func IDS(t *testing.T, ids string) ID {

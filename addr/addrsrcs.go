@@ -2,7 +2,7 @@
 package addr
 
 import (
-	ma "QmaA6aDzeHjZiuqBtgYRz8ZXb1qMCoyMHgyDjBEYQniUKF/go-multiaddr"
+	ma "QmbWxL1aXQhBjc1XGjGF1f2KGBMCBYSuT2ThA8YXnXJK83/go-multiaddr"
 )
 
 // AddrSource is a source of addresses. It allows clients to retrieve
