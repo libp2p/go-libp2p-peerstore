@@ -9,7 +9,7 @@ import (
 	ic "github.com/ipfs/go-libp2p/p2p/crypto"
 	. "github.com/ipfs/go-libp2p/p2p/peer"
 	u "util"
-	tu "util/testutil"
+	tu "github.com/ipfs/go-libp2p/testutil"
 
 	b58 "QmNsoHoCVhgXcv1Yg45jtkMgimxorTAN36fV9AQMFXHHAQ/go-base58"
 )
