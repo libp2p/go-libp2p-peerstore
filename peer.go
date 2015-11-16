@@ -9,7 +9,7 @@ import (
 
 	b58 "QmNsoHoCVhgXcv1Yg45jtkMgimxorTAN36fV9AQMFXHHAQ/go-base58"
 	ma "QmbWxL1aXQhBjc1XGjGF1f2KGBMCBYSuT2ThA8YXnXJK83/go-multiaddr"
-	mh "QmdeauTdyf38KDQB4Cc4CurPWRRb5pej27NCXPA7kbPTJy/go-multihash"
+	mh "QmdsKjp5fcCT8PZ8JBMcdFsCbbmKwSLCU5xXbsnwb5DMxy/go-multihash"
 
 	logging "QmWRypnfEwrgH4k93KEHN5hng7VjKYkWmzDYRuTZeh2Mgh/go-log"
 	ic "github.com/ipfs/go-libp2p/p2p/crypto"
