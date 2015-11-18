@@ -9,9 +9,9 @@ import (
 	ic "github.com/ipfs/go-libp2p/p2p/crypto"
 	. "github.com/ipfs/go-libp2p/p2p/peer"
 	tu "github.com/ipfs/go-libp2p/testutil"
-	u "Qmah3kfjwhVxBM4qGnrqJTqGzrF8svwByyhExPipA2U6LE/go-ipfs-util"
+	u "gx/QmQA79FfVsUnGkH3TgKDqcDkupfjqLSJ6EYwDuDDZK8nhD/go-ipfs-util"
 
-	b58 "QmNsoHoCVhgXcv1Yg45jtkMgimxorTAN36fV9AQMFXHHAQ/go-base58"
+	b58 "gx/QmNsoHoCVhgXcv1Yg45jtkMgimxorTAN36fV9AQMFXHHAQ/go-base58"
 )
 
 var gen1 keyset // generated

@@ -7,13 +7,13 @@ import (
 	"fmt"
 	"strings"
 
-	b58 "QmNsoHoCVhgXcv1Yg45jtkMgimxorTAN36fV9AQMFXHHAQ/go-base58"
-	ma "QmbWxL1aXQhBjc1XGjGF1f2KGBMCBYSuT2ThA8YXnXJK83/go-multiaddr"
-	mh "QmdsKjp5fcCT8PZ8JBMcdFsCbbmKwSLCU5xXbsnwb5DMxy/go-multihash"
+	b58 "gx/QmNsoHoCVhgXcv1Yg45jtkMgimxorTAN36fV9AQMFXHHAQ/go-base58"
+	ma "gx/QmVUi2ncqnU48zsPgR1rQosDGwY3SSZ1Ndp33j33YjXdsj/go-multiaddr"
+	mh "gx/Qma7dqy7ZVH4tkNJdC9TRrA82Uz5fQfbbwuvmNVVc17r7a/go-multihash"
 
-	logging "QmWRypnfEwrgH4k93KEHN5hng7VjKYkWmzDYRuTZeh2Mgh/go-log"
-	u "Qmah3kfjwhVxBM4qGnrqJTqGzrF8svwByyhExPipA2U6LE/go-ipfs-util"
 	ic "github.com/ipfs/go-libp2p/p2p/crypto"
+	u "gx/QmQA79FfVsUnGkH3TgKDqcDkupfjqLSJ6EYwDuDDZK8nhD/go-ipfs-util"
+	logging "gx/QmfZZB1aVXWA4kaR5R4e9NifERT366TTCSagkfhmAbYLsu/go-log"
 )
 
 var log = logging.Logger("peer")
@@ -43,7 +43,7 @@ func (id ID) String() string {
 
 	//All sha256 nodes start with Qm
 	//We can skip the Qm to make the peer.ID more useful
-	if strings.HasPrefix(pid, "Qm") {
+	if strings.HasPrefix(pid, "gx/Qm") {
 		pid = pid[2:]
 	}
 

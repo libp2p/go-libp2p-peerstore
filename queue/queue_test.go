@@ -7,9 +7,9 @@ import (
 	"time"
 
 	peer "github.com/ipfs/go-libp2p/p2p/peer"
-	u "Qmah3kfjwhVxBM4qGnrqJTqGzrF8svwByyhExPipA2U6LE/go-ipfs-util"
+	u "gx/QmQA79FfVsUnGkH3TgKDqcDkupfjqLSJ6EYwDuDDZK8nhD/go-ipfs-util"
 
-	context "QmacZi9WygGK7Me8mH53pypyscHzU386aUZXpr28GZgUct/context"
+	context "gx/QmacZi9WygGK7Me8mH53pypyscHzU386aUZXpr28GZgUct/context"
 )
 
 func TestQueue(t *testing.T) {

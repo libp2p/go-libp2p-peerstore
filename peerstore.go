@@ -7,9 +7,9 @@ import (
 
 	ic "github.com/ipfs/go-libp2p/p2p/crypto"
 
-	ma "QmbWxL1aXQhBjc1XGjGF1f2KGBMCBYSuT2ThA8YXnXJK83/go-multiaddr"
-	ds "github.com/jbenet/go-datastore"
-	dssync "github.com/jbenet/go-datastore/sync"
+	//ds "github.com/jbenet/go-datastore"
+	//dssync "github.com/jbenet/go-datastore/sync"
+	ma "gx/QmVUi2ncqnU48zsPgR1rQosDGwY3SSZ1Ndp33j33YjXdsj/go-multiaddr"
 )
 
 const (
@@ -153,7 +153,10 @@ type peerstore struct {
 	AddrManager
 
 	// store other data, like versions
-	ds ds.ThreadSafeDatastore
+	//ds ds.ThreadSafeDatastore
+	// TODO: use a datastore for this
+	ds     map[string]interface{}
+	dslock sync.Mutex
 }
 
 // NewPeerstore creates a threadsafe collection of peers.
@@ -162,18 +165,31 @@ func NewPeerstore() Peerstore {
 		keybook:     *newKeybook(),
 		metrics:     *(NewMetrics()).(*metrics),
 		AddrManager: AddrManager{},
-		ds:          dssync.MutexWrap(ds.NewMapDatastore()),
+		//ds:          dssync.MutexWrap(ds.NewMapDatastore()),
+		ds: make(map[string]interface{}),
 	}
 }
 
 func (ps *peerstore) Put(p ID, key string, val interface{}) error {
-	dsk := ds.NewKey(string(p) + "/" + key)
-	return ps.ds.Put(dsk, val)
+	//dsk := ds.NewKey(string(p) + "/" + key)
+	//return ps.ds.Put(dsk, val)
+	ps.dslock.Lock()
+	defer ps.dslock.Unlock()
+	ps.ds[string(p)+"/"+key] = val
+	return nil
 }
 
 func (ps *peerstore) Get(p ID, key string) (interface{}, error) {
-	dsk := ds.NewKey(string(p) + "/" + key)
-	return ps.ds.Get(dsk)
+	//dsk := ds.NewKey(string(p) + "/" + key)
+	//return ps.ds.Get(dsk)
+
+	ps.dslock.Lock()
+	defer ps.dslock.Unlock()
+	i, ok := ps.ds[string(p)+"/"+key]
+	if !ok {
+		return nil, errors.New("item not found")
+	}
+	return i, nil
 }
 
 func (ps *peerstore) Peers() []ID {
