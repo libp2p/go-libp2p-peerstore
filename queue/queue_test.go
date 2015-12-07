@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
+	u "github.com/ipfs/go-ipfs-util"
 	peer "github.com/ipfs/go-libp2p/p2p/peer"
-	u "gx/QmQA79FfVsUnGkH3TgKDqcDkupfjqLSJ6EYwDuDDZK8nhD/go-ipfs-util"
 
-	context "gx/QmacZi9WygGK7Me8mH53pypyscHzU386aUZXpr28GZgUct/context"
+	context "golang.org/x/net/context"
 )
 
 func TestQueue(t *testing.T) {
