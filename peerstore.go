@@ -9,7 +9,7 @@ import (
 
 	//ds "github.com/jbenet/go-datastore"
 	//dssync "github.com/jbenet/go-datastore/sync"
-	ma "github.com/jbenet/go-multiaddr"
+	ma "gx/ipfs/QmR3JkmZBKYXgNMNsNZawm914455Qof3PEopwuVSeXG7aV/go-multiaddr"
 )
 
 const (

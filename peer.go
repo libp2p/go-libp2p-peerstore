@@ -7,13 +7,13 @@ import (
 	"fmt"
 	"strings"
 
-	b58 "github.com/jbenet/go-base58"
-	ma "github.com/jbenet/go-multiaddr"
-	mh "github.com/jbenet/go-multihash"
+	ma "gx/ipfs/QmR3JkmZBKYXgNMNsNZawm914455Qof3PEopwuVSeXG7aV/go-multiaddr"
+	b58 "gx/ipfs/QmT8rehPR3F6bmwL6zjUN8XpiDBFFpMP2myPdC6ApsWfJf/go-base58"
+	mh "gx/ipfs/QmYf7ng2hG5XBtJA3tN34DQ2GUN5HNksEw1rLDkmr6vGku/go-multihash"
 
-	u "github.com/ipfs/go-ipfs-util"
 	ic "github.com/ipfs/go-libp2p/p2p/crypto"
-	logging "github.com/ipfs/go-log"
+	u "gx/ipfs/QmZNVWh8LLjAavuQ2JXuFmuYH3C11xo988vSgp7UQrTRj1/go-ipfs-util"
+	logging "gx/ipfs/Qmazh5oNUVsDZTs2g59rq8aYQqwpss8tcUWQzor5sCCEuH/go-log"
 )
 
 var log = logging.Logger("peer")

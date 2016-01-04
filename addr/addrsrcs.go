@@ -2,7 +2,7 @@
 package addr
 
 import (
-	ma "github.com/jbenet/go-multiaddr"
+	ma "gx/ipfs/QmR3JkmZBKYXgNMNsNZawm914455Qof3PEopwuVSeXG7aV/go-multiaddr"
 )
 
 // AddrSource is a source of addresses. It allows clients to retrieve

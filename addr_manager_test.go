@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	ma "github.com/jbenet/go-multiaddr"
+	ma "gx/ipfs/QmR3JkmZBKYXgNMNsNZawm914455Qof3PEopwuVSeXG7aV/go-multiaddr"
 )
 
 func IDS(t *testing.T, ids string) ID {
