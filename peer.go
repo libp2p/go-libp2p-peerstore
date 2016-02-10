@@ -141,6 +141,13 @@ type PeerInfo struct {
 	Addrs []ma.Multiaddr
 }
 
+func (pi *PeerInfo) Loggable() map[string]interface{} {
+	return map[string]interface{}{
+		"peerID": pi.ID.Pretty(),
+		"addrs":  pi.Addrs,
+	}
+}
+
 func (pi *PeerInfo) MarshalJSON() ([]byte, error) {
 	out := make(map[string]interface{})
 	out["ID"] = IDB58Encode(pi.ID)
