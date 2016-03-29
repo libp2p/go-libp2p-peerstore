@@ -41,7 +41,7 @@ func (id ID) String() string {
 
 	//All sha256 nodes start with Qm
 	//We can skip the Qm to make the peer.ID more useful
-	if strings.HasPrefix(pid, "gx/Qm") {
+	if strings.HasPrefix(pid, "Qm") {
 		pid = pid[2:]
 	}
 
