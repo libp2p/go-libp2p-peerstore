@@ -10,6 +10,7 @@ import (
 	//ds "github.com/jbenet/go-datastore"
 	//dssync "github.com/jbenet/go-datastore/sync"
 	ma "github.com/jbenet/go-multiaddr"
+	"golang.org/x/net/context"
 )
 
 const (
@@ -31,6 +32,11 @@ type Peerstore interface {
 	// This is a small slice of the information Peerstore has on
 	// that peer, useful to other services.
 	PeerInfo(ID) PeerInfo
+
+	// AddrStream returns a channel that gets all addresses for a given
+	// peer sent on it. If new addresses are added after the call is made
+	// they will be sent along through the channel as well.
+	AddrStream(context.Context, ID) <-chan ma.Multiaddr
 
 	// Get/Put is a simple registry for other peer-related key/value pairs.
 	// if we find something we use often, it should become its own set of
