@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	peer "github.com/ipfs/go-libp2p/p2p/peer"
+	peer "github.com/ipfs/go-libp2p-peer"
 	testutil "github.com/ipfs/go-libp2p/testutil"
 )
 

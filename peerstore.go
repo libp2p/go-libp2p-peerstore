@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	ic "github.com/ipfs/go-libp2p/p2p/crypto"
+	ic "github.com/ipfs/go-libp2p-crypto"
 
 	//ds "github.com/jbenet/go-datastore"
 	//dssync "github.com/jbenet/go-datastore/sync"

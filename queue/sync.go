@@ -1,7 +1,7 @@
 package queue
 
 import (
-	peer "github.com/ipfs/go-libp2p/p2p/peer"
+	peer "github.com/ipfs/go-libp2p-peer"
 	logging "github.com/ipfs/go-log"
 	context "golang.org/x/net/context"
 )

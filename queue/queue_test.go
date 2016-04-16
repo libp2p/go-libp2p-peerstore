@@ -7,7 +7,7 @@ import (
 	"time"
 
 	u "github.com/ipfs/go-ipfs-util"
-	peer "github.com/ipfs/go-libp2p/p2p/peer"
+	peer "github.com/ipfs/go-libp2p-peer"
 
 	context "golang.org/x/net/context"
 )
