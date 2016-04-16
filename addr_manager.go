@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	ma "gx/ipfs/QmcobAGsCjYt5DXoq9et9L8yR8er7o7Cu3DTvpaq12jYSz/go-multiaddr"
+	ma "github.com/jbenet/go-multiaddr"
 )
 
 const (

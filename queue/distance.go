@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	peer "github.com/ipfs/go-libp2p/p2p/peer"
-	ks "gx/ipfs/QmUusaX99BZoELh7dmPgirqRQ1FAmMnmnBn3oiqDFGBUSc/go-keyspace"
+	ks "github.com/whyrusleeping/go-keyspace"
 )
 
 // peerMetric tracks a peer and its distance to something else.
