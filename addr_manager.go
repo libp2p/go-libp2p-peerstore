@@ -1,9 +1,11 @@
 package peer
 
 import (
+	"sort"
 	"sync"
 	"time"
 
+	addr "github.com/ipfs/go-libp2p-peer/addr"
 	ma "github.com/jbenet/go-multiaddr"
 	"golang.org/x/net/context"
 )
@@ -258,7 +260,7 @@ func (mgr *AddrManager) AddrStream(ctx context.Context, p ID) <-chan ma.Multiadd
 		initial = append(initial, a.Addr)
 	}
 
-	// TODO: sort these?
+	sort.Sort(addr.AddrList(initial))
 
 	go func(buffer []ma.Multiaddr) {
 		defer close(out)
