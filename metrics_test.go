@@ -51,7 +51,7 @@ func TestLatencyEWMA(t *testing.T) {
 	mu := exp
 	sig := 10.0
 	next := func() time.Duration {
-		mu = (rand.NormFloat64() * sig) + mu
+		mu := (rand.NormFloat64() * sig) + mu
 		return time.Duration(mu)
 	}
 
