@@ -33,11 +33,6 @@ type Peerstore interface {
 	// that peer, useful to other services.
 	PeerInfo(ID) PeerInfo
 
-	// AddrStream returns a channel that gets all addresses for a given
-	// peer sent on it. If new addresses are added after the call is made
-	// they will be sent along through the channel as well.
-	AddrStream(context.Context, ID) <-chan ma.Multiaddr
-
 	// Get/Put is a simple registry for other peer-related key/value pairs.
 	// if we find something we use often, it should become its own set of
 	// methods. this is a last resort.
@@ -66,6 +61,11 @@ type AddrBook interface {
 
 	// Addresses returns all known (and valid) addresses for a given
 	Addrs(p ID) []ma.Multiaddr
+
+	// AddrStream returns a channel that gets all addresses for a given
+	// peer sent on it. If new addresses are added after the call is made
+	// they will be sent along through the channel as well.
+	AddrStream(context.Context, ID) <-chan ma.Multiaddr
 
 	// ClearAddresses removes all previously stored addresses
 	ClearAddrs(p ID)
