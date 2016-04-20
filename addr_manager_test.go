@@ -88,6 +88,10 @@ func TestAddresses(t *testing.T) {
 	m.ClearAddrs(id5)
 	m.AddAddrs(id5, []ma.Multiaddr{ma51, ma52, ma53, ma54, ma55}, ttl) // clearing
 
+	if len(m.Peers()) != 5 {
+		t.Fatal("should have exactly two peers in the address book")
+	}
+
 	// test the Addresses return value
 	testHas(t, []ma.Multiaddr{ma11}, m.Addrs(id1))
 	testHas(t, []ma.Multiaddr{ma21, ma22}, m.Addrs(id2))
@@ -113,6 +117,10 @@ func TestAddressesExpire(t *testing.T) {
 	m.AddAddr(id1, ma13, time.Hour)
 	m.AddAddr(id2, ma24, time.Hour)
 	m.AddAddr(id2, ma25, time.Hour)
+
+	if len(m.Peers()) != 2 {
+		t.Fatal("should have exactly two peers in the address book")
+	}
 
 	testHas(t, []ma.Multiaddr{ma11, ma12, ma13}, m.Addrs(id1))
 	testHas(t, []ma.Multiaddr{ma24, ma25}, m.Addrs(id2))
@@ -177,4 +185,18 @@ func TestClearWorks(t *testing.T) {
 
 	testHas(t, nil, m.Addrs(id1))
 	testHas(t, nil, m.Addrs(id2))
+}
+
+func TestSetNegativeTTLClears(t *testing.T) {
+	id1 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
+	ma11 := MA(t, "/ip4/1.2.3.1/tcp/1111")
+
+	m := AddrManager{}
+	m.SetAddr(id1, ma11, time.Hour)
+
+	testHas(t, []ma.Multiaddr{ma11}, m.Addrs(id1))
+
+	m.SetAddr(id1, ma11, -1)
+
+	testHas(t, nil, m.Addrs(id1))
 }

@@ -2,6 +2,7 @@ package peer_test
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"testing"
 	"time"
@@ -36,5 +37,33 @@ func TestLatencyEWMAFun(t *testing.T) {
 			m.RecordLatency(id, next())
 			print()
 		}
+	}
+}
+
+func TestLatencyEWMA(t *testing.T) {
+	m := peer.NewMetrics()
+	id, err := testutil.RandPeerID()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exp := 100.0
+	mu := exp
+	sig := 10.0
+	next := func() time.Duration {
+		mu = (rand.NormFloat64() * sig) + mu
+		return time.Duration(mu)
+	}
+
+	for i := 0; i < 10; i++ {
+		select {
+		case <-time.After(200 * time.Millisecond):
+			m.RecordLatency(id, next())
+		}
+	}
+
+	lat := m.LatencyEWMA(id)
+	if math.Abs(exp-float64(lat)) > sig {
+		t.Fatal("latency outside of expected range: ", exp, lat, sig)
 	}
 }
