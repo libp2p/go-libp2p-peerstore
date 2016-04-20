@@ -2,6 +2,7 @@ package peer
 
 import (
 	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -9,9 +10,9 @@ import (
 	"golang.org/x/net/context"
 )
 
-func TestAddrStream(t *testing.T) {
+func getAddrs(t *testing.T, n int) []ma.Multiaddr {
 	var addrs []ma.Multiaddr
-	for i := 0; i < 100; i++ {
+	for i := 0; i < n; i++ {
 		a, err := ma.NewMultiaddr(fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", i))
 		if err != nil {
 			t.Fatal(err)
@@ -19,6 +20,11 @@ func TestAddrStream(t *testing.T) {
 
 		addrs = append(addrs, a)
 	}
+	return addrs
+}
+
+func TestAddrStream(t *testing.T) {
+	addrs := getAddrs(t, 100)
 
 	pid := ID("testpeer")
 
@@ -80,5 +86,95 @@ func TestAddrStream(t *testing.T) {
 
 	for _, a := range addrs[80:] {
 		ps.AddAddr(pid, a, time.Hour)
+	}
+}
+
+func TestGetStreamBeforePeerAdded(t *testing.T) {
+	addrs := getAddrs(t, 10)
+	pid := ID("testpeer")
+
+	ps := NewPeerstore()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ach := ps.AddrStream(ctx, pid)
+
+	for i := 0; i < 10; i++ {
+		ps.AddAddr(pid, addrs[i], time.Hour)
+	}
+
+	received := make(map[string]bool)
+	var count int
+
+	for i := 0; i < 10; i++ {
+		a, ok := <-ach
+		if !ok {
+			t.Fatal("channel shouldnt be closed yet")
+		}
+		if a == nil {
+			t.Fatal("got a nil address, thats weird")
+		}
+		count++
+		if received[a.String()] {
+			t.Fatal("received duplicate address")
+		}
+		received[a.String()] = true
+	}
+
+	select {
+	case <-ach:
+		t.Fatal("shouldnt have received any more addresses")
+	default:
+	}
+
+	if count != 10 {
+		t.Fatal("should have received exactly ten addresses, got ", count)
+	}
+
+	for _, a := range addrs {
+		if !received[a.String()] {
+			t.Log(received)
+			t.Fatalf("expected to receive address %s but didnt", a)
+		}
+	}
+}
+
+func TestAddrStreamDuplicates(t *testing.T) {
+	addrs := getAddrs(t, 10)
+	pid := ID("testpeer")
+
+	ps := NewPeerstore()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ach := ps.AddrStream(ctx, pid)
+
+	go func() {
+		for i := 0; i < 10; i++ {
+			ps.AddAddr(pid, addrs[i], time.Hour)
+			ps.AddAddr(pid, addrs[rand.Intn(10)], time.Hour)
+		}
+
+		// make sure that all addresses get processed before context is cancelled
+		time.Sleep(time.Millisecond * 50)
+		cancel()
+	}()
+
+	received := make(map[string]bool)
+	var count int
+	for a := range ach {
+		if a == nil {
+			t.Fatal("got a nil address, thats weird")
+		}
+		count++
+		if received[a.String()] {
+			t.Fatal("received duplicate address")
+		}
+		received[a.String()] = true
+	}
+
+	if count != 10 {
+		t.Fatal("should have received exactly ten addresses")
 	}
 }

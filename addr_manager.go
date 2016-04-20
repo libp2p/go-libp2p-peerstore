@@ -266,7 +266,7 @@ func (mgr *AddrManager) AddrStream(ctx context.Context, p ID) <-chan ma.Multiadd
 		defer close(out)
 
 		sent := make(map[string]bool)
-		outch := out
+		var outch chan ma.Multiaddr
 
 		for _, a := range buffer {
 			sent[a.String()] = true
@@ -276,6 +276,7 @@ func (mgr *AddrManager) AddrStream(ctx context.Context, p ID) <-chan ma.Multiadd
 		if len(buffer) > 0 {
 			next = buffer[0]
 			buffer = buffer[1:]
+			outch = out
 		}
 
 		for {
