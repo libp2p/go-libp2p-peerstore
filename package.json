@@ -33,7 +33,7 @@
     },
     {
       "author": "whyrusleeping",
-      "hash": "QmcobAGsCjYt5DXoq9et9L8yR8er7o7Cu3DTvpaq12jYSz",
+      "hash": "QmYzDkkgAEmrcNzFCiYo6L1dTX4EAG1gZkbtdbd9trL4vd",
       "name": "go-multiaddr",
       "version": "0.0.0"
     },
@@ -51,14 +51,14 @@
     },
     {
       "author": "whyrusleeping",
-      "hash": "QmaP38GJApheTr84f8R89vsT7oJLQw1AeCz4HqrQgv2njB",
+      "hash": "QmUEUu1CM8bxBJxc3ZLojAi8evhTr4byQogWstABet79oY",
       "name": "go-libp2p-crypto",
-      "version": "1.0.0"
+      "version": "1.0.2"
     }
   ],
   "gxVersion": "0.4.0",
   "language": "go",
   "license": "MIT",
   "name": "go-libp2p-peer",
-  "version": "1.0.3"
+  "version": "1.0.5"
 }
