@@ -109,7 +109,7 @@ func (mgr *AddrManager) AddAddrs(p ID, addrs []ma.Multiaddr, ttl time.Duration) 
 			continue
 		}
 
-		addrstr := addr.String()
+		addrstr := string(addr.Bytes())
 		a, found := amap[addrstr]
 		if !found || exp.After(a.TTL) {
 			amap[addrstr] = expiringAddr{Addr: addr, TTL: exp}
@@ -144,7 +144,7 @@ func (mgr *AddrManager) SetAddrs(p ID, addrs []ma.Multiaddr, ttl time.Duration) 
 			continue
 		}
 		// re-set all of them for new ttl.
-		addrs := addr.String()
+		addrs := string(addr.Bytes())
 
 		if ttl > 0 {
 			amap[addrs] = expiringAddr{Addr: addr, TTL: exp}
