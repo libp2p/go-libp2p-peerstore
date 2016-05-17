@@ -200,3 +200,10 @@ func TestSetNegativeTTLClears(t *testing.T) {
 
 	testHas(t, nil, m.Addrs(id1))
 }
+
+func TestNilAddrsDontBreak(t *testing.T) {
+	id1 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
+	m := AddrManager{}
+	m.SetAddr(id1, nil, time.Hour)
+	m.AddAddr(id1, nil, time.Hour)
+}

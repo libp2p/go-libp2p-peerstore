@@ -104,6 +104,11 @@ func (mgr *AddrManager) AddAddrs(p ID, addrs []ma.Multiaddr, ttl time.Duration) 
 	// only expand ttls
 	exp := time.Now().Add(ttl)
 	for _, addr := range addrs {
+		if addr == nil {
+			log.Warningf("was passed nil multiaddr for %s", p)
+			continue
+		}
+
 		addrstr := addr.String()
 		a, found := amap[addrstr]
 		if !found || exp.After(a.TTL) {
@@ -134,6 +139,10 @@ func (mgr *AddrManager) SetAddrs(p ID, addrs []ma.Multiaddr, ttl time.Duration) 
 
 	exp := time.Now().Add(ttl)
 	for _, addr := range addrs {
+		if addr == nil {
+			log.Warningf("was passed nil multiaddr for %s", p)
+			continue
+		}
 		// re-set all of them for new ttl.
 		addrs := addr.String()
 
