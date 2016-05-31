@@ -1,10 +1,13 @@
 package peer
 
 import (
+	"sort"
 	"sync"
 	"time"
 
+	addr "github.com/ipfs/go-libp2p-peer/addr"
 	ma "github.com/jbenet/go-multiaddr"
+	"golang.org/x/net/context"
 )
 
 const (
@@ -51,6 +54,8 @@ type addrSet map[string]expiringAddr
 type AddrManager struct {
 	addrmu sync.Mutex // guards addrs
 	addrs  map[ID]addrSet
+
+	addrSubs map[ID][]*addrSub
 }
 
 // ensures the AddrManager is initialized.
@@ -58,6 +63,9 @@ type AddrManager struct {
 func (mgr *AddrManager) init() {
 	if mgr.addrs == nil {
 		mgr.addrs = make(map[ID]addrSet)
+	}
+	if mgr.addrSubs == nil {
+		mgr.addrSubs = make(map[ID][]*addrSub)
 	}
 }
 
@@ -101,6 +109,8 @@ func (mgr *AddrManager) AddAddrs(p ID, addrs []ma.Multiaddr, ttl time.Duration) 
 		mgr.addrs[p] = amap
 	}
 
+	subs := mgr.addrSubs[p]
+
 	// only expand ttls
 	exp := time.Now().Add(ttl)
 	for _, addr := range addrs {
@@ -113,6 +123,10 @@ func (mgr *AddrManager) AddAddrs(p ID, addrs []ma.Multiaddr, ttl time.Duration) 
 		a, found := amap[addrstr]
 		if !found || exp.After(a.TTL) {
 			amap[addrstr] = expiringAddr{Addr: addr, TTL: exp}
+
+			for _, sub := range subs {
+				sub.pubAddr(addr)
+			}
 		}
 	}
 }
@@ -137,6 +151,8 @@ func (mgr *AddrManager) SetAddrs(p ID, addrs []ma.Multiaddr, ttl time.Duration) 
 		mgr.addrs[p] = amap
 	}
 
+	subs := mgr.addrSubs[p]
+
 	exp := time.Now().Add(ttl)
 	for _, addr := range addrs {
 		if addr == nil {
@@ -148,6 +164,10 @@ func (mgr *AddrManager) SetAddrs(p ID, addrs []ma.Multiaddr, ttl time.Duration) 
 
 		if ttl > 0 {
 			amap[addrs] = expiringAddr{Addr: addr, TTL: exp}
+
+			for _, sub := range subs {
+				sub.pubAddr(addr)
+			}
 		} else {
 			delete(amap, addrs)
 		}
@@ -194,4 +214,100 @@ func (mgr *AddrManager) ClearAddrs(p ID) {
 	mgr.init()
 
 	mgr.addrs[p] = make(addrSet) // clear what was there before
+}
+
+func (mgr *AddrManager) removeSub(p ID, s *addrSub) {
+	mgr.addrmu.Lock()
+	defer mgr.addrmu.Unlock()
+	subs := mgr.addrSubs[p]
+	var filtered []*addrSub
+	for _, v := range subs {
+		if v != s {
+			filtered = append(filtered, v)
+		}
+	}
+	mgr.addrSubs[p] = filtered
+}
+
+type addrSub struct {
+	pubch  chan ma.Multiaddr
+	lk     sync.Mutex
+	buffer []ma.Multiaddr
+	ctx    context.Context
+}
+
+func (s *addrSub) pubAddr(a ma.Multiaddr) {
+	select {
+	case s.pubch <- a:
+	case <-s.ctx.Done():
+	}
+}
+
+func (mgr *AddrManager) AddrStream(ctx context.Context, p ID) <-chan ma.Multiaddr {
+	mgr.addrmu.Lock()
+	defer mgr.addrmu.Unlock()
+	mgr.init()
+
+	sub := &addrSub{pubch: make(chan ma.Multiaddr), ctx: ctx}
+
+	out := make(chan ma.Multiaddr)
+
+	mgr.addrSubs[p] = append(mgr.addrSubs[p], sub)
+
+	baseaddrset := mgr.addrs[p]
+	var initial []ma.Multiaddr
+	for _, a := range baseaddrset {
+		initial = append(initial, a.Addr)
+	}
+
+	sort.Sort(addr.AddrList(initial))
+
+	go func(buffer []ma.Multiaddr) {
+		defer close(out)
+
+		sent := make(map[string]bool)
+		var outch chan ma.Multiaddr
+
+		for _, a := range buffer {
+			sent[a.String()] = true
+		}
+
+		var next ma.Multiaddr
+		if len(buffer) > 0 {
+			next = buffer[0]
+			buffer = buffer[1:]
+			outch = out
+		}
+
+		for {
+			select {
+			case outch <- next:
+				if len(buffer) > 0 {
+					next = buffer[0]
+					buffer = buffer[1:]
+				} else {
+					outch = nil
+					next = nil
+				}
+			case naddr := <-sub.pubch:
+				if sent[naddr.String()] {
+					continue
+				}
+
+				sent[naddr.String()] = true
+				if next == nil {
+					next = naddr
+					outch = out
+				} else {
+					buffer = append(buffer, naddr)
+				}
+			case <-ctx.Done():
+				mgr.removeSub(p, sub)
+				return
+			}
+		}
+
+	}(initial)
+
+	return out
 }

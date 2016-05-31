@@ -10,6 +10,7 @@ import (
 	//ds "github.com/jbenet/go-datastore"
 	//dssync "github.com/jbenet/go-datastore/sync"
 	ma "github.com/jbenet/go-multiaddr"
+	"golang.org/x/net/context"
 )
 
 const (
@@ -60,6 +61,11 @@ type AddrBook interface {
 
 	// Addresses returns all known (and valid) addresses for a given
 	Addrs(p ID) []ma.Multiaddr
+
+	// AddrStream returns a channel that gets all addresses for a given
+	// peer sent on it. If new addresses are added after the call is made
+	// they will be sent along through the channel as well.
+	AddrStream(context.Context, ID) <-chan ma.Multiaddr
 
 	// ClearAddresses removes all previously stored addresses
 	ClearAddrs(p ID)

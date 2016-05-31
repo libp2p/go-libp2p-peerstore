@@ -54,6 +54,18 @@
       "hash": "QmUEUu1CM8bxBJxc3ZLojAi8evhTr4byQogWstABet79oY",
       "name": "go-libp2p-crypto",
       "version": "1.0.2"
+    },
+    {
+      "author": "jbenet",
+      "hash": "QmYp8PC6b9M3UY4awdHkdRUim68KpGSmRmz27bANHteen6",
+      "name": "go-multiaddr-net",
+      "version": "1.1.0"
+    },
+    {
+      "author": "whyrusleeping",
+      "hash": "QmeLQ13LftT9XhNn22piZc3GP56fGqhijuL5Y8KdUaRn1g",
+      "name": "mafmt",
+      "version": "1.1.1"
     }
   ],
   "gxVersion": "0.4.0",
