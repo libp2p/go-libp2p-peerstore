@@ -1,8 +1,10 @@
-package peer
+package peerstore
 
 import (
 	"sync"
 	"time"
+
+	"github.com/ipfs/go-libp2p-peer"
 )
 
 // LatencyEWMASmooting governs the decay of the EWMA (the speed
@@ -15,26 +17,26 @@ var LatencyEWMASmoothing = 0.1
 type Metrics interface {
 
 	// RecordLatency records a new latency measurement
-	RecordLatency(ID, time.Duration)
+	RecordLatency(peer.ID, time.Duration)
 
 	// LatencyEWMA returns an exponentially-weighted moving avg.
 	// of all measurements of a peer's latency.
-	LatencyEWMA(ID) time.Duration
+	LatencyEWMA(peer.ID) time.Duration
 }
 
 type metrics struct {
-	latmap map[ID]time.Duration
+	latmap map[peer.ID]time.Duration
 	latmu  sync.RWMutex
 }
 
 func NewMetrics() Metrics {
 	return &metrics{
-		latmap: make(map[ID]time.Duration),
+		latmap: make(map[peer.ID]time.Duration),
 	}
 }
 
 // RecordLatency records a new latency measurement
-func (m *metrics) RecordLatency(p ID, next time.Duration) {
+func (m *metrics) RecordLatency(p peer.ID, next time.Duration) {
 	nextf := float64(next)
 	s := LatencyEWMASmoothing
 	if s > 1 || s < 0 {
@@ -55,7 +57,7 @@ func (m *metrics) RecordLatency(p ID, next time.Duration) {
 
 // LatencyEWMA returns an exponentially-weighted moving avg.
 // of all measurements of a peer's latency.
-func (m *metrics) LatencyEWMA(p ID) time.Duration {
+func (m *metrics) LatencyEWMA(p peer.ID) time.Duration {
 	m.latmu.RLock()
 	lat := m.latmap[p]
 	m.latmu.RUnlock()

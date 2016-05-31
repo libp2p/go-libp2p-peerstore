@@ -1,4 +1,4 @@
-package peer
+package peerstore
 
 import (
 	"errors"
@@ -9,9 +9,13 @@ import (
 
 	//ds "github.com/jbenet/go-datastore"
 	//dssync "github.com/jbenet/go-datastore/sync"
+	"github.com/ipfs/go-libp2p-peer"
+	logging "github.com/ipfs/go-log"
 	ma "github.com/jbenet/go-multiaddr"
 	"golang.org/x/net/context"
 )
+
+var log = logging.Logger("peerstore")
 
 const (
 	// AddressTTL is the expiration time of addresses.
@@ -26,18 +30,18 @@ type Peerstore interface {
 	Metrics
 
 	// Peers returns a list of all peer.IDs in this Peerstore
-	Peers() []ID
+	Peers() []peer.ID
 
 	// PeerInfo returns a peer.PeerInfo struct for given peer.ID.
 	// This is a small slice of the information Peerstore has on
 	// that peer, useful to other services.
-	PeerInfo(ID) PeerInfo
+	PeerInfo(peer.ID) PeerInfo
 
 	// Get/Put is a simple registry for other peer-related key/value pairs.
 	// if we find something we use often, it should become its own set of
 	// methods. this is a last resort.
-	Get(id ID, key string) (interface{}, error)
-	Put(id ID, key string, val interface{}) error
+	Get(id peer.ID, key string) (interface{}, error)
+	Put(id peer.ID, key string, val interface{}) error
 }
 
 // AddrBook is an interface that fits the new AddrManager. I'm patching
@@ -45,58 +49,58 @@ type Peerstore interface {
 type AddrBook interface {
 
 	// AddAddr calls AddAddrs(p, []ma.Multiaddr{addr}, ttl)
-	AddAddr(p ID, addr ma.Multiaddr, ttl time.Duration)
+	AddAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration)
 
 	// AddAddrs gives AddrManager addresses to use, with a given ttl
 	// (time-to-live), after which the address is no longer valid.
 	// If the manager has a longer TTL, the operation is a no-op for that address
-	AddAddrs(p ID, addrs []ma.Multiaddr, ttl time.Duration)
+	AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration)
 
 	// SetAddr calls mgr.SetAddrs(p, addr, ttl)
-	SetAddr(p ID, addr ma.Multiaddr, ttl time.Duration)
+	SetAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration)
 
 	// SetAddrs sets the ttl on addresses. This clears any TTL there previously.
 	// This is used when we receive the best estimate of the validity of an address.
-	SetAddrs(p ID, addrs []ma.Multiaddr, ttl time.Duration)
+	SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration)
 
 	// Addresses returns all known (and valid) addresses for a given
-	Addrs(p ID) []ma.Multiaddr
+	Addrs(p peer.ID) []ma.Multiaddr
 
 	// AddrStream returns a channel that gets all addresses for a given
 	// peer sent on it. If new addresses are added after the call is made
 	// they will be sent along through the channel as well.
-	AddrStream(context.Context, ID) <-chan ma.Multiaddr
+	AddrStream(context.Context, peer.ID) <-chan ma.Multiaddr
 
 	// ClearAddresses removes all previously stored addresses
-	ClearAddrs(p ID)
+	ClearAddrs(p peer.ID)
 }
 
 // KeyBook tracks the Public keys of Peers.
 type KeyBook interface {
-	PubKey(ID) ic.PubKey
-	AddPubKey(ID, ic.PubKey) error
+	PubKey(peer.ID) ic.PubKey
+	AddPubKey(peer.ID, ic.PubKey) error
 
-	PrivKey(ID) ic.PrivKey
-	AddPrivKey(ID, ic.PrivKey) error
+	PrivKey(peer.ID) ic.PrivKey
+	AddPrivKey(peer.ID, ic.PrivKey) error
 }
 
 type keybook struct {
-	pks map[ID]ic.PubKey
-	sks map[ID]ic.PrivKey
+	pks map[peer.ID]ic.PubKey
+	sks map[peer.ID]ic.PrivKey
 
 	sync.RWMutex // same lock. wont happen a ton.
 }
 
 func newKeybook() *keybook {
 	return &keybook{
-		pks: map[ID]ic.PubKey{},
-		sks: map[ID]ic.PrivKey{},
+		pks: map[peer.ID]ic.PubKey{},
+		sks: map[peer.ID]ic.PrivKey{},
 	}
 }
 
-func (kb *keybook) Peers() []ID {
+func (kb *keybook) Peers() []peer.ID {
 	kb.RLock()
-	ps := make([]ID, 0, len(kb.pks)+len(kb.sks))
+	ps := make([]peer.ID, 0, len(kb.pks)+len(kb.sks))
 	for p := range kb.pks {
 		ps = append(ps, p)
 	}
@@ -109,14 +113,14 @@ func (kb *keybook) Peers() []ID {
 	return ps
 }
 
-func (kb *keybook) PubKey(p ID) ic.PubKey {
+func (kb *keybook) PubKey(p peer.ID) ic.PubKey {
 	kb.RLock()
 	pk := kb.pks[p]
 	kb.RUnlock()
 	return pk
 }
 
-func (kb *keybook) AddPubKey(p ID, pk ic.PubKey) error {
+func (kb *keybook) AddPubKey(p peer.ID, pk ic.PubKey) error {
 
 	// check it's correct first
 	if !p.MatchesPublicKey(pk) {
@@ -129,14 +133,14 @@ func (kb *keybook) AddPubKey(p ID, pk ic.PubKey) error {
 	return nil
 }
 
-func (kb *keybook) PrivKey(p ID) ic.PrivKey {
+func (kb *keybook) PrivKey(p peer.ID) ic.PrivKey {
 	kb.RLock()
 	sk := kb.sks[p]
 	kb.RUnlock()
 	return sk
 }
 
-func (kb *keybook) AddPrivKey(p ID, sk ic.PrivKey) error {
+func (kb *keybook) AddPrivKey(p peer.ID, sk ic.PrivKey) error {
 
 	if sk == nil {
 		return errors.New("sk is nil (PrivKey)")
@@ -176,7 +180,7 @@ func NewPeerstore() Peerstore {
 	}
 }
 
-func (ps *peerstore) Put(p ID, key string, val interface{}) error {
+func (ps *peerstore) Put(p peer.ID, key string, val interface{}) error {
 	//dsk := ds.NewKey(string(p) + "/" + key)
 	//return ps.ds.Put(dsk, val)
 	ps.dslock.Lock()
@@ -185,7 +189,7 @@ func (ps *peerstore) Put(p ID, key string, val interface{}) error {
 	return nil
 }
 
-func (ps *peerstore) Get(p ID, key string) (interface{}, error) {
+func (ps *peerstore) Get(p peer.ID, key string) (interface{}, error) {
 	//dsk := ds.NewKey(string(p) + "/" + key)
 	//return ps.ds.Get(dsk)
 
@@ -198,8 +202,8 @@ func (ps *peerstore) Get(p ID, key string) (interface{}, error) {
 	return i, nil
 }
 
-func (ps *peerstore) Peers() []ID {
-	set := map[ID]struct{}{}
+func (ps *peerstore) Peers() []peer.ID {
+	set := map[peer.ID]struct{}{}
 	for _, p := range ps.keybook.Peers() {
 		set[p] = struct{}{}
 	}
@@ -207,21 +211,21 @@ func (ps *peerstore) Peers() []ID {
 		set[p] = struct{}{}
 	}
 
-	pps := make([]ID, 0, len(set))
+	pps := make([]peer.ID, 0, len(set))
 	for p := range set {
 		pps = append(pps, p)
 	}
 	return pps
 }
 
-func (ps *peerstore) PeerInfo(p ID) PeerInfo {
+func (ps *peerstore) PeerInfo(p peer.ID) PeerInfo {
 	return PeerInfo{
 		ID:    p,
 		Addrs: ps.AddrManager.Addrs(p),
 	}
 }
 
-func PeerInfos(ps Peerstore, peers []ID) []PeerInfo {
+func PeerInfos(ps Peerstore, peers []peer.ID) []PeerInfo {
 	pi := make([]PeerInfo, len(peers))
 	for i, p := range peers {
 		pi[i] = ps.PeerInfo(p)
@@ -229,8 +233,8 @@ func PeerInfos(ps Peerstore, peers []ID) []PeerInfo {
 	return pi
 }
 
-func PeerInfoIDs(pis []PeerInfo) []ID {
-	ps := make([]ID, len(pis))
+func PeerInfoIDs(pis []PeerInfo) []peer.ID {
+	ps := make([]peer.ID, len(pis))
 	for i, pi := range pis {
 		ps[i] = pi.ID
 	}

@@ -1,4 +1,4 @@
-package peer
+package peerstore
 
 import (
 	"fmt"
@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	peer "github.com/ipfs/go-libp2p-peer"
 	ma "github.com/jbenet/go-multiaddr"
 	"golang.org/x/net/context"
 )
@@ -26,7 +27,7 @@ func getAddrs(t *testing.T, n int) []ma.Multiaddr {
 func TestAddrStream(t *testing.T) {
 	addrs := getAddrs(t, 100)
 
-	pid := ID("testpeer")
+	pid := peer.ID("testpeer")
 
 	ps := NewPeerstore()
 
@@ -91,7 +92,7 @@ func TestAddrStream(t *testing.T) {
 
 func TestGetStreamBeforePeerAdded(t *testing.T) {
 	addrs := getAddrs(t, 10)
-	pid := ID("testpeer")
+	pid := peer.ID("testpeer")
 
 	ps := NewPeerstore()
 
@@ -142,7 +143,7 @@ func TestGetStreamBeforePeerAdded(t *testing.T) {
 
 func TestAddrStreamDuplicates(t *testing.T) {
 	addrs := getAddrs(t, 10)
-	pid := ID("testpeer")
+	pid := peer.ID("testpeer")
 
 	ps := NewPeerstore()
 

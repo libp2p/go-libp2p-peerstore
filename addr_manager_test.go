@@ -1,14 +1,15 @@
-package peer
+package peerstore
 
 import (
 	"testing"
 	"time"
 
+	"github.com/ipfs/go-libp2p-peer"
 	ma "github.com/jbenet/go-multiaddr"
 )
 
-func IDS(t *testing.T, ids string) ID {
-	id, err := IDB58Decode(ids)
+func IDS(t *testing.T, ids string) peer.ID {
+	id, err := peer.IDB58Decode(ids)
 	if err != nil {
 		t.Fatalf("id %q is bad: %s", ids, err)
 	}

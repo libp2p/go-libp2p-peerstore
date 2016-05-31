@@ -9,18 +9,6 @@
   "gxDependencies": [
     {
       "author": "whyrusleeping",
-      "hash": "QmT8rehPR3F6bmwL6zjUN8XpiDBFFpMP2myPdC6ApsWfJf",
-      "name": "go-base58",
-      "version": "0.0.0"
-    },
-    {
-      "author": "whyrusleeping",
-      "hash": "QmYf7ng2hG5XBtJA3tN34DQ2GUN5HNksEw1rLDkmr6vGku",
-      "name": "go-multihash",
-      "version": "0.0.0"
-    },
-    {
-      "author": "whyrusleeping",
       "hash": "QmZNVWh8LLjAavuQ2JXuFmuYH3C11xo988vSgp7UQrTRj1",
       "name": "go-ipfs-util",
       "version": "1.0.0"
@@ -66,6 +54,12 @@
       "hash": "QmeLQ13LftT9XhNn22piZc3GP56fGqhijuL5Y8KdUaRn1g",
       "name": "mafmt",
       "version": "1.1.1"
+    },
+    {
+      "author": "whyrusleeping",
+      "hash": "QmQGwpJy9P4yXZySmqkZEXCmbBpJUb8xntCv8Ca4taZwDC",
+      "name": "go-libp2p-peer",
+      "version": "2.0.0"
     }
   ],
   "gxVersion": "0.4.0",

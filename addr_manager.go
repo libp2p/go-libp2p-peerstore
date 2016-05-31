@@ -1,11 +1,12 @@
-package peer
+package peerstore
 
 import (
 	"sort"
 	"sync"
 	"time"
 
-	addr "github.com/ipfs/go-libp2p-peer/addr"
+	peer "github.com/ipfs/go-libp2p-peer"
+	addr "github.com/ipfs/go-libp2p-peerstore/addr"
 	ma "github.com/jbenet/go-multiaddr"
 	"golang.org/x/net/context"
 )
@@ -53,30 +54,30 @@ type addrSet map[string]expiringAddr
 // The zero-value is ready to be used.
 type AddrManager struct {
 	addrmu sync.Mutex // guards addrs
-	addrs  map[ID]addrSet
+	addrs  map[peer.ID]addrSet
 
-	addrSubs map[ID][]*addrSub
+	addrSubs map[peer.ID][]*addrSub
 }
 
 // ensures the AddrManager is initialized.
 // So we can use the zero value.
 func (mgr *AddrManager) init() {
 	if mgr.addrs == nil {
-		mgr.addrs = make(map[ID]addrSet)
+		mgr.addrs = make(map[peer.ID]addrSet)
 	}
 	if mgr.addrSubs == nil {
-		mgr.addrSubs = make(map[ID][]*addrSub)
+		mgr.addrSubs = make(map[peer.ID][]*addrSub)
 	}
 }
 
-func (mgr *AddrManager) Peers() []ID {
+func (mgr *AddrManager) Peers() []peer.ID {
 	mgr.addrmu.Lock()
 	defer mgr.addrmu.Unlock()
 	if mgr.addrs == nil {
 		return nil
 	}
 
-	pids := make([]ID, 0, len(mgr.addrs))
+	pids := make([]peer.ID, 0, len(mgr.addrs))
 	for pid := range mgr.addrs {
 		pids = append(pids, pid)
 	}
@@ -84,14 +85,14 @@ func (mgr *AddrManager) Peers() []ID {
 }
 
 // AddAddr calls AddAddrs(p, []ma.Multiaddr{addr}, ttl)
-func (mgr *AddrManager) AddAddr(p ID, addr ma.Multiaddr, ttl time.Duration) {
+func (mgr *AddrManager) AddAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) {
 	mgr.AddAddrs(p, []ma.Multiaddr{addr}, ttl)
 }
 
 // AddAddrs gives AddrManager addresses to use, with a given ttl
 // (time-to-live), after which the address is no longer valid.
 // If the manager has a longer TTL, the operation is a no-op for that address
-func (mgr *AddrManager) AddAddrs(p ID, addrs []ma.Multiaddr, ttl time.Duration) {
+func (mgr *AddrManager) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
 	mgr.addrmu.Lock()
 	defer mgr.addrmu.Unlock()
 
@@ -132,13 +133,13 @@ func (mgr *AddrManager) AddAddrs(p ID, addrs []ma.Multiaddr, ttl time.Duration) 
 }
 
 // SetAddr calls mgr.SetAddrs(p, addr, ttl)
-func (mgr *AddrManager) SetAddr(p ID, addr ma.Multiaddr, ttl time.Duration) {
+func (mgr *AddrManager) SetAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) {
 	mgr.SetAddrs(p, []ma.Multiaddr{addr}, ttl)
 }
 
 // SetAddrs sets the ttl on addresses. This clears any TTL there previously.
 // This is used when we receive the best estimate of the validity of an address.
-func (mgr *AddrManager) SetAddrs(p ID, addrs []ma.Multiaddr, ttl time.Duration) {
+func (mgr *AddrManager) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
 	mgr.addrmu.Lock()
 	defer mgr.addrmu.Unlock()
 
@@ -175,7 +176,7 @@ func (mgr *AddrManager) SetAddrs(p ID, addrs []ma.Multiaddr, ttl time.Duration) 
 }
 
 // Addresses returns all known (and valid) addresses for a given
-func (mgr *AddrManager) Addrs(p ID) []ma.Multiaddr {
+func (mgr *AddrManager) Addrs(p peer.ID) []ma.Multiaddr {
 	mgr.addrmu.Lock()
 	defer mgr.addrmu.Unlock()
 
@@ -208,7 +209,7 @@ func (mgr *AddrManager) Addrs(p ID) []ma.Multiaddr {
 }
 
 // ClearAddresses removes all previously stored addresses
-func (mgr *AddrManager) ClearAddrs(p ID) {
+func (mgr *AddrManager) ClearAddrs(p peer.ID) {
 	mgr.addrmu.Lock()
 	defer mgr.addrmu.Unlock()
 	mgr.init()
@@ -216,7 +217,7 @@ func (mgr *AddrManager) ClearAddrs(p ID) {
 	mgr.addrs[p] = make(addrSet) // clear what was there before
 }
 
-func (mgr *AddrManager) removeSub(p ID, s *addrSub) {
+func (mgr *AddrManager) removeSub(p peer.ID, s *addrSub) {
 	mgr.addrmu.Lock()
 	defer mgr.addrmu.Unlock()
 	subs := mgr.addrSubs[p]
@@ -243,7 +244,7 @@ func (s *addrSub) pubAddr(a ma.Multiaddr) {
 	}
 }
 
-func (mgr *AddrManager) AddrStream(ctx context.Context, p ID) <-chan ma.Multiaddr {
+func (mgr *AddrManager) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Multiaddr {
 	mgr.addrmu.Lock()
 	defer mgr.addrmu.Unlock()
 	mgr.init()

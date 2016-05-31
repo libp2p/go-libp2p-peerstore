@@ -1,4 +1,4 @@
-package peer_test
+package peerstore
 
 import (
 	"fmt"
@@ -7,14 +7,13 @@ import (
 	"testing"
 	"time"
 
-	peer "github.com/ipfs/go-libp2p-peer"
 	testutil "github.com/ipfs/go-libp2p-peer/test"
 )
 
 func TestLatencyEWMAFun(t *testing.T) {
 	t.Skip("run it for fun")
 
-	m := peer.NewMetrics()
+	m := NewMetrics()
 	id, err := testutil.RandPeerID()
 	if err != nil {
 		t.Fatal(err)
@@ -41,7 +40,7 @@ func TestLatencyEWMAFun(t *testing.T) {
 }
 
 func TestLatencyEWMA(t *testing.T) {
-	m := peer.NewMetrics()
+	m := NewMetrics()
 	id, err := testutil.RandPeerID()
 	if err != nil {
 		t.Fatal(err)
