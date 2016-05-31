@@ -1,10 +1,10 @@
 {
   "author": "whyrusleeping",
   "bugs": {
-    "url": "https://github.com/ipfs/go-libp2p-peer"
+    "url": "https://github.com/ipfs/go-libp2p-peerstore"
   },
   "gx": {
-    "dvcsimport": "github.com/ipfs/go-libp2p-peer"
+    "dvcsimport": "github.com/ipfs/go-libp2p-peerstore"
   },
   "gxDependencies": [
     {
@@ -65,6 +65,6 @@
   "gxVersion": "0.4.0",
   "language": "go",
   "license": "MIT",
-  "name": "go-libp2p-peer",
-  "version": "1.0.6"
+  "name": "go-libp2p-peerstore",
+  "version": "1.0.0"
 }
