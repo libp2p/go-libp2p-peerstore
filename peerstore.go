@@ -42,6 +42,9 @@ type Peerstore interface {
 	// methods. this is a last resort.
 	Get(id peer.ID, key string) (interface{}, error)
 	Put(id peer.ID, key string, val interface{}) error
+
+	GetProtocols(peer.ID) ([]string, error)
+	SetProtocols(peer.ID, []string) error
 }
 
 // AddrBook is an interface that fits the new AddrManager. I'm patching
@@ -223,6 +226,24 @@ func (ps *peerstore) PeerInfo(p peer.ID) PeerInfo {
 		ID:    p,
 		Addrs: ps.AddrManager.Addrs(p),
 	}
+}
+
+func (ps *peerstore) SetProtocols(p peer.ID, protos []string) error {
+	return ps.Put(p, "protocols", protos)
+}
+
+func (ps *peerstore) GetProtocols(p peer.ID) ([]string, error) {
+	protos, err := ps.Get(p, "protocols")
+	if err != nil {
+		return nil, err
+	}
+
+	out, ok := protos.([]string)
+	if !ok {
+		return nil, errors.New("stored protocols array was not array of strings")
+	}
+
+	return out, nil
 }
 
 func PeerInfos(ps Peerstore, peers []peer.ID) []PeerInfo {

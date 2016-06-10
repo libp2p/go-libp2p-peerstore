@@ -179,3 +179,30 @@ func TestAddrStreamDuplicates(t *testing.T) {
 		t.Fatal("should have received exactly ten addresses")
 	}
 }
+
+func TestPeerstoreProtoStore(t *testing.T) {
+	ps := NewPeerstore()
+	p1 := peer.ID("TESTPEER")
+
+	protos := []string{"a", "b", "c", "d"}
+
+	err := ps.SetProtocols(p1, protos)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := ps.GetProtocols(p1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(out) != len(protos) {
+		t.Fatal("got wrong number of protocols back")
+	}
+
+	for i, p := range protos {
+		if out[i] != p {
+			t.Fatal("got wrong protocol")
+		}
+	}
+}
