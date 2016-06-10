@@ -45,9 +45,9 @@
     },
     {
       "author": "jbenet",
-      "hash": "QmYp8PC6b9M3UY4awdHkdRUim68KpGSmRmz27bANHteen6",
+      "hash": "QmPpRcbNUXauP3zWZ1NJMLWpe4QnmEHrd2ba2D3yqWznw7",
       "name": "go-multiaddr-net",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "author": "whyrusleeping",
