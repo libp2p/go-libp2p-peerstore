@@ -15,9 +15,9 @@
     },
     {
       "author": "whyrusleeping",
-      "hash": "Qmazh5oNUVsDZTs2g59rq8aYQqwpss8tcUWQzor5sCCEuH",
+      "hash": "QmNQynaz7qfriSUJkiEZUrm2Wen1u3Kj9goZzWtrPyu7XR",
       "name": "go-log",
-      "version": "0.0.0"
+      "version": "1.1.2"
     },
     {
       "author": "whyrusleeping",
@@ -39,9 +39,9 @@
     },
     {
       "author": "whyrusleeping",
-      "hash": "QmUEUu1CM8bxBJxc3ZLojAi8evhTr4byQogWstABet79oY",
+      "hash": "QmUWER4r4qMvaCnX5zREcfyiWN7cXN9g3a7fkRqNz8qWPP",
       "name": "go-libp2p-crypto",
-      "version": "1.0.2"
+      "version": "1.0.3"
     },
     {
       "author": "jbenet",
@@ -57,14 +57,14 @@
     },
     {
       "author": "whyrusleeping",
-      "hash": "QmQGwpJy9P4yXZySmqkZEXCmbBpJUb8xntCv8Ca4taZwDC",
+      "hash": "QmRBqJF7hb8ZSpRcMwUt8hNhydWcxGEhtk81HKq6oUwKvs",
       "name": "go-libp2p-peer",
-      "version": "2.0.0"
+      "version": "1.0.8"
     }
   ],
   "gxVersion": "0.4.0",
   "language": "go",
   "license": "MIT",
   "name": "go-libp2p-peerstore",
-  "version": "1.1.0"
+  "version": "1.1.2"
 }
