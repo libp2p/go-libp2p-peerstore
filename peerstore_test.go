@@ -3,6 +3,7 @@ package peerstore
 import (
 	"fmt"
 	"math/rand"
+	"sort"
 	"testing"
 	"time"
 
@@ -186,7 +187,7 @@ func TestPeerstoreProtoStore(t *testing.T) {
 
 	protos := []string{"a", "b", "c", "d"}
 
-	err := ps.SetProtocols(p1, protos)
+	err := ps.AddProtocols(p1, protos...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,9 +201,23 @@ func TestPeerstoreProtoStore(t *testing.T) {
 		t.Fatal("got wrong number of protocols back")
 	}
 
+	sort.Strings(out)
 	for i, p := range protos {
 		if out[i] != p {
 			t.Fatal("got wrong protocol")
 		}
+	}
+
+	supported, err := ps.SupportsProtocols(p1, "q", "w", "a", "y", "b")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(supported) != 2 {
+		t.Fatal("only expected 2 supported")
+	}
+
+	if supported[0] != "a" || supported[1] != "b" {
+		t.Fatal("got wrong supported array: ", supported)
 	}
 }
