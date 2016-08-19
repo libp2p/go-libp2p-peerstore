@@ -68,7 +68,7 @@ type AddrBook interface {
 	// This is used when we receive the best estimate of the validity of an address.
 	SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration)
 
-	// Addresses returns all known (and valid) addresses for a given
+	// Addresses returns all known (and valid) addresses for a given peer
 	Addrs(p peer.ID) []ma.Multiaddr
 
 	// AddrStream returns a channel that gets all addresses for a given
@@ -172,6 +172,9 @@ type peerstore struct {
 	// TODO: use a datastore for this
 	ds     map[string]interface{}
 	dslock sync.Mutex
+
+	// lock for protocol information, separate from datastore lock
+	protolock sync.Mutex
 }
 
 // NewPeerstore creates a threadsafe collection of peers.
@@ -233,6 +236,8 @@ func (ps *peerstore) PeerInfo(p peer.ID) PeerInfo {
 }
 
 func (ps *peerstore) AddProtocols(p peer.ID, protos ...string) error {
+	ps.protolock.Lock()
+	defer ps.protolock.Unlock()
 	protomap, err := ps.getProtocolMap(p)
 	if err != nil {
 		return err
@@ -263,6 +268,8 @@ func (ps *peerstore) getProtocolMap(p peer.ID) (map[string]struct{}, error) {
 }
 
 func (ps *peerstore) GetProtocols(p peer.ID) ([]string, error) {
+	ps.protolock.Lock()
+	defer ps.protolock.Unlock()
 	pmap, err := ps.getProtocolMap(p)
 	if err != nil {
 		return nil, err
@@ -277,6 +284,8 @@ func (ps *peerstore) GetProtocols(p peer.ID) ([]string, error) {
 }
 
 func (ps *peerstore) SupportsProtocols(p peer.ID, protos ...string) ([]string, error) {
+	ps.protolock.Lock()
+	defer ps.protolock.Unlock()
 	pmap, err := ps.getProtocolMap(p)
 	if err != nil {
 		return nil, err
