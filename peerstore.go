@@ -2,6 +2,7 @@ package peerstore
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -44,7 +45,8 @@ type Peerstore interface {
 	Put(id peer.ID, key string, val interface{}) error
 
 	GetProtocols(peer.ID) ([]string, error)
-	SetProtocols(peer.ID, []string) error
+	AddProtocols(peer.ID, ...string) error
+	SupportsProtocols(peer.ID, ...string) ([]string, error)
 }
 
 // AddrBook is an interface that fits the new AddrManager. I'm patching
@@ -66,7 +68,7 @@ type AddrBook interface {
 	// This is used when we receive the best estimate of the validity of an address.
 	SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration)
 
-	// Addresses returns all known (and valid) addresses for a given
+	// Addresses returns all known (and valid) addresses for a given peer
 	Addrs(p peer.ID) []ma.Multiaddr
 
 	// AddrStream returns a channel that gets all addresses for a given
@@ -170,6 +172,9 @@ type peerstore struct {
 	// TODO: use a datastore for this
 	ds     map[string]interface{}
 	dslock sync.Mutex
+
+	// lock for protocol information, separate from datastore lock
+	protolock sync.Mutex
 }
 
 // NewPeerstore creates a threadsafe collection of peers.
@@ -192,6 +197,8 @@ func (ps *peerstore) Put(p peer.ID, key string, val interface{}) error {
 	return nil
 }
 
+var ErrNotFound = errors.New("item not found")
+
 func (ps *peerstore) Get(p peer.ID, key string) (interface{}, error) {
 	//dsk := ds.NewKey(string(p) + "/" + key)
 	//return ps.ds.Get(dsk)
@@ -200,7 +207,7 @@ func (ps *peerstore) Get(p peer.ID, key string) (interface{}, error) {
 	defer ps.dslock.Unlock()
 	i, ok := ps.ds[string(p)+"/"+key]
 	if !ok {
-		return nil, errors.New("item not found")
+		return nil, ErrNotFound
 	}
 	return i, nil
 }
@@ -228,19 +235,67 @@ func (ps *peerstore) PeerInfo(p peer.ID) PeerInfo {
 	}
 }
 
-func (ps *peerstore) SetProtocols(p peer.ID, protos []string) error {
-	return ps.Put(p, "protocols", protos)
+func (ps *peerstore) AddProtocols(p peer.ID, protos ...string) error {
+	ps.protolock.Lock()
+	defer ps.protolock.Unlock()
+	protomap, err := ps.getProtocolMap(p)
+	if err != nil {
+		return err
+	}
+
+	for _, proto := range protos {
+		protomap[proto] = struct{}{}
+	}
+
+	return ps.Put(p, "protocols", protomap)
+}
+
+func (ps *peerstore) getProtocolMap(p peer.ID) (map[string]struct{}, error) {
+	iprotomap, err := ps.Get(p, "protocols")
+	switch err {
+	default:
+		return nil, err
+	case ErrNotFound:
+		return make(map[string]struct{}), nil
+	case nil:
+		cast, ok := iprotomap.(map[string]struct{})
+		if !ok {
+			return nil, fmt.Errorf("stored protocol set was not a map")
+		}
+
+		return cast, nil
+	}
 }
 
 func (ps *peerstore) GetProtocols(p peer.ID) ([]string, error) {
-	protos, err := ps.Get(p, "protocols")
+	ps.protolock.Lock()
+	defer ps.protolock.Unlock()
+	pmap, err := ps.getProtocolMap(p)
 	if err != nil {
 		return nil, err
 	}
 
-	out, ok := protos.([]string)
-	if !ok {
-		return nil, errors.New("stored protocols array was not array of strings")
+	var out []string
+	for k, _ := range pmap {
+		out = append(out, k)
+	}
+
+	return out, nil
+}
+
+func (ps *peerstore) SupportsProtocols(p peer.ID, protos ...string) ([]string, error) {
+	ps.protolock.Lock()
+	defer ps.protolock.Unlock()
+	pmap, err := ps.getProtocolMap(p)
+	if err != nil {
+		return nil, err
+	}
+
+	var out []string
+	for _, proto := range protos {
+		if _, ok := pmap[proto]; ok {
+			out = append(out, proto)
+		}
 	}
 
 	return out, nil
