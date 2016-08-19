@@ -221,3 +221,25 @@ func TestPeerstoreProtoStore(t *testing.T) {
 		t.Fatal("got wrong supported array: ", supported)
 	}
 }
+
+func TestBasicPeerstore(t *testing.T) {
+	ps := NewPeerstore()
+
+	var pids []peer.ID
+	addrs := getAddrs(t, 10)
+	for i, a := range addrs {
+		p := peer.ID(fmt.Sprint(i))
+		pids = append(pids, p)
+		ps.AddAddr(p, a, PermanentAddrTTL)
+	}
+
+	peers := ps.Peers()
+	if len(peers) != 10 {
+		t.Fatal("expected ten peers")
+	}
+
+	pinfo := ps.PeerInfo(pids[0])
+	if !pinfo.Addrs[0].Equal(addrs[0]) {
+		t.Fatal("stored wrong address")
+	}
+}
