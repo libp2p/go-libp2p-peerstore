@@ -66,5 +66,5 @@
   "language": "go",
   "license": "MIT",
   "name": "go-libp2p-peerstore",
-  "version": "1.2.3"
+  "version": "1.2.4"
 }
