@@ -8,7 +8,7 @@ import (
 	"time"
 
 	peer "github.com/ipfs/go-libp2p-peer"
-	ma "github.com/jbenet/go-multiaddr"
+	ma "github.com/multiformats/go-multiaddr"
 	"golang.org/x/net/context"
 )
 
