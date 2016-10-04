@@ -27,12 +27,6 @@
     },
     {
       "author": "whyrusleeping",
-      "hash": "QmZy2y8t9zQH2a1b8q2ZSLKp17ATuJoCNxxyMFG5qFExpt",
-      "name": "go-net",
-      "version": "0.0.0"
-    },
-    {
-      "author": "whyrusleeping",
       "hash": "QmUusaX99BZoELh7dmPgirqRQ1FAmMnmnBn3oiqDFGBUSc",
       "name": "go-keyspace",
       "version": "1.0.0"

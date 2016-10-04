@@ -1,6 +1,7 @@
 package peerstore
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -13,7 +14,6 @@ import (
 	"github.com/ipfs/go-libp2p-peer"
 	logging "github.com/ipfs/go-log"
 	ma "github.com/jbenet/go-multiaddr"
-	"golang.org/x/net/context"
 )
 
 var log = logging.Logger("peerstore")

@@ -1,9 +1,10 @@
 package queue
 
 import (
+	"context"
+
 	peer "github.com/ipfs/go-libp2p-peer"
 	logging "github.com/ipfs/go-log"
-	context "golang.org/x/net/context"
 )
 
 var log = logging.Logger("peerqueue")

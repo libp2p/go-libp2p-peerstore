@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"testing"
@@ -8,8 +9,6 @@ import (
 
 	u "github.com/ipfs/go-ipfs-util"
 	peer "github.com/ipfs/go-libp2p-peer"
-
-	context "golang.org/x/net/context"
 )
 
 func TestQueue(t *testing.T) {
