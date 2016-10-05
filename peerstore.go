@@ -163,8 +163,8 @@ func (kb *keybook) AddPrivKey(p peer.ID, sk ic.PrivKey) error {
 }
 
 type peerstore struct {
-	keybook
-	metrics
+	*keybook
+	*metrics
 	AddrManager
 
 	// store other data, like versions
@@ -180,8 +180,8 @@ type peerstore struct {
 // NewPeerstore creates a threadsafe collection of peers.
 func NewPeerstore() Peerstore {
 	return &peerstore{
-		keybook:     *newKeybook(),
-		metrics:     *(NewMetrics()).(*metrics),
+		keybook:     newKeybook(),
+		metrics:     NewMetrics(),
 		AddrManager: AddrManager{},
 		//ds:          dssync.MutexWrap(ds.NewMapDatastore()),
 		ds: make(map[string]interface{}),
