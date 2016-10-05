@@ -8,7 +8,7 @@ import (
 	"time"
 
 	u "github.com/ipfs/go-ipfs-util"
-	peer "github.com/ipfs/go-libp2p-peer"
+	peer "github.com/libp2p/go-libp2p-peer"
 )
 
 func TestQueue(t *testing.T) {

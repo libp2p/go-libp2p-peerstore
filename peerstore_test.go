@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	peer "github.com/ipfs/go-libp2p-peer"
-	ma "github.com/jbenet/go-multiaddr"
+	peer "github.com/libp2p/go-libp2p-peer"
+	ma "github.com/multiformats/go-multiaddr"
 )
 
 func getAddrs(t *testing.T, n int) []ma.Multiaddr {

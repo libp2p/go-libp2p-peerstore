@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	peer "github.com/ipfs/go-libp2p-peer"
-	ma "github.com/jbenet/go-multiaddr"
+	peer "github.com/libp2p/go-libp2p-peer"
 	addr "github.com/libp2p/go-libp2p-peerstore/addr"
+	ma "github.com/multiformats/go-multiaddr"
 )
 
 const (

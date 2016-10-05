@@ -3,8 +3,8 @@ package peerstore
 import (
 	"encoding/json"
 
-	"github.com/ipfs/go-libp2p-peer"
-	ma "github.com/jbenet/go-multiaddr"
+	"github.com/libp2p/go-libp2p-peer"
+	ma "github.com/multiformats/go-multiaddr"
 )
 
 // PeerInfo is a small struct used to pass around a peer with

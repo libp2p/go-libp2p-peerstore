@@ -1,9 +1,10 @@
 package peerstore
 
 import (
-	peer "github.com/ipfs/go-libp2p-peer"
-	ma "github.com/jbenet/go-multiaddr"
 	"testing"
+
+	peer "github.com/libp2p/go-libp2p-peer"
+	ma "github.com/multiformats/go-multiaddr"
 )
 
 func mustAddr(t *testing.T, s string) ma.Multiaddr {

@@ -7,13 +7,13 @@ import (
 	"sync"
 	"time"
 
-	ic "github.com/ipfs/go-libp2p-crypto"
+	ic "github.com/libp2p/go-libp2p-crypto"
 
 	//ds "github.com/jbenet/go-datastore"
 	//dssync "github.com/jbenet/go-datastore/sync"
-	"github.com/ipfs/go-libp2p-peer"
 	logging "github.com/ipfs/go-log"
-	ma "github.com/jbenet/go-multiaddr"
+	"github.com/libp2p/go-libp2p-peer"
+	ma "github.com/multiformats/go-multiaddr"
 )
 
 var log = logging.Logger("peerstore")

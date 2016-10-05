@@ -4,8 +4,8 @@ import (
 	"io"
 
 	u "github.com/ipfs/go-ipfs-util"
-	ci "github.com/ipfs/go-libp2p-crypto"
-	peer "github.com/ipfs/go-libp2p-peer"
+	ci "github.com/libp2p/go-libp2p-crypto"
+	peer "github.com/libp2p/go-libp2p-peer"
 )
 
 func RandPeerID() (peer.ID, error) {

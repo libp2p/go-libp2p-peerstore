@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ipfs/go-libp2p-peer"
-	ma "github.com/jbenet/go-multiaddr"
+	"github.com/libp2p/go-libp2p-peer"
+	ma "github.com/multiformats/go-multiaddr"
 )
 
 func IDS(t *testing.T, ids string) peer.ID {
