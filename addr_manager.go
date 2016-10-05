@@ -1,14 +1,14 @@
 package peerstore
 
 import (
+	"context"
 	"sort"
 	"sync"
 	"time"
 
 	peer "github.com/ipfs/go-libp2p-peer"
-	addr "github.com/ipfs/go-libp2p-peerstore/addr"
 	ma "github.com/jbenet/go-multiaddr"
-	"golang.org/x/net/context"
+	addr "github.com/libp2p/go-libp2p-peerstore/addr"
 )
 
 const (

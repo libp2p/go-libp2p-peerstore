@@ -1,6 +1,6 @@
 os:
-    - linux
-    - osx
+  - linux
+  - osx
 
 language: go
 
@@ -9,12 +9,16 @@ go:
 
 install: true
 
+before_install:
+  - make deps
+
 script:
-    - make deps
-    - gx-go rewrite
-    - go get github.com/mattn/goveralls
-    - goveralls -service=travis-ci
+  - go vet
+  - $GOPATH/bin/goveralls -service="travis-ci"
 
 cache:
     directories:
         - $GOPATH/src/gx
+
+notifications:
+  email: false

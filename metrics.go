@@ -29,7 +29,7 @@ type metrics struct {
 	latmu  sync.RWMutex
 }
 
-func NewMetrics() Metrics {
+func NewMetrics() *metrics {
 	return &metrics{
 		latmap: make(map[peer.ID]time.Duration),
 	}

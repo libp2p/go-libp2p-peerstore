@@ -1,6 +1,7 @@
 package peerstore
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"sort"
@@ -9,7 +10,6 @@ import (
 
 	peer "github.com/ipfs/go-libp2p-peer"
 	ma "github.com/jbenet/go-multiaddr"
-	"golang.org/x/net/context"
 )
 
 func getAddrs(t *testing.T, n int) []ma.Multiaddr {

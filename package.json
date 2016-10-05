@@ -1,10 +1,10 @@
 {
   "author": "whyrusleeping",
   "bugs": {
-    "url": "https://github.com/ipfs/go-libp2p-peerstore"
+    "url": "https://github.com/libp2p/go-libp2p-peerstore"
   },
   "gx": {
-    "dvcsimport": "github.com/ipfs/go-libp2p-peerstore"
+    "dvcsimport": "github.com/libp2p/go-libp2p-peerstore"
   },
   "gxDependencies": [
     {
@@ -23,12 +23,6 @@
       "author": "whyrusleeping",
       "hash": "QmYzDkkgAEmrcNzFCiYo6L1dTX4EAG1gZkbtdbd9trL4vd",
       "name": "go-multiaddr",
-      "version": "0.0.0"
-    },
-    {
-      "author": "whyrusleeping",
-      "hash": "QmZy2y8t9zQH2a1b8q2ZSLKp17ATuJoCNxxyMFG5qFExpt",
-      "name": "go-net",
       "version": "0.0.0"
     },
     {

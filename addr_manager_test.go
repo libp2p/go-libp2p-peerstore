@@ -40,7 +40,7 @@ func testHas(t *testing.T, exp, act []ma.Multiaddr) {
 		}
 
 		if !found {
-			t.Fatal("expected address %s not found", a)
+			t.Fatalf("expected address %s not found", a)
 		}
 	}
 }
