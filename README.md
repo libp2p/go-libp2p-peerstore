@@ -10,11 +10,13 @@
 
 ## Install
 
-TODO
+```sh
+go get github.com/libp2p/go-libp2p-peerstore
+```
 
 ## Usage
 
-TODO
+Check out the [GoDocs](https://godoc.org/github.com/libp2p/go-libp2p-peerstore).
 
 ## Contribute
 
