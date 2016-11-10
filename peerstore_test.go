@@ -2,12 +2,15 @@ package peerstore
 
 import (
 	"context"
+	cr "crypto/rand"
 	"fmt"
 	"math/rand"
 	"sort"
 	"testing"
 	"time"
 
+	ds "github.com/ipfs/go-datastore"
+	ci "github.com/libp2p/go-libp2p-crypto"
 	peer "github.com/libp2p/go-libp2p-peer"
 	ma "github.com/multiformats/go-multiaddr"
 )
@@ -25,18 +28,24 @@ func getAddrs(t *testing.T, n int) []ma.Multiaddr {
 	return addrs
 }
 
+func randPeerID() peer.ID {
+	_, pub, _ := ci.GenerateEd25519Key(cr.Reader)
+	id, _ := peer.IDFromPublicKey(pub)
+	return id
+}
+
 func TestAddrStream(t *testing.T) {
 	addrs := getAddrs(t, 100)
 
-	pid := peer.ID("testpeer")
+	pid := randPeerID()
 
-	ps := NewPeerstore()
+	ps := NewPeerstore(context.Background(), ds.NewMapDatastore())
 
 	ps.AddAddrs(pid, addrs[:10], time.Hour)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	addrch := ps.AddrStream(ctx, pid)
+	addrch, _ := ps.AddrStream(ctx, pid)
 
 	// while that subscription is active, publish ten more addrs
 	// this tests that it doesnt hang
@@ -93,14 +102,14 @@ func TestAddrStream(t *testing.T) {
 
 func TestGetStreamBeforePeerAdded(t *testing.T) {
 	addrs := getAddrs(t, 10)
-	pid := peer.ID("testpeer")
+	pid := randPeerID()
 
-	ps := NewPeerstore()
+	ps := NewPeerstore(context.Background(), ds.NewMapDatastore())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ach := ps.AddrStream(ctx, pid)
+	ach, _ := ps.AddrStream(ctx, pid)
 
 	for i := 0; i < 10; i++ {
 		ps.AddAddr(pid, addrs[i], time.Hour)
@@ -144,13 +153,13 @@ func TestGetStreamBeforePeerAdded(t *testing.T) {
 
 func TestAddrStreamDuplicates(t *testing.T) {
 	addrs := getAddrs(t, 10)
-	pid := peer.ID("testpeer")
+	pid := randPeerID()
 
-	ps := NewPeerstore()
+	ps := NewPeerstore(context.Background(), ds.NewMapDatastore())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	ach := ps.AddrStream(ctx, pid)
+	ach, _ := ps.AddrStream(ctx, pid)
 
 	go func() {
 		for i := 0; i < 10; i++ {
@@ -182,8 +191,8 @@ func TestAddrStreamDuplicates(t *testing.T) {
 }
 
 func TestPeerstoreProtoStore(t *testing.T) {
-	ps := NewPeerstore()
-	p1 := peer.ID("TESTPEER")
+	ps := NewPeerstore(context.Background(), ds.NewMapDatastore())
+	p1 := randPeerID()
 
 	protos := []string{"a", "b", "c", "d"}
 
@@ -223,22 +232,25 @@ func TestPeerstoreProtoStore(t *testing.T) {
 }
 
 func TestBasicPeerstore(t *testing.T) {
-	ps := NewPeerstore()
+	ps := NewPeerstore(context.Background(), ds.NewMapDatastore())
 
 	var pids []peer.ID
 	addrs := getAddrs(t, 10)
-	for i, a := range addrs {
-		p := peer.ID(fmt.Sprint(i))
+	for _, a := range addrs {
+		p := randPeerID()
 		pids = append(pids, p)
-		ps.AddAddr(p, a, PermanentAddrTTL)
+		err := ps.AddAddr(p, a, PermanentAddrTTL)
+		if err != nil {
+			t.Fatalf("failed adding address: %v", err)
+		}
 	}
 
-	peers := ps.Peers()
-	if len(peers) != 10 {
-		t.Fatal("expected ten peers")
+	peers, _ := ps.Peers()
+	if len(peers) != len(addrs) {
+		t.Fatalf("expected %d peers, got %d", len(addrs), len(peers))
 	}
 
-	pinfo := ps.PeerInfo(pids[0])
+	pinfo, _ := ps.PeerInfo(pids[0])
 	if !pinfo.Addrs[0].Equal(addrs[0]) {
 		t.Fatal("stored wrong address")
 	}
