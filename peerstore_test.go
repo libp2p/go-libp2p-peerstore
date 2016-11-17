@@ -220,6 +220,20 @@ func TestPeerstoreProtoStore(t *testing.T) {
 	if supported[0] != "a" || supported[1] != "b" {
 		t.Fatal("got wrong supported array: ", supported)
 	}
+
+	err = ps.SetProtocols(p1, "other")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	supported, err = ps.SupportsProtocols(p1, "q", "w", "a", "y", "b")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(supported) != 0 {
+		t.Fatal("none of those protocols should have been supported")
+	}
 }
 
 func TestBasicPeerstore(t *testing.T) {
