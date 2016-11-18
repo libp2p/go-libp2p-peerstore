@@ -46,6 +46,7 @@ type Peerstore interface {
 
 	GetProtocols(peer.ID) ([]string, error)
 	AddProtocols(peer.ID, ...string) error
+	SetProtocols(peer.ID, ...string) error
 	SupportsProtocols(peer.ID, ...string) ([]string, error)
 }
 
@@ -233,6 +234,18 @@ func (ps *peerstore) PeerInfo(p peer.ID) PeerInfo {
 		ID:    p,
 		Addrs: ps.AddrManager.Addrs(p),
 	}
+}
+
+func (ps *peerstore) SetProtocols(p peer.ID, protos ...string) error {
+	ps.protolock.Lock()
+	defer ps.protolock.Unlock()
+
+	protomap := make(map[string]struct{})
+	for _, proto := range protos {
+		protomap[proto] = struct{}{}
+	}
+
+	return ps.Put(p, "protocols", protomap)
 }
 
 func (ps *peerstore) AddProtocols(p peer.ID, protos ...string) error {
