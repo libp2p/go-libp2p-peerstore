@@ -2,7 +2,7 @@
 package addr
 
 import (
-	ma "gx/ipfs/QmSWLfmj5frN9xVLMMN846dMDriy5wN5jeghUm7aTW3DAG/go-multiaddr"
+	ma "github.com/multiformats/go-multiaddr"
 )
 
 // AddrSource is a source of addresses. It allows clients to retrieve
