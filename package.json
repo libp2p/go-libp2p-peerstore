@@ -9,12 +9,6 @@
   "gxDependencies": [
     {
       "author": "whyrusleeping",
-      "hash": "QmWbjfz3u6HkAdPh34dgPchGbQjob6LXLhAeCGii2TX69n",
-      "name": "go-ipfs-util",
-      "version": "1.2.4"
-    },
-    {
-      "author": "whyrusleeping",
       "hash": "QmSpJByNKFX1sCsHBEp3R73FL4NF6FnQTEGyNAXHm2GS52",
       "name": "go-log",
       "version": "1.2.0"

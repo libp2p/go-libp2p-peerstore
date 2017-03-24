@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	u "github.com/ipfs/go-ipfs-util"
 	peer "github.com/libp2p/go-libp2p-peer"
+	mh "github.com/multiformats/go-multihash"
 )
 
 func TestQueue(t *testing.T) {
@@ -64,7 +64,7 @@ func TestQueue(t *testing.T) {
 
 func newPeerTime(t time.Time) peer.ID {
 	s := fmt.Sprintf("hmmm time: %v", t)
-	h := u.Hash([]byte(s))
+	h, _ := mh.Sum([]byte(s), mh.SHA2_256, -1)
 	return peer.ID(h)
 }
 
