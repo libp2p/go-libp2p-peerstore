@@ -56,3 +56,30 @@ func TestPeerInfoMarshal(t *testing.T) {
 		t.Fatal("loggables gave wrong peerID output")
 	}
 }
+
+func TestP2pAddrParsing(t *testing.T) {
+	a := mustAddr(t, "/ip4/1.2.3.4/tcp/4536")
+	id, err := peer.IDB58Decode("QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p2pa := a.String() + "/ipfs/" + id.Pretty()
+	p2pma, err := ma.NewMultiaddr(p2pa)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pinfo, err := InfoFromP2pAddr(p2pma)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if pinfo.ID != id {
+		t.Fatal("didnt get expected peerID")
+	}
+
+	if !a.Equal(pinfo.Addrs[0]) {
+		t.Fatal("didnt get expected address")
+	}
+}

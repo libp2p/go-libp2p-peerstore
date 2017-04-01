@@ -2,6 +2,8 @@ package peerstore
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 
 	"github.com/libp2p/go-libp2p-peer"
 	ma "github.com/multiformats/go-multiaddr"
@@ -14,6 +16,38 @@ import (
 type PeerInfo struct {
 	ID    peer.ID
 	Addrs []ma.Multiaddr
+}
+
+var ErrInvalidAddr = fmt.Errorf("invalid p2p multiaddr")
+
+func InfoFromP2pAddr(m ma.Multiaddr) (*PeerInfo, error) {
+	if m == nil {
+		return nil, ErrInvalidAddr
+	}
+
+	// make sure it's an IPFS addr
+	parts := ma.Split(m)
+	if len(parts) < 1 {
+		return nil, ErrInvalidAddr
+	}
+
+	ipfspart := parts[len(parts)-1] // last part
+	if ipfspart.Protocols()[0].Code != ma.P_IPFS {
+		return nil, ErrInvalidAddr
+	}
+
+	// make sure 'ipfs id' parses as a peer.ID
+	peerIdParts := strings.Split(ipfspart.String(), "/")
+	peerIdStr := peerIdParts[len(peerIdParts)-1]
+	id, err := peer.IDB58Decode(peerIdStr)
+	if err != nil {
+		return nil, err
+	}
+
+	return &PeerInfo{
+		ID:    id,
+		Addrs: []ma.Multiaddr{ma.Join(parts[:len(parts)-1]...)},
+	}, nil
 }
 
 func (pi *PeerInfo) Loggable() map[string]interface{} {
