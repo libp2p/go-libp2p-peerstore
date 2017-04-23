@@ -26,7 +26,7 @@ const (
 	RecentlyConnectedAddrTTL = time.Minute * 10
 
 	// OwnObservedAddrTTL is used for our own external addresses observed by peers.
-	OwnObservedAddrTTL = time.Minute * 10
+	OwnObservedAddrTTL = time.Hour * 1
 
 	// PermanentAddrTTL is the ttl for a "permanent address" (e.g. bootstrap nodes)
 	// if we haven't shipped you an update to ipfs in 356 days
