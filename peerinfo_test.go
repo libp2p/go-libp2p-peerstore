@@ -58,29 +58,54 @@ func TestPeerInfoMarshal(t *testing.T) {
 }
 
 func TestP2pAddrParsing(t *testing.T) {
-	a := mustAddr(t, "/ip4/1.2.3.4/tcp/4536")
 	id, err := peer.IDB58Decode("QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ")
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
 	}
+	addr := ma.StringCast("/ip4/1.2.3.4/tcp/4536")
+	p2paddr := ma.Join(addr, ma.StringCast("/ipfs/"+peer.IDB58Encode(id)))
 
-	p2pa := a.String() + "/ipfs/" + id.Pretty()
-	p2pma, err := ma.NewMultiaddr(p2pa)
+	pinfo, err := InfoFromP2pAddr(p2paddr)
 	if err != nil {
-		t.Fatal(err)
-	}
-
-	pinfo, err := InfoFromP2pAddr(p2pma)
-	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
 	}
 
 	if pinfo.ID != id {
-		t.Fatal("didnt get expected peerID")
+		t.Fatalf("expected PeerID [%s], got [%s]", id, pinfo.ID)
 	}
 
-	if !a.Equal(pinfo.Addrs[0]) {
-		t.Fatal("didnt get expected address")
+	if len(pinfo.Addrs) != 1 {
+		t.Fatalf("expected 1 addr, got %d", len(pinfo.Addrs))
+	}
+
+	if !addr.Equal(pinfo.Addrs[0]) {
+		t.Fatalf("expected addr [%s], got [%s]", addr, pinfo.Addrs[0])
+	}
+
+	addr = ma.StringCast("/ipfs/" + peer.IDB58Encode(id))
+	pinfo, err = InfoFromP2pAddr(addr)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if pinfo.ID != id {
+		t.Fatalf("expected PeerID [%s], got [%s]", id, pinfo.ID)
+	}
+
+	if len(pinfo.Addrs) > 0 {
+		t.Fatalf("expected 0 addrs, got %d", len(pinfo.Addrs))
+	}
+
+	addr = ma.StringCast("/ip4/1.2.3.4/tcp/4536")
+	pinfo, err = InfoFromP2pAddr(addr)
+	if err == nil {
+		t.Fatalf("expected error, got none")
+	}
+
+	addr = ma.StringCast("/ip4/1.2.3.4/tcp/4536/http")
+	pinfo, err = InfoFromP2pAddr(addr)
+	if err == nil {
+		t.Fatalf("expected error, got none")
 	}
 }
 
