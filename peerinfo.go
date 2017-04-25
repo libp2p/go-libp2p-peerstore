@@ -50,6 +50,16 @@ func InfoFromP2pAddr(m ma.Multiaddr) (*PeerInfo, error) {
 	}, nil
 }
 
+func InfoToP2pAddrs(pi *PeerInfo) ([]ma.Multiaddr, error) {
+	addrs := []ma.Multiaddr{}
+	tpl := "/" + ma.ProtocolWithCode(ma.P_IPFS).Name + "/"
+	for _, addr := range pi.Addrs {
+		p2paddr := ma.StringCast(tpl + peer.IDB58Encode(pi.ID))
+		addrs = append(addrs, ma.Join(addr, p2paddr))
+	}
+	return addrs, nil
+}
+
 func (pi *PeerInfo) Loggable() map[string]interface{} {
 	return map[string]interface{}{
 		"peerID": pi.ID.Pretty(),

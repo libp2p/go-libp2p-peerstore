@@ -83,3 +83,36 @@ func TestP2pAddrParsing(t *testing.T) {
 		t.Fatal("didnt get expected address")
 	}
 }
+
+func TestP2pAddrConstruction(t *testing.T) {
+	id, err := peer.IDB58Decode("QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ")
+	if err != nil {
+		t.Error(err)
+	}
+	addr := ma.StringCast("/ip4/1.2.3.4/tcp/4536")
+	p2paddr := ma.Join(addr, ma.StringCast("/ipfs/"+peer.IDB58Encode(id)))
+
+	pi := &PeerInfo{ID: id, Addrs: []ma.Multiaddr{addr}}
+	p2paddrs, err := InfoToP2pAddrs(pi)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if len(p2paddrs) != 1 {
+		t.Fatalf("expected 1 addr, got %d", len(p2paddrs))
+	}
+
+	if !p2paddr.Equal(p2paddrs[0]) {
+		t.Fatalf("expected [%s], got [%s]", p2paddr, p2paddrs[0])
+	}
+
+	pi = &PeerInfo{ID: id}
+	p2paddrs, err = InfoToP2pAddrs(pi)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if len(p2paddrs) > 0 {
+		t.Fatalf("expected 0 addrs, got %d", len(p2paddrs))
+	}
+}
