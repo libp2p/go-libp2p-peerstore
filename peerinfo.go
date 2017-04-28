@@ -31,12 +31,13 @@ func InfoFromP2pAddr(m ma.Multiaddr) (*PeerInfo, error) {
 		return nil, ErrInvalidAddr
 	}
 
-	ipfspart := parts[len(parts)-1] // last part
+	// TODO(lgierth): we shouldn't assume /ipfs is the last part
+	ipfspart := parts[len(parts)-1]
 	if ipfspart.Protocols()[0].Code != ma.P_IPFS {
 		return nil, ErrInvalidAddr
 	}
 
-	// make sure 'ipfs id' parses as a peer.ID
+	// make sure the /ipfs value parses as a peer.ID
 	peerIdParts := strings.Split(ipfspart.String(), "/")
 	peerIdStr := peerIdParts[len(peerIdParts)-1]
 	id, err := peer.IDB58Decode(peerIdStr)
@@ -44,10 +45,29 @@ func InfoFromP2pAddr(m ma.Multiaddr) (*PeerInfo, error) {
 		return nil, err
 	}
 
+	// we might have received just an /ipfs part, which means there's no addr.
+	var addrs []ma.Multiaddr
+	if len(parts) > 1 {
+		addrs = append(addrs, ma.Join(parts[:len(parts)-1]...))
+	}
+
 	return &PeerInfo{
 		ID:    id,
-		Addrs: []ma.Multiaddr{ma.Join(parts[:len(parts)-1]...)},
+		Addrs: addrs,
 	}, nil
+}
+
+func InfoToP2pAddrs(pi *PeerInfo) ([]ma.Multiaddr, error) {
+	addrs := []ma.Multiaddr{}
+	tpl := "/" + ma.ProtocolWithCode(ma.P_IPFS).Name + "/"
+	for _, addr := range pi.Addrs {
+		p2paddr, err := ma.NewMultiaddr(tpl + peer.IDB58Encode(pi.ID))
+		if err != nil {
+			return nil, err
+		}
+		addrs = append(addrs, addr.Encapsulate(p2paddr))
+	}
+	return addrs, nil
 }
 
 func (pi *PeerInfo) Loggable() map[string]interface{} {
