@@ -2,6 +2,8 @@ os:
   - linux
   - osx
 
+sudo: false
+
 language: go
 
 go:
