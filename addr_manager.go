@@ -205,6 +205,9 @@ func (mgr *AddrManager) Addrs(p peer.ID) []ma.Multiaddr {
 	for _, s := range expired {
 		delete(maddrs, s)
 	}
+	if len(maddrs) == 0 {
+		delete(mgr.addrs, p)
+	}
 	return good
 }
 
@@ -214,20 +217,28 @@ func (mgr *AddrManager) ClearAddrs(p peer.ID) {
 	defer mgr.addrmu.Unlock()
 	mgr.init()
 
-	mgr.addrs[p] = make(addrSet) // clear what was there before
+	delete(mgr.addrs, p)
 }
 
 func (mgr *AddrManager) removeSub(p peer.ID, s *addrSub) {
 	mgr.addrmu.Lock()
 	defer mgr.addrmu.Unlock()
 	subs := mgr.addrSubs[p]
-	var filtered []*addrSub
-	for _, v := range subs {
-		if v != s {
-			filtered = append(filtered, v)
+	if len(subs) == 1 {
+		if subs[0] != s {
+			return
+		}
+		delete(mgr.addrSubs, p)
+		return
+	}
+	for i, v := range subs {
+		if v == s {
+			subs[i] = subs[len(subs)-1]
+			subs[len(subs)-1] = nil
+			mgr.addrSubs[p] = subs[:len(subs)-1]
+			return
 		}
 	}
-	mgr.addrSubs[p] = filtered
 }
 
 type addrSub struct {
