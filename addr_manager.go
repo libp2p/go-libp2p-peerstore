@@ -267,7 +267,7 @@ func (mgr *AddrManager) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Mul
 	mgr.addrSubs[p] = append(mgr.addrSubs[p], sub)
 
 	baseaddrset := mgr.addrs[p]
-	var initial []ma.Multiaddr
+	initial := make([]ma.Multiaddr, 0, len(baseaddrset))
 	for _, a := range baseaddrset {
 		initial = append(initial, a.Addr)
 	}
@@ -277,7 +277,7 @@ func (mgr *AddrManager) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Mul
 	go func(buffer []ma.Multiaddr) {
 		defer close(out)
 
-		sent := make(map[string]bool)
+		sent := make(map[string]bool, len(buffer))
 		var outch chan ma.Multiaddr
 
 		for _, a := range buffer {
