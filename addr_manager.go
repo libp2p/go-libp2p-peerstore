@@ -281,7 +281,7 @@ func (mgr *AddrManager) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Mul
 		var outch chan ma.Multiaddr
 
 		for _, a := range buffer {
-			sent[a.String()] = true
+			sent[string(a.Bytes())] = true
 		}
 
 		var next ma.Multiaddr
@@ -302,11 +302,11 @@ func (mgr *AddrManager) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Mul
 					next = nil
 				}
 			case naddr := <-sub.pubch:
-				if sent[naddr.String()] {
+				if sent[string(naddr.Bytes())] {
 					continue
 				}
 
-				sent[naddr.String()] = true
+				sent[string(naddr.Bytes())] = true
 				if next == nil {
 					next = naddr
 					outch = out
