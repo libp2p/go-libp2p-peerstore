@@ -205,6 +205,9 @@ func (mgr *AddrManager) Addrs(p peer.ID) []ma.Multiaddr {
 	for _, s := range expired {
 		delete(maddrs, s)
 	}
+	if len(maddrs) == 0 {
+		delete(mgr.addrs, p)
+	}
 	return good
 }
 
@@ -214,20 +217,28 @@ func (mgr *AddrManager) ClearAddrs(p peer.ID) {
 	defer mgr.addrmu.Unlock()
 	mgr.init()
 
-	mgr.addrs[p] = make(addrSet) // clear what was there before
+	delete(mgr.addrs, p)
 }
 
 func (mgr *AddrManager) removeSub(p peer.ID, s *addrSub) {
 	mgr.addrmu.Lock()
 	defer mgr.addrmu.Unlock()
 	subs := mgr.addrSubs[p]
-	var filtered []*addrSub
-	for _, v := range subs {
-		if v != s {
-			filtered = append(filtered, v)
+	if len(subs) == 1 {
+		if subs[0] != s {
+			return
+		}
+		delete(mgr.addrSubs, p)
+		return
+	}
+	for i, v := range subs {
+		if v == s {
+			subs[i] = subs[len(subs)-1]
+			subs[len(subs)-1] = nil
+			mgr.addrSubs[p] = subs[:len(subs)-1]
+			return
 		}
 	}
-	mgr.addrSubs[p] = filtered
 }
 
 type addrSub struct {
@@ -256,7 +267,7 @@ func (mgr *AddrManager) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Mul
 	mgr.addrSubs[p] = append(mgr.addrSubs[p], sub)
 
 	baseaddrset := mgr.addrs[p]
-	var initial []ma.Multiaddr
+	initial := make([]ma.Multiaddr, 0, len(baseaddrset))
 	for _, a := range baseaddrset {
 		initial = append(initial, a.Addr)
 	}
@@ -266,11 +277,11 @@ func (mgr *AddrManager) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Mul
 	go func(buffer []ma.Multiaddr) {
 		defer close(out)
 
-		sent := make(map[string]bool)
+		sent := make(map[string]bool, len(buffer))
 		var outch chan ma.Multiaddr
 
 		for _, a := range buffer {
-			sent[a.String()] = true
+			sent[string(a.Bytes())] = true
 		}
 
 		var next ma.Multiaddr
@@ -291,11 +302,11 @@ func (mgr *AddrManager) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Mul
 					next = nil
 				}
 			case naddr := <-sub.pubch:
-				if sent[naddr.String()] {
+				if sent[string(naddr.Bytes())] {
 					continue
 				}
 
-				sent[naddr.String()] = true
+				sent[string(naddr.Bytes())] = true
 				if next == nil {
 					next = naddr
 					outch = out

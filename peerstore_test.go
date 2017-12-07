@@ -54,6 +54,10 @@ func TestAddrStream(t *testing.T) {
 		}
 	}
 
+	// start a second stream
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	addrch2 := ps.AddrStream(ctx2, pid)
+
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -83,9 +87,17 @@ func TestAddrStream(t *testing.T) {
 		}
 	}
 
-	// now cancel it, and add a few more addresses it doesnt hang afterwards
+	// now cancel it
 	cancel()
 
+	// now check the *second* subscription. We should see 80 addresses.
+	for i := 0; i < 80; i++ {
+		<-addrch2
+	}
+
+	cancel2()
+
+	// and add a few more addresses it doesnt hang afterwards
 	for _, a := range addrs[80:] {
 		ps.AddAddr(pid, a, time.Hour)
 	}
