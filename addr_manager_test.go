@@ -1,9 +1,11 @@
 package peerstore
 
 import (
+	"context"
 	"testing"
 	"time"
 
+	ds "github.com/ipfs/go-datastore"
 	"github.com/libp2p/go-libp2p-peer"
 	ma "github.com/multiformats/go-multiaddr"
 )
@@ -45,6 +47,11 @@ func testHas(t *testing.T, exp, act []ma.Multiaddr) {
 	}
 }
 
+func testPeerHas(t *testing.T, mgr *AddrManager, exp []ma.Multiaddr, p peer.ID) {
+	addrs, _ := mgr.Addrs(p)
+	testHas(t, exp, addrs)
+}
+
 func TestAddresses(t *testing.T) {
 
 	id1 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
@@ -70,8 +77,11 @@ func TestAddresses(t *testing.T) {
 	ma55 := MA(t, "/ip4/5.2.3.3/tcp/5555")
 
 	ttl := time.Hour
-	m := AddrManager{}
-	m.AddAddr(id1, ma11, ttl)
+	m := newAddrManager(context.Background(), ds.NewMapDatastore())
+	err := m.AddAddr(id1, ma11, ttl)
+	if err != nil {
+		t.Fatal("error adding address:", err)
+	}
 
 	m.AddAddrs(id2, []ma.Multiaddr{ma21, ma22}, ttl)
 	m.AddAddrs(id2, []ma.Multiaddr{ma21, ma22}, ttl) // idempotency
@@ -89,16 +99,17 @@ func TestAddresses(t *testing.T) {
 	m.ClearAddrs(id5)
 	m.AddAddrs(id5, []ma.Multiaddr{ma51, ma52, ma53, ma54, ma55}, ttl) // clearing
 
-	if len(m.Peers()) != 5 {
-		t.Fatal("should have exactly two peers in the address book")
+	peers, _ := m.Peers()
+	if len(peers) != 5 {
+		t.Fatalf("should have %d peers in the address book, has %d", 5, len(peers))
 	}
 
 	// test the Addresses return value
-	testHas(t, []ma.Multiaddr{ma11}, m.Addrs(id1))
-	testHas(t, []ma.Multiaddr{ma21, ma22}, m.Addrs(id2))
-	testHas(t, []ma.Multiaddr{ma31, ma32, ma33}, m.Addrs(id3))
-	testHas(t, []ma.Multiaddr{ma41, ma42, ma43, ma44}, m.Addrs(id4))
-	testHas(t, []ma.Multiaddr{ma51, ma52, ma53, ma54, ma55}, m.Addrs(id5))
+	testPeerHas(t, m, []ma.Multiaddr{ma11}, id1)
+	testPeerHas(t, m, []ma.Multiaddr{ma21, ma22}, id2)
+	testPeerHas(t, m, []ma.Multiaddr{ma31, ma32, ma33}, id3)
+	testPeerHas(t, m, []ma.Multiaddr{ma41, ma42, ma43, ma44}, id4)
+	testPeerHas(t, m, []ma.Multiaddr{ma51, ma52, ma53, ma54, ma55}, id5)
 
 }
 
@@ -112,19 +123,20 @@ func TestAddressesExpire(t *testing.T) {
 	ma24 := MA(t, "/ip4/4.2.3.3/tcp/4444")
 	ma25 := MA(t, "/ip4/5.2.3.3/tcp/5555")
 
-	m := AddrManager{}
+	m := newAddrManager(context.Background(), ds.NewMapDatastore())
 	m.AddAddr(id1, ma11, time.Hour)
 	m.AddAddr(id1, ma12, time.Hour)
 	m.AddAddr(id1, ma13, time.Hour)
 	m.AddAddr(id2, ma24, time.Hour)
 	m.AddAddr(id2, ma25, time.Hour)
 
-	if len(m.Peers()) != 2 {
-		t.Fatal("should have exactly two peers in the address book")
+	peers, _ := m.Peers()
+	if len(peers) != 2 {
+		t.Fatalf("should have %d peers in the address book, has %d", 2, len(peers))
 	}
 
-	testHas(t, []ma.Multiaddr{ma11, ma12, ma13}, m.Addrs(id1))
-	testHas(t, []ma.Multiaddr{ma24, ma25}, m.Addrs(id2))
+	testPeerHas(t, m, []ma.Multiaddr{ma11, ma12, ma13}, id1)
+	testPeerHas(t, m, []ma.Multiaddr{ma24, ma25}, id2)
 
 	m.SetAddr(id1, ma11, 2*time.Hour)
 	m.SetAddr(id1, ma12, 2*time.Hour)
@@ -132,33 +144,33 @@ func TestAddressesExpire(t *testing.T) {
 	m.SetAddr(id2, ma24, 2*time.Hour)
 	m.SetAddr(id2, ma25, 2*time.Hour)
 
-	testHas(t, []ma.Multiaddr{ma11, ma12, ma13}, m.Addrs(id1))
-	testHas(t, []ma.Multiaddr{ma24, ma25}, m.Addrs(id2))
+	testPeerHas(t, m, []ma.Multiaddr{ma11, ma12, ma13}, id1)
+	testPeerHas(t, m, []ma.Multiaddr{ma24, ma25}, id2)
 
 	m.SetAddr(id1, ma11, time.Millisecond)
 	<-time.After(time.Millisecond)
-	testHas(t, []ma.Multiaddr{ma12, ma13}, m.Addrs(id1))
-	testHas(t, []ma.Multiaddr{ma24, ma25}, m.Addrs(id2))
+	testPeerHas(t, m, []ma.Multiaddr{ma12, ma13}, id1)
+	testPeerHas(t, m, []ma.Multiaddr{ma24, ma25}, id2)
 
 	m.SetAddr(id1, ma13, time.Millisecond)
 	<-time.After(time.Millisecond)
-	testHas(t, []ma.Multiaddr{ma12}, m.Addrs(id1))
-	testHas(t, []ma.Multiaddr{ma24, ma25}, m.Addrs(id2))
+	testPeerHas(t, m, []ma.Multiaddr{ma12}, id1)
+	testPeerHas(t, m, []ma.Multiaddr{ma24, ma25}, id2)
 
 	m.SetAddr(id2, ma24, time.Millisecond)
 	<-time.After(time.Millisecond)
-	testHas(t, []ma.Multiaddr{ma12}, m.Addrs(id1))
-	testHas(t, []ma.Multiaddr{ma25}, m.Addrs(id2))
+	testPeerHas(t, m, []ma.Multiaddr{ma12}, id1)
+	testPeerHas(t, m, []ma.Multiaddr{ma25}, id2)
 
 	m.SetAddr(id2, ma25, time.Millisecond)
 	<-time.After(time.Millisecond)
-	testHas(t, []ma.Multiaddr{ma12}, m.Addrs(id1))
-	testHas(t, nil, m.Addrs(id2))
+	testPeerHas(t, m, []ma.Multiaddr{ma12}, id1)
+	testPeerHas(t, m, nil, id2)
 
 	m.SetAddr(id1, ma12, time.Millisecond)
 	<-time.After(time.Millisecond)
-	testHas(t, nil, m.Addrs(id1))
-	testHas(t, nil, m.Addrs(id2))
+	testPeerHas(t, m, nil, id1)
+	testPeerHas(t, m, nil, id2)
 }
 
 func TestClearWorks(t *testing.T) {
@@ -171,40 +183,60 @@ func TestClearWorks(t *testing.T) {
 	ma24 := MA(t, "/ip4/4.2.3.3/tcp/4444")
 	ma25 := MA(t, "/ip4/5.2.3.3/tcp/5555")
 
-	m := AddrManager{}
+	m := newAddrManager(context.Background(), ds.NewMapDatastore())
 	m.AddAddr(id1, ma11, time.Hour)
 	m.AddAddr(id1, ma12, time.Hour)
 	m.AddAddr(id1, ma13, time.Hour)
 	m.AddAddr(id2, ma24, time.Hour)
 	m.AddAddr(id2, ma25, time.Hour)
 
-	testHas(t, []ma.Multiaddr{ma11, ma12, ma13}, m.Addrs(id1))
-	testHas(t, []ma.Multiaddr{ma24, ma25}, m.Addrs(id2))
+	testPeerHas(t, m, []ma.Multiaddr{ma11, ma12, ma13}, id1)
+	testPeerHas(t, m, []ma.Multiaddr{ma24, ma25}, id2)
 
 	m.ClearAddrs(id1)
 	m.ClearAddrs(id2)
 
-	testHas(t, nil, m.Addrs(id1))
-	testHas(t, nil, m.Addrs(id2))
+	testPeerHas(t, m, nil, id1)
+	testPeerHas(t, m, nil, id2)
+}
+
+func TestClearWorksForDatastoreResidentRecords(t *testing.T) {
+	old := lruCacheSize
+	defer func() { lruCacheSize = old }()
+
+	id1 := IDS(t, "QmQ4PU94ZKknywdLuyZ9SVuZd8tTkGPGFfbYN2nJuNZbWP")
+	id2 := IDS(t, "QmU7WhKm6Y3T4ZrYeg4BHnAApHEqNci1fMxTAvsjaynSJN")
+	ma1 := MA(t, "/ip4/1.2.3.1/tcp/1111")
+	ma2 := MA(t, "/ip4/2.4.3.1/tcp/2222")
+
+	m := newAddrManager(context.Background(), ds.NewMapDatastore())
+	m.AddAddr(id1, ma1, time.Hour)
+	// make record for id1 go to datastore
+	m.AddAddr(id2, ma2, time.Hour)
+
+	m.ClearAddrs(id1)
+
+	testPeerHas(t, m, nil, id1)
+	testPeerHas(t, m, []ma.Multiaddr{ma2}, id2)
 }
 
 func TestSetNegativeTTLClears(t *testing.T) {
 	id1 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
 	ma11 := MA(t, "/ip4/1.2.3.1/tcp/1111")
 
-	m := AddrManager{}
+	m := newAddrManager(context.Background(), ds.NewMapDatastore())
 	m.SetAddr(id1, ma11, time.Hour)
 
-	testHas(t, []ma.Multiaddr{ma11}, m.Addrs(id1))
+	testPeerHas(t, m, []ma.Multiaddr{ma11}, id1)
 
 	m.SetAddr(id1, ma11, -1)
 
-	testHas(t, nil, m.Addrs(id1))
+	testPeerHas(t, m, nil, id1)
 }
 
 func TestNilAddrsDontBreak(t *testing.T) {
 	id1 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
-	m := AddrManager{}
+	m := newAddrManager(context.Background(), ds.NewMapDatastore())
 	m.SetAddr(id1, nil, time.Hour)
 	m.AddAddr(id1, nil, time.Hour)
 }

@@ -9,7 +9,7 @@ import (
 
 	ic "github.com/libp2p/go-libp2p-crypto"
 
-	//ds "github.com/jbenet/go-datastore"
+	ds "github.com/ipfs/go-datastore"
 	//dssync "github.com/jbenet/go-datastore/sync"
 	logging "github.com/ipfs/go-log"
 	"github.com/libp2p/go-libp2p-peer"
@@ -31,12 +31,12 @@ type Peerstore interface {
 	Metrics
 
 	// Peers returns a list of all peer.IDs in this Peerstore
-	Peers() []peer.ID
+	Peers() ([]peer.ID, error)
 
 	// PeerInfo returns a peer.PeerInfo struct for given peer.ID.
 	// This is a small slice of the information Peerstore has on
 	// that peer, useful to other services.
-	PeerInfo(peer.ID) PeerInfo
+	PeerInfo(peer.ID) (PeerInfo, error)
 
 	// Get/Put is a simple registry for other peer-related key/value pairs.
 	// if we find something we use often, it should become its own set of
@@ -55,27 +55,27 @@ type Peerstore interface {
 type AddrBook interface {
 
 	// AddAddr calls AddAddrs(p, []ma.Multiaddr{addr}, ttl)
-	AddAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration)
+	AddAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) error
 
 	// AddAddrs gives AddrManager addresses to use, with a given ttl
 	// (time-to-live), after which the address is no longer valid.
 	// If the manager has a longer TTL, the operation is a no-op for that address
-	AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration)
+	AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) error
 
 	// SetAddr calls mgr.SetAddrs(p, addr, ttl)
-	SetAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration)
+	SetAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) error
 
 	// SetAddrs sets the ttl on addresses. This clears any TTL there previously.
 	// This is used when we receive the best estimate of the validity of an address.
-	SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration)
+	SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) error
 
 	// Addresses returns all known (and valid) addresses for a given peer
-	Addrs(p peer.ID) []ma.Multiaddr
+	Addrs(p peer.ID) ([]ma.Multiaddr, error)
 
 	// AddrStream returns a channel that gets all addresses for a given
 	// peer sent on it. If new addresses are added after the call is made
 	// they will be sent along through the channel as well.
-	AddrStream(context.Context, peer.ID) <-chan ma.Multiaddr
+	AddrStream(context.Context, peer.ID) (<-chan ma.Multiaddr, error)
 
 	// ClearAddresses removes all previously stored addresses
 	ClearAddrs(p peer.ID)
@@ -178,12 +178,13 @@ type peerstore struct {
 	protolock sync.Mutex
 }
 
-// NewPeerstore creates a threadsafe collection of peers.
-func NewPeerstore() Peerstore {
+// NewPeerstore creates a threadsafe collection of peers. ctx restrains the lifetime
+// of automatic expired addresses cleanup. Less frequently used addresses are kept in dstore.
+func NewPeerstore(ctx context.Context, dstore ds.Batching) Peerstore {
 	return &peerstore{
 		keybook:     newKeybook(),
 		metrics:     NewMetrics(),
-		AddrManager: AddrManager{},
+		AddrManager: *newAddrManager(ctx, dstore),
 		//ds:          dssync.MutexWrap(ds.NewMapDatastore()),
 		ds: make(map[string]interface{}),
 	}
@@ -213,12 +214,16 @@ func (ps *peerstore) Get(p peer.ID, key string) (interface{}, error) {
 	return i, nil
 }
 
-func (ps *peerstore) Peers() []peer.ID {
+func (ps *peerstore) Peers() ([]peer.ID, error) {
 	set := map[peer.ID]struct{}{}
 	for _, p := range ps.keybook.Peers() {
 		set[p] = struct{}{}
 	}
-	for _, p := range ps.AddrManager.Peers() {
+	amPeers, err := ps.AddrManager.Peers()
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range amPeers {
 		set[p] = struct{}{}
 	}
 
@@ -226,14 +231,18 @@ func (ps *peerstore) Peers() []peer.ID {
 	for p := range set {
 		pps = append(pps, p)
 	}
-	return pps
+	return pps, nil
 }
 
-func (ps *peerstore) PeerInfo(p peer.ID) PeerInfo {
+func (ps *peerstore) PeerInfo(p peer.ID) (PeerInfo, error) {
+	addrs, err := ps.AddrManager.Addrs(p)
+	if err != nil {
+		return PeerInfo{}, err
+	}
 	return PeerInfo{
 		ID:    p,
-		Addrs: ps.AddrManager.Addrs(p),
-	}
+		Addrs: addrs,
+	}, nil
 }
 
 func (ps *peerstore) SetProtocols(p peer.ID, protos ...string) error {
@@ -314,12 +323,16 @@ func (ps *peerstore) SupportsProtocols(p peer.ID, protos ...string) ([]string, e
 	return out, nil
 }
 
-func PeerInfos(ps Peerstore, peers []peer.ID) []PeerInfo {
-	pi := make([]PeerInfo, len(peers))
+func PeerInfos(ps Peerstore, peers []peer.ID) ([]PeerInfo, error) {
+	pis := make([]PeerInfo, len(peers))
 	for i, p := range peers {
-		pi[i] = ps.PeerInfo(p)
+		pi, err := ps.PeerInfo(p)
+		if err != nil {
+			return nil, err
+		}
+		pis[i] = pi
 	}
-	return pi
+	return pis, nil
 }
 
 func PeerInfoIDs(pis []PeerInfo) []peer.ID {
