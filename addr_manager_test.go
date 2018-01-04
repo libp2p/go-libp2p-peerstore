@@ -205,6 +205,44 @@ func TestSetNegativeTTLClears(t *testing.T) {
 	testHas(t, nil, m.Addrs(id1))
 }
 
+func TestUpdateTTLs(t *testing.T) {
+	id1 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
+	id2 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQM")
+	ma11 := MA(t, "/ip4/1.2.3.1/tcp/1111")
+	ma12 := MA(t, "/ip4/1.2.3.1/tcp/1112")
+	ma21 := MA(t, "/ip4/1.2.3.1/tcp/1121")
+	ma22 := MA(t, "/ip4/1.2.3.1/tcp/1122")
+
+	m := AddrManager{}
+	m.SetAddr(id1, ma11, time.Hour)
+	m.SetAddr(id1, ma12, time.Minute)
+	m.SetAddr(id2, ma21, time.Hour)
+	m.SetAddr(id2, ma22, time.Minute)
+
+	testHas(t, []ma.Multiaddr{ma11, ma12}, m.Addrs(id1))
+	testHas(t, []ma.Multiaddr{ma21, ma22}, m.Addrs(id2))
+
+	m.UpdateAddrs(id1, time.Hour, time.Millisecond)
+
+	testHas(t, []ma.Multiaddr{ma11, ma12}, m.Addrs(id1))
+	testHas(t, []ma.Multiaddr{ma21, ma22}, m.Addrs(id2))
+
+	time.Sleep(time.Millisecond)
+
+	testHas(t, []ma.Multiaddr{ma12}, m.Addrs(id1))
+	testHas(t, []ma.Multiaddr{ma21, ma22}, m.Addrs(id2))
+
+	m.UpdateAddrs(id2, time.Hour, time.Millisecond)
+
+	testHas(t, []ma.Multiaddr{ma12}, m.Addrs(id1))
+	testHas(t, []ma.Multiaddr{ma21, ma22}, m.Addrs(id2))
+
+	time.Sleep(time.Millisecond)
+
+	testHas(t, []ma.Multiaddr{ma12}, m.Addrs(id1))
+	testHas(t, []ma.Multiaddr{ma22}, m.Addrs(id2))
+}
+
 func TestNilAddrsDontBreak(t *testing.T) {
 	id1 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
 	m := AddrManager{}
