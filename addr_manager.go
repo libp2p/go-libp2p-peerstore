@@ -40,12 +40,13 @@ const (
 )
 
 type expiringAddr struct {
-	Addr ma.Multiaddr
-	TTL  time.Time
+	Addr    ma.Multiaddr
+	TTL     time.Duration
+	Expires time.Time
 }
 
 func (e *expiringAddr) ExpiredBy(t time.Time) bool {
-	return t.After(e.TTL)
+	return t.After(e.Expires)
 }
 
 type addrSet map[string]expiringAddr
@@ -122,8 +123,8 @@ func (mgr *AddrManager) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Durat
 
 		addrstr := string(addr.Bytes())
 		a, found := amap[addrstr]
-		if !found || exp.After(a.TTL) {
-			amap[addrstr] = expiringAddr{Addr: addr, TTL: exp}
+		if !found || exp.After(a.Expires) {
+			amap[addrstr] = expiringAddr{Addr: addr, Expires: exp, TTL: ttl}
 
 			for _, sub := range subs {
 				sub.pubAddr(addr)
@@ -164,13 +165,38 @@ func (mgr *AddrManager) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Durat
 		addrs := string(addr.Bytes())
 
 		if ttl > 0 {
-			amap[addrs] = expiringAddr{Addr: addr, TTL: exp}
+			amap[addrs] = expiringAddr{Addr: addr, Expires: exp, TTL: ttl}
 
 			for _, sub := range subs {
 				sub.pubAddr(addr)
 			}
 		} else {
 			delete(amap, addrs)
+		}
+	}
+}
+
+// UpdateAddrs updates the addresses associated with the given peer that have
+// the given oldTTL to have the given newTTL.
+func (mgr *AddrManager) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.Duration) {
+	mgr.addrmu.Lock()
+	defer mgr.addrmu.Unlock()
+
+	if mgr.addrs == nil {
+		return
+	}
+
+	amap, found := mgr.addrs[p]
+	if !found {
+		return
+	}
+
+	exp := time.Now().Add(newTTL)
+	for addrstr, aexp := range amap {
+		if oldTTL == aexp.TTL {
+			aexp.TTL = newTTL
+			aexp.Expires = exp
+			amap[addrstr] = aexp
 		}
 	}
 }
