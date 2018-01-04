@@ -2,6 +2,7 @@ package peerstore
 
 import (
 	"context"
+	"math"
 	"sort"
 	"sync"
 	"time"
@@ -27,16 +28,19 @@ const (
 
 	// OwnObservedAddrTTL is used for our own external addresses observed by peers.
 	OwnObservedAddrTTL = time.Minute * 10
+)
 
+// Perminent TTLs (distinct so we can distinguish between them)
+const (
 	// PermanentAddrTTL is the ttl for a "permanent address" (e.g. bootstrap nodes)
 	// if we haven't shipped you an update to ipfs in 356 days
 	// we probably arent running the same bootstrap nodes...
-	PermanentAddrTTL = time.Hour * 24 * 356
+	PermanentAddrTTL = math.MaxInt64 - iota
 
 	// ConnectedAddrTTL is the ttl used for the addresses of a peer to whom
 	// we're connected directly. This is basically permanent, as we will
 	// clear them + re-add under a TempAddrTTL after disconnecting.
-	ConnectedAddrTTL = PermanentAddrTTL
+	ConnectedAddrTTL
 )
 
 type expiringAddr struct {
