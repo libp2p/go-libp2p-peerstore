@@ -9,6 +9,7 @@ import (
 )
 
 func IDS(t *testing.T, ids string) peer.ID {
+	t.Helper()
 	id, err := peer.IDB58Decode(ids)
 	if err != nil {
 		t.Fatalf("id %q is bad: %s", ids, err)
@@ -17,6 +18,7 @@ func IDS(t *testing.T, ids string) peer.ID {
 }
 
 func MA(t *testing.T, m string) ma.Multiaddr {
+	t.Helper()
 	maddr, err := ma.NewMultiaddr(m)
 	if err != nil {
 		t.Fatal(err)
@@ -25,6 +27,7 @@ func MA(t *testing.T, m string) ma.Multiaddr {
 }
 
 func testHas(t *testing.T, exp, act []ma.Multiaddr) {
+	t.Helper()
 	if len(exp) != len(act) {
 		t.Fatal("lengths not the same")
 	}
