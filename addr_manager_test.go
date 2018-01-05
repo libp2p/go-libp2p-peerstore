@@ -214,8 +214,16 @@ func TestUpdateTTLs(t *testing.T) {
 	ma22 := MA(t, "/ip4/1.2.3.1/tcp/1122")
 
 	m := AddrManager{}
+
+	// Shouldn't panic.
+	m.UpdateAddrs(id1, time.Hour, time.Minute)
+
 	m.SetAddr(id1, ma11, time.Hour)
 	m.SetAddr(id1, ma12, time.Minute)
+
+	// Shouldn't panic.
+	m.UpdateAddrs(id2, time.Hour, time.Minute)
+
 	m.SetAddr(id2, ma21, time.Hour)
 	m.SetAddr(id2, ma22, time.Minute)
 
