@@ -69,6 +69,10 @@ type AddrBook interface {
 	// This is used when we receive the best estimate of the validity of an address.
 	SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration)
 
+	// UpdateAddrs updates the addresses associated with the given peer that have
+	// the given oldTTL to have the given newTTL.
+	UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.Duration)
+
 	// Addresses returns all known (and valid) addresses for a given peer
 	Addrs(p peer.ID) []ma.Multiaddr
 
