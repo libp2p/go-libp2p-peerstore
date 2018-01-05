@@ -30,7 +30,7 @@ const (
 	OwnObservedAddrTTL = time.Minute * 10
 )
 
-// Perminent TTLs (distinct so we can distinguish between them)
+// Permanent TTLs (distinct so we can distinguish between them)
 const (
 	// PermanentAddrTTL is the ttl for a "permanent address" (e.g. bootstrap nodes).
 	PermanentAddrTTL = math.MaxInt64 - iota
