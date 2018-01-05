@@ -12,7 +12,7 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 )
 
-const (
+var (
 
 	// TempAddrTTL is the ttl used for a short lived address
 	TempAddrTTL = time.Second * 10
@@ -30,7 +30,8 @@ const (
 	OwnObservedAddrTTL = time.Minute * 10
 )
 
-// Permanent TTLs (distinct so we can distinguish between them)
+// Permanent TTLs (distinct so we can distinguish between them, constant as they
+// are, in fact, permanent)
 const (
 	// PermanentAddrTTL is the ttl for a "permanent address" (e.g. bootstrap nodes).
 	PermanentAddrTTL = math.MaxInt64 - iota
