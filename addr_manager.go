@@ -52,13 +52,13 @@ func (e *expiringAddr) ExpiredBy(t time.Time) bool {
 	return t.After(e.Expires)
 }
 
-type addrSet map[string]expiringAddr
+type addrSlice []expiringAddr
 
 // AddrManager manages addresses.
 // The zero-value is ready to be used.
 type AddrManager struct {
 	addrmu sync.Mutex // guards addrs
-	addrs  map[peer.ID]addrSet
+	addrs  map[peer.ID]addrSlice
 
 	addrSubs map[peer.ID][]*addrSub
 }
@@ -67,7 +67,7 @@ type AddrManager struct {
 // So we can use the zero value.
 func (mgr *AddrManager) init() {
 	if mgr.addrs == nil {
-		mgr.addrs = make(map[peer.ID]addrSet)
+		mgr.addrs = make(map[peer.ID]addrSlice)
 	}
 	if mgr.addrSubs == nil {
 		mgr.addrSubs = make(map[peer.ID][]*addrSub)
@@ -108,10 +108,10 @@ func (mgr *AddrManager) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Durat
 	// so zero value can be used
 	mgr.init()
 
-	amap, found := mgr.addrs[p]
-	if !found {
-		amap = make(addrSet)
-		mgr.addrs[p] = amap
+	oldAddrs := mgr.addrs[p]
+	amap := make(map[string]expiringAddr, len(oldAddrs))
+	for _, ea := range oldAddrs {
+		amap[string(ea.Addr.Bytes())] = ea
 	}
 
 	subs := mgr.addrSubs[p]
@@ -134,6 +134,11 @@ func (mgr *AddrManager) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Durat
 			}
 		}
 	}
+	newAddrs := make([]expiringAddr, 0, len(amap))
+	for _, ea := range amap {
+		newAddrs = append(newAddrs, ea)
+	}
+	mgr.addrs[p] = newAddrs
 }
 
 // SetAddr calls mgr.SetAddrs(p, addr, ttl)
@@ -150,10 +155,10 @@ func (mgr *AddrManager) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Durat
 	// so zero value can be used
 	mgr.init()
 
-	amap, found := mgr.addrs[p]
-	if !found {
-		amap = make(addrSet)
-		mgr.addrs[p] = amap
+	oldAddrs := mgr.addrs[p]
+	amap := make(map[string]expiringAddr, len(oldAddrs))
+	for _, ea := range oldAddrs {
+		amap[string(ea.Addr.Bytes())] = ea
 	}
 
 	subs := mgr.addrSubs[p]
@@ -177,6 +182,11 @@ func (mgr *AddrManager) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Durat
 			delete(amap, addrs)
 		}
 	}
+	newAddrs := make([]expiringAddr, 0, len(amap))
+	for _, ea := range amap {
+		newAddrs = append(newAddrs, ea)
+	}
+	mgr.addrs[p] = newAddrs
 }
 
 // UpdateAddrs updates the addresses associated with the given peer that have
@@ -221,21 +231,19 @@ func (mgr *AddrManager) Addrs(p peer.ID) []ma.Multiaddr {
 
 	now := time.Now()
 	good := make([]ma.Multiaddr, 0, len(maddrs))
-	var expired []string
-	for s, m := range maddrs {
-		if m.ExpiredBy(now) {
-			expired = append(expired, s)
-		} else {
+	cleaned := make([]expiringAddr, 0, len(maddrs))
+	for _, m := range maddrs {
+		if !m.ExpiredBy(now) {
+			cleaned = append(cleaned, m)
 			good = append(good, m.Addr)
 		}
 	}
 
 	// clean up the expired ones.
-	for _, s := range expired {
-		delete(maddrs, s)
-	}
-	if len(maddrs) == 0 {
+	if len(cleaned) == 0 {
 		delete(mgr.addrs, p)
+	} else {
+		mgr.addrs[p] = cleaned
 	}
 	return good
 }
@@ -295,9 +303,9 @@ func (mgr *AddrManager) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Mul
 
 	mgr.addrSubs[p] = append(mgr.addrSubs[p], sub)
 
-	baseaddrset := mgr.addrs[p]
-	initial := make([]ma.Multiaddr, 0, len(baseaddrset))
-	for _, a := range baseaddrset {
+	baseaddrslice := mgr.addrs[p]
+	initial := make([]ma.Multiaddr, 0, len(baseaddrslice))
+	for _, a := range baseaddrslice {
 		initial = append(initial, a.Addr)
 	}
 
