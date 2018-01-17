@@ -108,8 +108,9 @@ func (mgr *AddrManager) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Durat
 	// so zero value can be used
 	mgr.init()
 
-	amap := make(map[string]expiringAddr)
-	for _, ea := range mgr.addrs[p] {
+	oldAddrs := mgr.addrs[p]
+	amap := make(map[string]expiringAddr, len(oldAddrs))
+	for _, ea := range oldAddrs {
 		amap[string(ea.Addr.Bytes())] = ea
 	}
 
@@ -154,8 +155,9 @@ func (mgr *AddrManager) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Durat
 	// so zero value can be used
 	mgr.init()
 
-	amap := make(map[string]expiringAddr)
-	for _, ea := range mgr.addrs[p] {
+	oldAddrs := mgr.addrs[p]
+	amap := make(map[string]expiringAddr, len(oldAddrs))
+	for _, ea := range oldAddrs {
 		amap[string(ea.Addr.Bytes())] = ea
 	}
 
@@ -238,7 +240,6 @@ func (mgr *AddrManager) Addrs(p peer.ID) []ma.Multiaddr {
 	}
 
 	// clean up the expired ones.
-	mgr.addrs[p] = cleaned
 	if len(cleaned) == 0 {
 		delete(mgr.addrs, p)
 	} else {
