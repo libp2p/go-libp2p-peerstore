@@ -199,17 +199,17 @@ func (mgr *AddrManager) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time
 		return
 	}
 
-	amap, found := mgr.addrs[p]
+	addrs, found := mgr.addrs[p]
 	if !found {
 		return
 	}
 
 	exp := time.Now().Add(newTTL)
-	for addrstr, aexp := range amap {
+	for i := range addrs {
+		aexp := &addrs[i]
 		if oldTTL == aexp.TTL {
 			aexp.TTL = newTTL
 			aexp.Expires = exp
-			amap[addrstr] = aexp
 		}
 	}
 }
