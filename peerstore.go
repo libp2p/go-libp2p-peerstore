@@ -127,6 +127,15 @@ func (kb *keybook) PubKey(p peer.ID) ic.PubKey {
 	kb.RLock()
 	pk := kb.pks[p]
 	kb.RUnlock()
+	if pk != nil {
+		return pk
+	}
+	pk, err := p.ExtractPublicKey()
+	if err == nil && pk != nil {
+		kb.Lock()
+		kb.pks[p] = pk
+		kb.Unlock()
+	}
 	return pk
 }
 
