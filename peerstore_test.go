@@ -269,3 +269,40 @@ func TestBasicPeerstore(t *testing.T) {
 		t.Fatal("stored wrong address")
 	}
 }
+
+func BenchmarkBasicPeerstore(b *testing.B) {
+	ps := NewPeerstore()
+
+	addrs := make(chan *peerpair, 100)
+
+	go addressProducer(b, addrs, 50000)
+
+	b.ResetTimer()
+	for {
+		pp, ok := <-addrs
+		if !ok {
+			break
+		}
+		pid := peer.ID(pp.ID)
+		ps.AddAddr(pid, pp.Addr, PermanentAddrTTL)
+	}
+}
+
+func BenchmarkBasicPeerstoreRateLimited(b *testing.B) {
+	ps := NewPeerstore()
+
+	producer := make(chan *peerpair, 100)
+	addrs := make(chan *peerpair, 100)
+
+	go rateLimitedAddressProducer(b, addrs, producer, 5000, time.Millisecond, 500 * time.Microsecond)
+
+	b.ResetTimer()
+	for {
+		pp, ok := <-addrs
+		if !ok {
+			break
+		}
+		pid := peer.ID(pp.ID)
+		ps.AddAddr(pid, pp.Addr, PermanentAddrTTL)
+	}
+}
