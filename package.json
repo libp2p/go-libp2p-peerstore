@@ -33,9 +33,9 @@
     },
     {
       "author": "jbenet",
-      "hash": "QmRK2LxanhK2gZq6k6R7vk5ZoYZk8ULSSTB7FzDsMUX6CB",
+      "hash": "QmcGXGdw9BWDysPJQHxJinjGHha3eEg4vzFETre4woNwcX",
       "name": "go-multiaddr-net",
-      "version": "1.5.7"
+      "version": "1.6.0"
     },
     {
       "author": "whyrusleeping",
@@ -61,6 +61,6 @@
   "license": "MIT",
   "name": "go-libp2p-peerstore",
   "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
-  "version": "1.4.17"
+  "version": "1.4.18"
 }
 
