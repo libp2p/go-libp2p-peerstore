@@ -6,6 +6,7 @@ import (
 
 	"github.com/libp2p/go-libp2p-peer"
 	ma "github.com/multiformats/go-multiaddr"
+	"os"
 )
 
 func IDS(t *testing.T, ids string) peer.ID {
@@ -29,7 +30,7 @@ func MA(t *testing.T, m string) ma.Multiaddr {
 func testHas(t *testing.T, exp, act []ma.Multiaddr) {
 	t.Helper()
 	if len(exp) != len(act) {
-		t.Fatal("lengths not the same")
+		t.Fatalf("lengths not the same. expected %d, got %d\n", len(exp), len(act))
 	}
 
 	for _, a := range exp {
@@ -48,8 +49,7 @@ func testHas(t *testing.T, exp, act []ma.Multiaddr) {
 	}
 }
 
-func TestAddresses(t *testing.T) {
-
+func testAddresses(t *testing.T, m AddrBook) {
 	id1 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
 	id2 := IDS(t, "QmRmPL3FDZKE3Qiwv1RosLdwdvbvg17b2hB39QPScgWKKZ")
 	id3 := IDS(t, "QmPhi7vBsChP7sjRoZGgg7bcKqF6MmCcQwvRbDte8aJ6Kn")
@@ -73,7 +73,6 @@ func TestAddresses(t *testing.T) {
 	ma55 := MA(t, "/ip4/5.2.3.3/tcp/5555")
 
 	ttl := time.Hour
-	m := AddrManager{}
 	m.AddAddr(id1, ma11, ttl)
 
 	m.AddAddrs(id2, []ma.Multiaddr{ma21, ma22}, ttl)
@@ -92,21 +91,40 @@ func TestAddresses(t *testing.T) {
 	m.ClearAddrs(id5)
 	m.AddAddrs(id5, []ma.Multiaddr{ma51, ma52, ma53, ma54, ma55}, ttl) // clearing
 
-	if len(m.Peers()) != 5 {
-		t.Fatal("should have exactly two peers in the address book")
-	}
-
 	// test the Addresses return value
 	testHas(t, []ma.Multiaddr{ma11}, m.Addrs(id1))
 	testHas(t, []ma.Multiaddr{ma21, ma22}, m.Addrs(id2))
 	testHas(t, []ma.Multiaddr{ma31, ma32, ma33}, m.Addrs(id3))
 	testHas(t, []ma.Multiaddr{ma41, ma42, ma43, ma44}, m.Addrs(id4))
 	testHas(t, []ma.Multiaddr{ma51, ma52, ma53, ma54, ma55}, m.Addrs(id5))
-
 }
 
-func TestAddressesExpire(t *testing.T) {
+func setupBadgerAddrManager(t *testing.T) (*AddrManagerBadger, func ()) {
+	dataPath := os.TempDir()
+	mgr, err := NewBadgerAddrManager(dataPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	closer := func () {
+		mgr.Close()
+		os.RemoveAll(dataPath)
+	}
+	return mgr, closer
+}
 
+func TestAddresses(t *testing.T) {
+	t.Log("AddrManager")
+	mgr1 := AddrManager{}
+	testAddresses(t, &mgr1)
+
+	t.Log("AddrManager")
+
+	mgr2, closer := setupBadgerAddrManager(t)
+	defer closer()
+	testAddresses(t, mgr2)
+}
+
+func testAddressesExpire(t *testing.T, m AddrBook) {
 	id1 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
 	id2 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQM")
 	ma11 := MA(t, "/ip4/1.2.3.1/tcp/1111")
@@ -115,16 +133,11 @@ func TestAddressesExpire(t *testing.T) {
 	ma24 := MA(t, "/ip4/4.2.3.3/tcp/4444")
 	ma25 := MA(t, "/ip4/5.2.3.3/tcp/5555")
 
-	m := AddrManager{}
 	m.AddAddr(id1, ma11, time.Hour)
 	m.AddAddr(id1, ma12, time.Hour)
 	m.AddAddr(id1, ma13, time.Hour)
 	m.AddAddr(id2, ma24, time.Hour)
 	m.AddAddr(id2, ma25, time.Hour)
-
-	if len(m.Peers()) != 2 {
-		t.Fatal("should have exactly two peers in the address book")
-	}
 
 	testHas(t, []ma.Multiaddr{ma11, ma12, ma13}, m.Addrs(id1))
 	testHas(t, []ma.Multiaddr{ma24, ma25}, m.Addrs(id2))
@@ -164,8 +177,18 @@ func TestAddressesExpire(t *testing.T) {
 	testHas(t, nil, m.Addrs(id2))
 }
 
-func TestClearWorks(t *testing.T) {
+func TestAddressesExpire(t *testing.T) {
+	t.Log("AddrManager")
+	m1 := &AddrManager{}
+	testAddressesExpire(t, m1)
 
+	t.Log("AddrManagerBadger")
+	m2, closer := setupBadgerAddrManager(t)
+	defer closer()
+	testAddressesExpire(t, m2)
+}
+
+func testClearWorks(t *testing.T, m AddrBook) {
 	id1 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
 	id2 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQM")
 	ma11 := MA(t, "/ip4/1.2.3.1/tcp/1111")
@@ -174,7 +197,6 @@ func TestClearWorks(t *testing.T) {
 	ma24 := MA(t, "/ip4/4.2.3.3/tcp/4444")
 	ma25 := MA(t, "/ip4/5.2.3.3/tcp/5555")
 
-	m := AddrManager{}
 	m.AddAddr(id1, ma11, time.Hour)
 	m.AddAddr(id1, ma12, time.Hour)
 	m.AddAddr(id1, ma13, time.Hour)
@@ -191,11 +213,21 @@ func TestClearWorks(t *testing.T) {
 	testHas(t, nil, m.Addrs(id2))
 }
 
-func TestSetNegativeTTLClears(t *testing.T) {
+func TestClearWorks(t *testing.T) {
+	t.Log("AddrManager")
+	m1 := &AddrManager{}
+	testClearWorks(t, m1)
+
+	t.Log("AddrManagerBadger")
+	m2, closer := setupBadgerAddrManager(t)
+	defer closer()
+	testClearWorks(t, m2)
+}
+
+func testSetNegativeTTLClears(t *testing.T, m AddrBook) {
 	id1 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
 	ma11 := MA(t, "/ip4/1.2.3.1/tcp/1111")
 
-	m := AddrManager{}
 	m.SetAddr(id1, ma11, time.Hour)
 
 	testHas(t, []ma.Multiaddr{ma11}, m.Addrs(id1))
@@ -204,16 +236,24 @@ func TestSetNegativeTTLClears(t *testing.T) {
 
 	testHas(t, nil, m.Addrs(id1))
 }
+func TestSetNegativeTTLClears(t *testing.T) {
+	t.Log("AddrManager")
+	m1 := &AddrManager{}
+	testSetNegativeTTLClears(t, m1)
 
-func TestUpdateTTLs(t *testing.T) {
+	t.Log("AddrManagerBadger")
+	m2, closer := setupBadgerAddrManager(t)
+	defer closer()
+	testSetNegativeTTLClears(t, m2)
+}
+
+func testUpdateTTLs(t *testing.T, m AddrBook) {
 	id1 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
 	id2 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQM")
 	ma11 := MA(t, "/ip4/1.2.3.1/tcp/1111")
 	ma12 := MA(t, "/ip4/1.2.3.1/tcp/1112")
 	ma21 := MA(t, "/ip4/1.2.3.1/tcp/1121")
 	ma22 := MA(t, "/ip4/1.2.3.1/tcp/1122")
-
-	m := AddrManager{}
 
 	// Shouldn't panic.
 	m.UpdateAddrs(id1, time.Hour, time.Minute)
@@ -230,30 +270,52 @@ func TestUpdateTTLs(t *testing.T) {
 	testHas(t, []ma.Multiaddr{ma11, ma12}, m.Addrs(id1))
 	testHas(t, []ma.Multiaddr{ma21, ma22}, m.Addrs(id2))
 
-	m.UpdateAddrs(id1, time.Hour, time.Millisecond)
+	m.UpdateAddrs(id1, time.Hour, time.Second)
 
 	testHas(t, []ma.Multiaddr{ma11, ma12}, m.Addrs(id1))
 	testHas(t, []ma.Multiaddr{ma21, ma22}, m.Addrs(id2))
 
-	time.Sleep(time.Millisecond)
+	time.Sleep(time.Second)
 
 	testHas(t, []ma.Multiaddr{ma12}, m.Addrs(id1))
 	testHas(t, []ma.Multiaddr{ma21, ma22}, m.Addrs(id2))
 
-	m.UpdateAddrs(id2, time.Hour, time.Millisecond)
+	m.UpdateAddrs(id2, time.Hour, time.Second)
 
 	testHas(t, []ma.Multiaddr{ma12}, m.Addrs(id1))
 	testHas(t, []ma.Multiaddr{ma21, ma22}, m.Addrs(id2))
 
-	time.Sleep(time.Millisecond)
+	time.Sleep(time.Second)
 
 	testHas(t, []ma.Multiaddr{ma12}, m.Addrs(id1))
 	testHas(t, []ma.Multiaddr{ma22}, m.Addrs(id2))
 }
 
-func TestNilAddrsDontBreak(t *testing.T) {
+func TestUpdateTTLs(t *testing.T) {
+	t.Log("AddrManager")
+	m1 := &AddrManager{}
+	testUpdateTTLs(t, m1)
+
+	t.Log("AddrManagerBadger")
+	m2, closer := setupBadgerAddrManager(t)
+	defer closer()
+	testUpdateTTLs(t, m2)
+}
+
+func testNilAddrsDontBreak(t *testing.T, m AddrBook) {
 	id1 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
-	m := AddrManager{}
 	m.SetAddr(id1, nil, time.Hour)
 	m.AddAddr(id1, nil, time.Hour)
+}
+
+func TestNilAddrsDontBreak(t *testing.T) {
+	t.Log("AddrManager")
+	m1 := &AddrManager{}
+	testNilAddrsDontBreak(t, m1)
+	t.Log("OK")
+	t.Log("AddrManagerBadger")
+	m2, closer := setupBadgerAddrManager(t)
+	defer closer()
+	testNilAddrsDontBreak(t, m2)
+	t.Log("OK")
 }
