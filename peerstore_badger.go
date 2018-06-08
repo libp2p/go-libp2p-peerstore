@@ -1,91 +1,140 @@
 package peerstore
 
 import (
-	"github.com/dgraph-io/badger"
-	"github.com/libp2p/go-libp2p-crypto"
-	"time"
+	"fmt"
+	"sync"
+
 	"github.com/libp2p/go-libp2p-peer"
 )
 
-type keybook_badger struct {
+type PeerstoreBadger struct {
+	*keybook
+	*metrics
+	*AddrManagerBadger
 
+	ds     map[string]interface{}
+	dslock sync.Mutex
+
+	// lock for protocol information, separate from datastore lock
+	protolock sync.Mutex
 }
 
-func (kb *keybook_badger) PubKey(peer.ID) crypto.PubKey {
-	panic("implement me")
+func NewPeerstoreBadger(dataPath string) *PeerstoreBadger {
+	mgr, err := NewBadgerAddrManager(dataPath)
+	if err != nil {
+		panic(err)
+	}
+	return &PeerstoreBadger{
+		keybook:           newKeybook(),
+		metrics:           NewMetrics(),
+		AddrManagerBadger: mgr,
+		ds:                make(map[string]interface{}),
+	}
 }
 
-func (kb *keybook_badger) AddPubKey(peer.ID, crypto.PubKey) error {
-	panic("implement me")
+func (ps *PeerstoreBadger) Close() error {
+	ps.AddrManagerBadger.Close()
+	return nil
 }
 
-func (kb *keybook_badger) PrivKey(peer.ID) crypto.PrivKey {
-	panic("implement me")
+func (ps *PeerstoreBadger) PeerInfo(p peer.ID) PeerInfo {
+	return PeerInfo{
+		ID:    p,
+		Addrs: ps.AddrManagerBadger.Addrs(p),
+	}
 }
 
-func (kb *keybook_badger) AddPrivKey(peer.ID, crypto.PrivKey) error {
-	panic("implement me")
+func (ps *PeerstoreBadger) Get(p peer.ID, key string) (interface{}, error) {
+	ps.dslock.Lock()
+	defer ps.dslock.Unlock()
+	i, ok := ps.ds[string(p)+"/"+key]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	return i, nil
 }
 
-type peerstore_badger struct {
-	*addrmanager_badger
-	*keybook_badger
-	*badger.DB
+func (ps *PeerstoreBadger) Put(p peer.ID, key string, val interface{}) error {
+	ps.dslock.Lock()
+	defer ps.dslock.Unlock()
+	ps.ds[string(p)+"/"+key] = val
+	return nil
 }
 
-func (store *peerstore_badger) PubKey(peer.ID) crypto.PubKey {
-	panic("implement me")
+func (ps *PeerstoreBadger) getProtocolMap(p peer.ID) (map[string]struct{}, error) {
+	iprotomap, err := ps.Get(p, "protocols")
+	switch err {
+	default:
+		return nil, err
+	case ErrNotFound:
+		return make(map[string]struct{}), nil
+	case nil:
+		cast, ok := iprotomap.(map[string]struct{})
+		if !ok {
+			return nil, fmt.Errorf("stored protocol set was not a map")
+		}
+
+		return cast, nil
+	}
 }
 
-func (store *peerstore_badger) AddPubKey(peer.ID, crypto.PubKey) error {
-	panic("implement me")
+func (ps *PeerstoreBadger) GetProtocols(p peer.ID) ([]string, error) {
+	ps.protolock.Lock()
+	defer ps.protolock.Unlock()
+	pmap, err := ps.getProtocolMap(p)
+	if err != nil {
+		return nil, err
+	}
+
+	var out []string
+	for k, _ := range pmap {
+		out = append(out, k)
+	}
+
+	return out, nil
 }
 
-func (store *peerstore_badger) PrivKey(peer.ID) crypto.PrivKey {
-	panic("implement me")
+func (ps *PeerstoreBadger) AddProtocols(p peer.ID, protos ...string) error {
+	ps.protolock.Lock()
+	defer ps.protolock.Unlock()
+	protomap, err := ps.getProtocolMap(p)
+	if err != nil {
+		return err
+	}
+
+	for _, proto := range protos {
+		protomap[proto] = struct{}{}
+	}
+
+	return ps.Put(p, "protocols", protomap)
 }
 
-func (store *peerstore_badger) AddPrivKey(peer.ID, crypto.PrivKey) error {
-	panic("implement me")
+func (ps *PeerstoreBadger) SetProtocols(p peer.ID, protos ...string) error {
+	ps.protolock.Lock()
+	defer ps.protolock.Unlock()
+
+	protomap := make(map[string]struct{})
+	for _, proto := range protos {
+		protomap[proto] = struct{}{}
+	}
+
+	return ps.Put(p, "protocols", protomap)
 }
 
-func (store *peerstore_badger) RecordLatency(peer.ID, time.Duration) {
-	panic("implement me")
-}
+func (ps *PeerstoreBadger) SupportsProtocols(p peer.ID, protos ...string) ([]string, error) {
+	ps.protolock.Lock()
+	defer ps.protolock.Unlock()
+	pmap, err := ps.getProtocolMap(p)
+	if err != nil {
+		return nil, err
+	}
 
-func (store *peerstore_badger) LatencyEWMA(peer.ID) time.Duration {
-	panic("implement me")
-}
+	var out []string
+	for _, proto := range protos {
+		if _, ok := pmap[proto]; ok {
+			out = append(out, proto)
+		}
+	}
 
-func (store *peerstore_badger) Peers() []peer.ID {
-	panic("implement me")
+	return out, nil
 }
-
-func (store *peerstore_badger) PeerInfo(peer.ID) PeerInfo {
-	panic("implement me")
-}
-
-func (store *peerstore_badger) Get(id peer.ID, key string) (interface{}, error) {
-	panic("implement me")
-}
-
-func (store *peerstore_badger) Put(id peer.ID, key string, val interface{}) error {
-	panic("implement me")
-}
-
-func (store *peerstore_badger) GetProtocols(peer.ID) ([]string, error) {
-	panic("implement me")
-}
-
-func (store *peerstore_badger) AddProtocols(peer.ID, ...string) error {
-	panic("implement me")
-}
-
-func (store *peerstore_badger) SetProtocols(peer.ID, ...string) error {
-	panic("implement me")
-}
-
-func (store *peerstore_badger) SupportsProtocols(peer.ID, ...string) ([]string, error) {
-	panic("implement me")
-}
-

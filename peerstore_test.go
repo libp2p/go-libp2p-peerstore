@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"os"
+
 	peer "github.com/libp2p/go-libp2p-peer"
 	ma "github.com/multiformats/go-multiaddr"
 )
@@ -277,6 +279,27 @@ func BenchmarkBasicPeerstore(b *testing.B) {
 
 	go addressProducer(b, addrs, 50000)
 
+	for {
+		pp, ok := <-addrs
+		if !ok {
+			break
+		}
+		pid := peer.ID(pp.ID)
+		ps.AddAddr(pid, pp.Addr, PermanentAddrTTL)
+	}
+}
+
+func BenchmarkBadgerPeerstore(b *testing.B) {
+	dataPath := os.TempDir()
+	ps := NewPeerstoreBadger(dataPath)
+	defer func() {
+		ps.Close()
+		os.RemoveAll(dataPath)
+	}()
+
+	addrs := make(chan *peerpair, 100)
+	go addressProducer(b, addrs, 50000)
+
 	b.ResetTimer()
 	for {
 		pp, ok := <-addrs
@@ -294,7 +317,31 @@ func BenchmarkBasicPeerstoreRateLimited(b *testing.B) {
 	producer := make(chan *peerpair, 100)
 	addrs := make(chan *peerpair, 100)
 
-	go rateLimitedAddressProducer(b, addrs, producer, 5000, time.Millisecond, 500 * time.Microsecond)
+	go rateLimitedAddressProducer(b, addrs, producer, 5000, time.Millisecond, 500*time.Microsecond)
+
+	b.ResetTimer()
+	for {
+		pp, ok := <-addrs
+		if !ok {
+			break
+		}
+		pid := peer.ID(pp.ID)
+		ps.AddAddr(pid, pp.Addr, PermanentAddrTTL)
+	}
+}
+
+func BenchmarkBadgerPeerstoreRateLimited(b *testing.B) {
+	dataPath := os.TempDir()
+	ps := NewPeerstoreBadger(dataPath)
+	defer func() {
+		ps.Close()
+		os.RemoveAll(dataPath)
+	}()
+
+	producer := make(chan *peerpair, 100)
+	addrs := make(chan *peerpair, 100)
+
+	go rateLimitedAddressProducer(b, addrs, producer, 5000, time.Millisecond, 500*time.Microsecond)
 
 	b.ResetTimer()
 	for {
