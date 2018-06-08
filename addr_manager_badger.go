@@ -6,17 +6,15 @@ import (
 
 	"github.com/libp2p/go-libp2p-peer"
 	ma "github.com/multiformats/go-multiaddr"
-	//"github.com/hashicorp/golang-lru"
 	"github.com/dgraph-io/badger"
 	"github.com/multiformats/go-multihash"
 	"encoding/gob"
 	"bytes"
-	"encoding/binary"
 )
 
-type addrmanager_badger struct {
-	//cache *lru.Cache
-	db *badger.DB
+type AddrManagerBadger struct {
+	DB *badger.DB
+	addrSubs map[peer.ID][]*addrSub
 }
 
 type addrentry struct {
@@ -24,15 +22,33 @@ type addrentry struct {
 	TTL time.Duration
 }
 
-func NewBadgerAddrManager() *addrmanager_badger {
-	db, err := badger.Open(badger.DefaultOptions)
-	if err != nil {
-		panic(err)
+func (mgr *AddrManagerBadger) sendSubscriptionUpdates(p *peer.ID, addrs []ma.Multiaddr) {
+	subs := mgr.addrSubs[*p]
+	for _, sub := range subs {
+		for _, addr := range addrs {
+			sub.pubAddr(addr)
+		}
 	}
-	return &addrmanager_badger{db: db}
 }
 
-func (mgr *addrmanager_badger) AddAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) {
+func (mgr *AddrManagerBadger) Close() {
+	if err := mgr.DB.Close(); err != nil {
+		log.Error(err)
+	}
+}
+
+func NewBadgerAddrManager(dataPath string) (*AddrManagerBadger, error) {
+	opts := badger.DefaultOptions
+	opts.Dir = dataPath
+	opts.ValueDir = dataPath
+	db, err := badger.Open(opts)
+	if err != nil {
+		return nil, err
+	}
+	return &AddrManagerBadger{DB: db}, nil
+}
+
+func (mgr *AddrManagerBadger) AddAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) {
 	mgr.AddAddrs(p, []ma.Multiaddr{addr}, ttl)
 }
 
@@ -41,31 +57,8 @@ func hashMultiaddr(addr *ma.Multiaddr) ([]byte, error) {
 	return multihash.Encode((*addr).Bytes(), multihash.MURMUR3)
 }
 
-// not relevant w/ key prefixing
-func createAddrEntry(addr ma.Multiaddr, ttl time.Duration) ([]byte, error) {
-	entry := addrentry{Addr: addr.Bytes(), TTL: ttl}
-	buf := bytes.Buffer{}
-	enc := gob.NewEncoder(&buf)
-	if err := enc.Encode(entry); err != nil {
-		return nil, err
-	}
-
-	return buf.Bytes(), nil
-}
-
-func createKeyPrefix(p *peer.ID, ttl time.Duration) ([]byte, error) {
-	buf := bytes.NewBufferString(string(*p))
-	if err := binary.Write(buf, binary.LittleEndian, ttl); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
-
-func createUniqueKey(p *peer.ID, addr *ma.Multiaddr, ttl time.Duration) ([]byte, error) {
-	prefix, err := createKeyPrefix(p, ttl)
-	if err != nil {
-		return nil, err
-	}
+func createUniqueKey(p *peer.ID, addr *ma.Multiaddr) ([]byte, error) {
+	prefix := []byte(*p)
 	addrHash, err := hashMultiaddr(addr)
 	if err != nil {
 		return nil, err
@@ -76,55 +69,86 @@ func createUniqueKey(p *peer.ID, addr *ma.Multiaddr, ttl time.Duration) ([]byte,
 
 func addAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration, txn *badger.Txn) {
 	for _, addr := range addrs {
-		key, err := createUniqueKey(&p, &addr, ttl)
+		if addr == nil {
+			continue
+		}
+		entry := &addrentry{Addr: addr.Bytes(), TTL: ttl}
+		key, err := createUniqueKey(&p, &addr)
 		if err != nil {
 			log.Error(err)
 			txn.Discard()
 			return
 		}
-		txn.SetWithTTL(key, addr.Bytes(), ttl)
+		buf := &bytes.Buffer{}
+		enc := gob.NewEncoder(buf)
+		if err := enc.Encode(entry); err != nil {
+			log.Error(err)
+			txn.Discard()
+			return
+		}
+		txn.SetWithTTL(key, buf.Bytes(), ttl)
 	}
 }
 
-func (mgr *addrmanager_badger) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
-	// if ttl is zero, exit. nothing to do.
+func (mgr *AddrManagerBadger) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
 	if ttl <= 0 {
 		log.Debugf("short circuiting AddAddrs with ttl %d", ttl)
 		return
 	}
 
-	txn := mgr.db.NewTransaction(true)
+	txn := mgr.DB.NewTransaction(true)
 	defer txn.Discard()
 
+
+	go mgr.sendSubscriptionUpdates(&p, addrs)
 	addAddrs(p, addrs, ttl, txn)
 
-	txn.Commit(func (err error) {
+	txn.Commit(nil)
+}
+
+func (mgr *AddrManagerBadger) SetAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) {
+	mgr.SetAddrs(p, []ma.Multiaddr{addr}, ttl)
+}
+
+func (mgr *AddrManagerBadger) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
+	txn := mgr.DB.NewTransaction(true)
+	defer txn.Discard()
+
+	for _, addr := range addrs {
+		if addr == nil {
+			continue
+		}
+		key, err := createUniqueKey(&p, &addr)
 		if err != nil {
 			log.Error(err)
+			continue
 		}
-	})
-}
-
-func (mgr *addrmanager_badger) SetAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) {
-	mgr.AddAddr(p, addr, ttl)
-}
-
-func (mgr *addrmanager_badger) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
-	mgr.AddAddrs(p, addrs, ttl)
-}
-
-func (mgr *addrmanager_badger) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.Duration) {
-	prefix, err := createKeyPrefix(&p, oldTTL)
-	if err != nil {
-		log.Error(err)
-		return
+		if ttl <= 0 {
+			if err := txn.Delete(key); err != nil {
+				log.Error(err)
+			}
+		} else {
+			entry := &addrentry{Addr: addr.Bytes(), TTL: ttl}
+			buf := &bytes.Buffer{}
+			enc := gob.NewEncoder(buf)
+			if err := enc.Encode(entry); err != nil {
+				log.Error(err)
+				continue
+			}
+			txn.SetWithTTL(key, buf.Bytes(), ttl)
+		}
 	}
-	txn := mgr.db.NewTransaction(true)
+
+	txn.Commit(nil)
+}
+
+func (mgr *AddrManagerBadger) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.Duration) {
+	prefix := []byte(p)
+	txn := mgr.DB.NewTransaction(true)
 	defer txn.Discard()
 	opts := badger.DefaultIteratorOptions
 	iter := txn.NewIterator(opts)
 
-	var addrs []ma.Multiaddr
 	iter.Seek(prefix)
 	for iter.ValidForPrefix(prefix) {
 		item := iter.Item()
@@ -133,22 +157,32 @@ func (mgr *addrmanager_badger) UpdateAddrs(p peer.ID, oldTTL time.Duration, newT
 			log.Error(err)
 			return
 		}
-		addrs = append(addrs, ma.Cast(addrbytes))
+		entry := &addrentry{}
+		buf := bytes.NewBuffer(addrbytes)
+		dec := gob.NewDecoder(buf)
+		if err := dec.Decode(&entry); err != nil {
+			log.Error(err)
+			return
+		}
+		if entry.TTL == oldTTL {
+			entry.TTL = newTTL
+			buf := &bytes.Buffer{}
+			enc := gob.NewEncoder(buf)
+			if err := enc.Encode(&entry); err != nil {
+				log.Error(err)
+				return
+			}
+			txn.SetWithTTL(item.Key(), buf.Bytes(), newTTL)
+		}
 
 		iter.Next()
 	}
 
-	addAddrs(p, addrs, newTTL, txn)
-
-	txn.Commit(func (err error) {
-		if err != nil {
-			log.Error(err)
-		}
-	})
+	txn.Commit(nil)
 }
 
-func (mgr *addrmanager_badger) Addrs(p peer.ID) []ma.Multiaddr {
-	txn := mgr.db.NewTransaction(false)
+func (mgr *AddrManagerBadger) Addrs(p peer.ID) []ma.Multiaddr {
+	txn := mgr.DB.NewTransaction(false)
 	defer txn.Discard()
 
 	prefix := []byte(p)
@@ -166,7 +200,15 @@ func (mgr *addrmanager_badger) Addrs(p peer.ID) []ma.Multiaddr {
 			if err != nil {
 				log.Error(err)
 			} else {
-				addrs = append(addrs, ma.Cast(value))
+				entry := &addrentry{}
+				buf := bytes.NewBuffer(value)
+				dec := gob.NewDecoder(buf)
+				if err := dec.Decode(&entry); err != nil {
+					log.Error("deleting bad entry in peerstore for peer", p.String())
+					txn.Delete(item.Key())
+				} else {
+					addrs = append(addrs, ma.Cast(entry.Addr))
+				}
 			}
 		}
 
@@ -178,32 +220,28 @@ func (mgr *addrmanager_badger) Addrs(p peer.ID) []ma.Multiaddr {
 	return addrs
 }
 
-func (mgr *addrmanager_badger) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Multiaddr {
+func (mgr *AddrManagerBadger) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Multiaddr {
 	addrs := make(chan ma.Multiaddr)
 
-	//mgr.db.View(func (txn *badger.Txn) error {
-	//	defer close(addrs)
-	//
-	//	return nil
-	//})
+	// TODO: impl
 
 	return addrs
 }
 
-func (mgr *addrmanager_badger) ClearAddrs(p peer.ID) {
-	err := mgr.db.Update(func (txn *badger.Txn) error {
-		iter := txn.NewIterator(badger.DefaultIteratorOptions)
-		prefix := []byte(p)
-		iter.Seek(prefix)
+func (mgr *AddrManagerBadger) ClearAddrs(p peer.ID) {
+	txn := mgr.DB.NewTransaction(true)
+	defer txn.Discard()
+	it := txn.NewIterator(badger.DefaultIteratorOptions)
+	prefix := []byte(p)
+	it.Seek(prefix)
 
-		for iter.ValidForPrefix(prefix) {
-			txn.Delete(iter.Item().Key())
-			iter.Next()
+	count := 0
+	for it.ValidForPrefix(prefix) {
+		count++
+		if err := txn.Delete(it.Item().Key()); err != nil {
+			log.Error(err)
 		}
-
-		return nil
-	})
-	if err != nil {
-		log.Error(err)
+		it.Next()
 	}
+	txn.Commit(nil)
 }
