@@ -28,7 +28,7 @@ func NewDatastoreAddrManager(ctx context.Context, ds ds.Datastore, ttlInterval t
 }
 
 func (mgr *DatastoreAddrManager) Stop() {
-	mgr.ttlManager.Stop()
+	mgr.ttlManager.stop()
 }
 
 func peerAddressKey(p *peer.ID, addr *ma.Multiaddr) (ds.Key, error) {
@@ -77,12 +77,12 @@ func (mgr *DatastoreAddrManager) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl t
 			}
 		}
 	}
-	mgr.ttlManager.SetTTLs(keys, ttl)
+	mgr.ttlManager.setTTLs(keys, ttl)
 }
 
 func (mgr *DatastoreAddrManager) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.Duration) {
 	prefix := ds.NewKey(p.Pretty())
-	mgr.ttlManager.UpdateTTLs(prefix, oldTTL, newTTL)
+	mgr.ttlManager.updateTTLs(prefix, oldTTL, newTTL)
 }
 
 func (mgr *DatastoreAddrManager) Addrs(p peer.ID) []ma.Multiaddr {
@@ -125,7 +125,7 @@ func (mgr *DatastoreAddrManager) ClearAddrs(p peer.ID) {
 	for result := range results.Next() {
 		mgr.ds.Delete(ds.NewKey(result.Key))
 	}
-	mgr.ttlManager.Clear(ds.NewKey(p.Pretty()))
+	mgr.ttlManager.clear(ds.NewKey(p.Pretty()))
 }
 
 // ttlmanager
@@ -173,7 +173,7 @@ func newTTLManager(parent context.Context, d ds.Datastore, tick time.Duration) *
 	return mgr
 }
 
-func (mgr *ttlmanager) Stop() {
+func (mgr *ttlmanager) stop() {
 	mgr.cancel()
 	<-mgr.done
 }
@@ -194,7 +194,7 @@ func (mgr *ttlmanager) tick() {
 	}
 }
 
-func (mgr *ttlmanager) SetTTLs(keys []ds.Key, ttl time.Duration) {
+func (mgr *ttlmanager) setTTLs(keys []ds.Key, ttl time.Duration) {
 	mgr.Lock()
 	defer mgr.Unlock()
 
@@ -208,7 +208,7 @@ func (mgr *ttlmanager) SetTTLs(keys []ds.Key, ttl time.Duration) {
 	}
 }
 
-func (mgr *ttlmanager) UpdateTTLs(prefix ds.Key, oldTTL, newTTL time.Duration) {
+func (mgr *ttlmanager) updateTTLs(prefix ds.Key, oldTTL, newTTL time.Duration) {
 	mgr.Lock()
 	defer mgr.Unlock()
 
@@ -223,7 +223,7 @@ func (mgr *ttlmanager) UpdateTTLs(prefix ds.Key, oldTTL, newTTL time.Duration) {
 	}
 }
 
-func (mgr *ttlmanager) Clear(prefix ds.Key) {
+func (mgr *ttlmanager) clear(prefix ds.Key) {
 	mgr.Lock()
 	defer mgr.Unlock()
 
