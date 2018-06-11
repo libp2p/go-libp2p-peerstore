@@ -7,6 +7,7 @@ import (
 	"github.com/libp2p/go-libp2p-peer"
 	ma "github.com/multiformats/go-multiaddr"
 	"os"
+	"github.com/ipfs/go-ds-badger"
 	"io/ioutil"
 )
 
@@ -61,6 +62,24 @@ func setupBadgerAddrManager(t *testing.T) (*BadgerAddrManager, func ()) {
 	}
 	closer := func () {
 		mgr.Close()
+		os.RemoveAll(dataPath)
+	}
+	return mgr, closer
+}
+
+func setupDatastoreAddrManager(t *testing.T) (*DatastoreAddrManager, func ()) {
+	dataPath, err := ioutil.TempDir(os.TempDir(), "badger")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ds, err := badger.NewDatastore(dataPath, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mgr := NewDatastoreAddrManager(ds, 100 * time.Microsecond)
+	closer := func () {
+		mgr.Stop()
+		ds.Close()
 		os.RemoveAll(dataPath)
 	}
 	return mgr, closer
@@ -125,6 +144,11 @@ func TestAddresses(t *testing.T) {
 	mgr2, closer2 := setupBadgerAddrManager(t)
 	defer closer2()
 	testAddresses(t, mgr2)
+
+	t.Log("DatastoreAddrManager")
+	mgr3, closer3 := setupDatastoreAddrManager(t)
+	defer closer3()
+	testAddresses(t, mgr3)
 }
 
 func testAddressesExpire(t *testing.T, m AddrBook) {
@@ -189,6 +213,11 @@ func TestAddressesExpire(t *testing.T) {
 	m2, closer2 := setupBadgerAddrManager(t)
 	defer closer2()
 	testAddressesExpire(t, m2)
+
+	t.Log("DatastoreAddrManager")
+	m3, closer3 := setupDatastoreAddrManager(t)
+	defer closer3()
+	testAddressesExpire(t, m3)
 }
 
 func testClearWorks(t *testing.T, m AddrBook) {
@@ -225,6 +254,11 @@ func TestClearWorks(t *testing.T) {
 	m2, closer2 := setupBadgerAddrManager(t)
 	defer closer2()
 	testClearWorks(t, m2)
+
+	t.Log("DatastoreAddrManager")
+	m3, closer3 := setupDatastoreAddrManager(t)
+	defer closer3()
+	testClearWorks(t, m3)
 }
 
 func testSetNegativeTTLClears(t *testing.T, m AddrBook) {
@@ -248,6 +282,11 @@ func TestSetNegativeTTLClears(t *testing.T) {
 	m2, closer2 := setupBadgerAddrManager(t)
 	defer closer2()
 	testSetNegativeTTLClears(t, m2)
+
+	t.Log("DatastoreAddrManager")
+	m3, closer3 := setupDatastoreAddrManager(t)
+	defer closer3()
+	testSetNegativeTTLClears(t, m3)
 }
 
 func testUpdateTTLs(t *testing.T, m AddrBook) {
@@ -303,6 +342,11 @@ func TestUpdateTTLs(t *testing.T) {
 	m2, closer2 := setupBadgerAddrManager(t)
 	defer closer2()
 	testUpdateTTLs(t, m2)
+
+	t.Log("DatastoreAddrManager")
+	m3, closer3 := setupDatastoreAddrManager(t)
+	defer closer3()
+	testUpdateTTLs(t, m3)
 }
 
 func testNilAddrsDontBreak(t *testing.T, m AddrBook) {
@@ -321,5 +365,11 @@ func TestNilAddrsDontBreak(t *testing.T) {
 	m2, closer2 := setupBadgerAddrManager(t)
 	defer closer2()
 	testNilAddrsDontBreak(t, m2)
+	t.Log("OK")
+
+	t.Log("DatastoreAddrManager")
+	m3, closer3 := setupDatastoreAddrManager(t)
+	defer closer3()
+	testNilAddrsDontBreak(t, m3)
 	t.Log("OK")
 }
