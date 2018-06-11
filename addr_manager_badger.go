@@ -12,7 +12,7 @@ import (
 	"bytes"
 )
 
-type AddrManagerBadger struct {
+type BadgerAddrManager struct {
 	DB *badger.DB
 	addrSubs map[peer.ID][]*addrSub
 }
@@ -22,7 +22,7 @@ type addrentry struct {
 	TTL time.Duration
 }
 
-func (mgr *AddrManagerBadger) sendSubscriptionUpdates(p *peer.ID, addrs []ma.Multiaddr) {
+func (mgr *BadgerAddrManager) sendSubscriptionUpdates(p *peer.ID, addrs []ma.Multiaddr) {
 	subs := mgr.addrSubs[*p]
 	for _, sub := range subs {
 		for _, addr := range addrs {
@@ -31,13 +31,13 @@ func (mgr *AddrManagerBadger) sendSubscriptionUpdates(p *peer.ID, addrs []ma.Mul
 	}
 }
 
-func (mgr *AddrManagerBadger) Close() {
+func (mgr *BadgerAddrManager) Close() {
 	if err := mgr.DB.Close(); err != nil {
 		log.Error(err)
 	}
 }
 
-func NewBadgerAddrManager(dataPath string) (*AddrManagerBadger, error) {
+func NewBadgerAddrManager(dataPath string) (*BadgerAddrManager, error) {
 	opts := badger.DefaultOptions
 	opts.Dir = dataPath
 	opts.ValueDir = dataPath
@@ -45,10 +45,10 @@ func NewBadgerAddrManager(dataPath string) (*AddrManagerBadger, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &AddrManagerBadger{DB: db}, nil
+	return &BadgerAddrManager{DB: db}, nil
 }
 
-func (mgr *AddrManagerBadger) AddAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) {
+func (mgr *BadgerAddrManager) AddAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) {
 	mgr.AddAddrs(p, []ma.Multiaddr{addr}, ttl)
 }
 
@@ -90,7 +90,7 @@ func addAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration, txn *badger.Tx
 	}
 }
 
-func (mgr *AddrManagerBadger) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
+func (mgr *BadgerAddrManager) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
 	if ttl <= 0 {
 		log.Debugf("short circuiting AddAddrs with ttl %d", ttl)
 		return
@@ -106,11 +106,11 @@ func (mgr *AddrManagerBadger) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time
 	txn.Commit(nil)
 }
 
-func (mgr *AddrManagerBadger) SetAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) {
+func (mgr *BadgerAddrManager) SetAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) {
 	mgr.SetAddrs(p, []ma.Multiaddr{addr}, ttl)
 }
 
-func (mgr *AddrManagerBadger) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
+func (mgr *BadgerAddrManager) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
 	txn := mgr.DB.NewTransaction(true)
 	defer txn.Discard()
 
@@ -142,7 +142,7 @@ func (mgr *AddrManagerBadger) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time
 	txn.Commit(nil)
 }
 
-func (mgr *AddrManagerBadger) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.Duration) {
+func (mgr *BadgerAddrManager) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.Duration) {
 	prefix := []byte(p)
 	txn := mgr.DB.NewTransaction(true)
 	defer txn.Discard()
@@ -181,7 +181,7 @@ func (mgr *AddrManagerBadger) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTT
 	txn.Commit(nil)
 }
 
-func (mgr *AddrManagerBadger) Addrs(p peer.ID) []ma.Multiaddr {
+func (mgr *BadgerAddrManager) Addrs(p peer.ID) []ma.Multiaddr {
 	txn := mgr.DB.NewTransaction(false)
 	defer txn.Discard()
 
@@ -220,7 +220,7 @@ func (mgr *AddrManagerBadger) Addrs(p peer.ID) []ma.Multiaddr {
 	return addrs
 }
 
-func (mgr *AddrManagerBadger) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Multiaddr {
+func (mgr *BadgerAddrManager) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Multiaddr {
 	addrs := make(chan ma.Multiaddr)
 
 	// TODO: impl
@@ -228,7 +228,7 @@ func (mgr *AddrManagerBadger) AddrStream(ctx context.Context, p peer.ID) <-chan 
 	return addrs
 }
 
-func (mgr *AddrManagerBadger) ClearAddrs(p peer.ID) {
+func (mgr *BadgerAddrManager) ClearAddrs(p peer.ID) {
 	txn := mgr.DB.NewTransaction(true)
 	defer txn.Discard()
 	it := txn.NewIterator(badger.DefaultIteratorOptions)

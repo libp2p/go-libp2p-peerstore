@@ -10,7 +10,7 @@ import (
 type PeerstoreBadger struct {
 	*keybook
 	*metrics
-	*AddrManagerBadger
+	*BadgerAddrManager
 
 	ds     map[string]interface{}
 	dslock sync.Mutex
@@ -27,20 +27,20 @@ func NewPeerstoreBadger(dataPath string) *PeerstoreBadger {
 	return &PeerstoreBadger{
 		keybook:           newKeybook(),
 		metrics:           NewMetrics(),
-		AddrManagerBadger: mgr,
+		BadgerAddrManager: mgr,
 		ds:                make(map[string]interface{}),
 	}
 }
 
 func (ps *PeerstoreBadger) Close() error {
-	ps.AddrManagerBadger.Close()
+	ps.BadgerAddrManager.Close()
 	return nil
 }
 
 func (ps *PeerstoreBadger) PeerInfo(p peer.ID) PeerInfo {
 	return PeerInfo{
 		ID:    p,
-		Addrs: ps.AddrManagerBadger.Addrs(p),
+		Addrs: ps.BadgerAddrManager.Addrs(p),
 	}
 }
 
