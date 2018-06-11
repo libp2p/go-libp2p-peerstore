@@ -10,6 +10,7 @@ import (
 	"github.com/ipfs/go-ds-badger"
 	"github.com/libp2p/go-libp2p-peer"
 	ma "github.com/multiformats/go-multiaddr"
+	"context"
 )
 
 func IDS(t *testing.T, ids string) peer.ID {
@@ -77,7 +78,7 @@ func setupDatastoreAddrManager(t *testing.T) (*DatastoreAddrManager, func()) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mgr := NewDatastoreAddrManager(ds, 100*time.Microsecond)
+	mgr := NewDatastoreAddrManager(context.Background(), ds, 100*time.Microsecond)
 	closer := func() {
 		mgr.Stop()
 		ds.Close()

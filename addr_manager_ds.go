@@ -18,10 +18,10 @@ type DatastoreAddrManager struct {
 	addrSubs   map[peer.ID][]*addrSub
 }
 
-func NewDatastoreAddrManager(ds ds.Datastore, ttlInterval time.Duration) *DatastoreAddrManager {
+func NewDatastoreAddrManager(ctx context.Context, ds ds.Datastore, ttlInterval time.Duration) *DatastoreAddrManager {
 	mgr := &DatastoreAddrManager{
 		ds:         ds,
-		ttlManager: newTTLManager(context.Background(), ds, ttlInterval),
+		ttlManager: newTTLManager(ctx, ds, ttlInterval),
 		addrSubs:   make(map[peer.ID][]*addrSub),
 	}
 	return mgr
@@ -158,20 +158,16 @@ func newTTLManager(parent context.Context, d ds.Datastore, tick time.Duration) *
 	}
 
 	go func() {
-		stop := false
 		for {
 			select {
 			case <-mgr.ctx.Done():
-				stop = true
+				mgr.ticker.Stop()
+				mgr.done <- struct{}{}
+				return
 			case <-mgr.ticker.C:
 				mgr.tick()
 			}
-
-			if stop {
-				break
-			}
 		}
-		mgr.done <- struct{}{}
 	}()
 
 	return mgr
