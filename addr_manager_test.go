@@ -4,11 +4,12 @@ import (
 	"testing"
 	"time"
 
+	"io/ioutil"
+	"os"
+
+	"github.com/ipfs/go-ds-badger"
 	"github.com/libp2p/go-libp2p-peer"
 	ma "github.com/multiformats/go-multiaddr"
-	"os"
-	"github.com/ipfs/go-ds-badger"
-	"io/ioutil"
 )
 
 func IDS(t *testing.T, ids string) peer.ID {
@@ -51,7 +52,7 @@ func testHas(t *testing.T, exp, act []ma.Multiaddr) {
 	}
 }
 
-func setupBadgerAddrManager(t *testing.T) (*BadgerAddrManager, func ()) {
+func setupBadgerAddrManager(t *testing.T) (*BadgerAddrManager, func()) {
 	dataPath, err := ioutil.TempDir(os.TempDir(), "badger")
 	if err != nil {
 		t.Fatal(err)
@@ -60,14 +61,14 @@ func setupBadgerAddrManager(t *testing.T) (*BadgerAddrManager, func ()) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	closer := func () {
+	closer := func() {
 		mgr.Close()
 		os.RemoveAll(dataPath)
 	}
 	return mgr, closer
 }
 
-func setupDatastoreAddrManager(t *testing.T) (*DatastoreAddrManager, func ()) {
+func setupDatastoreAddrManager(t *testing.T) (*DatastoreAddrManager, func()) {
 	dataPath, err := ioutil.TempDir(os.TempDir(), "badger")
 	if err != nil {
 		t.Fatal(err)
@@ -76,8 +77,8 @@ func setupDatastoreAddrManager(t *testing.T) (*DatastoreAddrManager, func ()) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mgr := NewDatastoreAddrManager(ds, 100 * time.Microsecond)
-	closer := func () {
+	mgr := NewDatastoreAddrManager(ds, 100*time.Microsecond)
+	closer := func() {
 		mgr.Stop()
 		ds.Close()
 		os.RemoveAll(dataPath)
