@@ -4,22 +4,22 @@ import (
 	"context"
 	"time"
 
+	"bytes"
+	"encoding/gob"
+	"github.com/dgraph-io/badger"
 	"github.com/libp2p/go-libp2p-peer"
 	ma "github.com/multiformats/go-multiaddr"
-	"github.com/dgraph-io/badger"
 	"github.com/multiformats/go-multihash"
-	"encoding/gob"
-	"bytes"
 )
 
 type BadgerAddrManager struct {
-	DB *badger.DB
+	DB       *badger.DB
 	addrSubs map[peer.ID][]*addrSub
 }
 
 type addrentry struct {
 	Addr []byte
-	TTL time.Duration
+	TTL  time.Duration
 }
 
 func (mgr *BadgerAddrManager) sendSubscriptionUpdates(p *peer.ID, addrs []ma.Multiaddr) {
@@ -99,7 +99,6 @@ func (mgr *BadgerAddrManager) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time
 	txn := mgr.DB.NewTransaction(true)
 	defer txn.Discard()
 
-
 	go mgr.sendSubscriptionUpdates(&p, addrs)
 	addAddrs(p, addrs, ttl, txn)
 
@@ -126,17 +125,17 @@ func (mgr *BadgerAddrManager) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time
 		if ttl <= 0 {
 			if err := txn.Delete(key); err != nil {
 				log.Error(err)
-			}
-		} else {
-			entry := &addrentry{Addr: addr.Bytes(), TTL: ttl}
-			buf := &bytes.Buffer{}
-			enc := gob.NewEncoder(buf)
-			if err := enc.Encode(entry); err != nil {
-				log.Error(err)
 				continue
 			}
-			txn.SetWithTTL(key, buf.Bytes(), ttl)
 		}
+		entry := &addrentry{Addr: addr.Bytes(), TTL: ttl}
+		buf := &bytes.Buffer{}
+		enc := gob.NewEncoder(buf)
+		if err := enc.Encode(entry); err != nil {
+			log.Error(err)
+			continue
+		}
+		txn.SetWithTTL(key, buf.Bytes(), ttl)
 	}
 
 	txn.Commit(nil)
@@ -192,27 +191,26 @@ func (mgr *BadgerAddrManager) Addrs(p peer.ID) []ma.Multiaddr {
 
 	var addrs []ma.Multiaddr
 
-	for iter.ValidForPrefix(prefix) {
+	for ; iter.ValidForPrefix(prefix); iter.Next() {
 		item := iter.Item()
-
-		if !item.IsDeletedOrExpired() {
-			value, err := item.Value()
-			if err != nil {
-				log.Error(err)
-			} else {
-				entry := &addrentry{}
-				buf := bytes.NewBuffer(value)
-				dec := gob.NewDecoder(buf)
-				if err := dec.Decode(&entry); err != nil {
-					log.Error("deleting bad entry in peerstore for peer", p.String())
-					txn.Delete(item.Key())
-				} else {
-					addrs = append(addrs, ma.Cast(entry.Addr))
-				}
-			}
+		if item.IsDeletedOrExpired() {
+			continue
 		}
 
-		iter.Next()
+		value, err := item.Value()
+		if err != nil {
+			log.Error(err)
+			continue
+		}
+		entry := &addrentry{}
+		buf := bytes.NewBuffer(value)
+		dec := gob.NewDecoder(buf)
+		if err := dec.Decode(&entry); err != nil {
+			log.Error("deleting bad entry in peerstore for peer", p.String())
+			txn.Delete(item.Key())
+		} else {
+			addrs = append(addrs, ma.Cast(entry.Addr))
+		}
 	}
 
 	txn.Commit(nil)
