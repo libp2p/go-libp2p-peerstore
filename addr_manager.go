@@ -70,9 +70,7 @@ func (mgr *AddrManager) init() {
 		mgr.addrs = make(map[peer.ID]addrSlice)
 	}
 	if mgr.subManager == nil {
-		mgr.subManager = &AddrSubManager{
-			subs: make(map[peer.ID][]*addrSub),
-		}
+		mgr.subManager = NewAddrSubManager()
 	}
 }
 
