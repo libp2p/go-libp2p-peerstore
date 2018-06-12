@@ -13,16 +13,16 @@ import (
 )
 
 type DatastoreAddrManager struct {
-	ds         ds.Datastore
-	ttlManager *ttlmanager
-	addrSubs   map[peer.ID][]*addrSub
+	ds          ds.Datastore
+	ttlManager  *ttlmanager
+	subsManager *AddrSubManager
 }
 
 func NewDatastoreAddrManager(ctx context.Context, ds ds.Datastore, ttlInterval time.Duration) *DatastoreAddrManager {
 	mgr := &DatastoreAddrManager{
-		ds:         ds,
-		ttlManager: newTTLManager(ctx, ds, ttlInterval),
-		addrSubs:   make(map[peer.ID][]*addrSub),
+		ds:          ds,
+		ttlManager:  newTTLManager(ctx, ds, ttlInterval),
+		subsManager: NewAddrSubManager(),
 	}
 	return mgr
 }
@@ -73,6 +73,9 @@ func (mgr *DatastoreAddrManager) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl t
 			mgr.ds.Delete(key)
 			continue
 		}
+		if has, err := mgr.ds.Has(key); err != nil && has == false {
+			mgr.subsManager.BroadcastAddr(p, addr)
+		}
 		if err := mgr.ds.Put(key, addr.Bytes()); err != nil {
 			log.Error(err)
 		}
@@ -107,10 +110,9 @@ func (mgr *DatastoreAddrManager) Addrs(p peer.ID) []ma.Multiaddr {
 	return addrs
 }
 
-func (mgr *DatastoreAddrManager) AddrStream(context.Context, peer.ID) <-chan ma.Multiaddr {
-	panic("implement me")
-	stream := make(chan ma.Multiaddr)
-	return stream
+func (mgr *DatastoreAddrManager) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Multiaddr {
+	initial := mgr.Addrs(p)
+	return mgr.subsManager.AddrStream(ctx, p, initial)
 }
 
 func (mgr *DatastoreAddrManager) ClearAddrs(p peer.ID) {
