@@ -71,10 +71,10 @@ func (mgr *DatastoreAddrManager) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl t
 
 		if ttl <= 0 {
 			mgr.ds.Delete(key)
-		} else {
-			if err := mgr.ds.Put(key, addr.Bytes()); err != nil {
-				log.Error(err)
-			}
+			continue
+		}
+		if err := mgr.ds.Put(key, addr.Bytes()); err != nil {
+			log.Error(err)
 		}
 	}
 	mgr.ttlManager.setTTLs(keys, ttl)
