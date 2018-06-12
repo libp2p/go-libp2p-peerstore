@@ -12,8 +12,8 @@ type PeerstoreBadger struct {
 	*metrics
 	*BadgerAddrManager
 
-	ds     map[string]interface{}
 	dslock sync.Mutex
+	ds     map[string]interface{}
 
 	// lock for protocol information, separate from datastore lock
 	protolock sync.Mutex
