@@ -39,6 +39,11 @@ func peerAddressKey(p *peer.ID, addr *ma.Multiaddr) (ds.Key, error) {
 	return ds.NewKey(p.Pretty()).ChildString(hash.B58String()), nil
 }
 
+func peerIDFromKey(key ds.Key) (peer.ID, error) {
+	idstring := key.Parent().Type()
+	return peer.IDB58Decode(idstring)
+}
+
 func (mgr *DatastoreAddrManager) AddAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) {
 	mgr.AddAddrs(p, []ma.Multiaddr{addr}, ttl)
 }
@@ -108,6 +113,31 @@ func (mgr *DatastoreAddrManager) Addrs(p peer.ID) []ma.Multiaddr {
 	}
 
 	return addrs
+}
+
+func (mgr *DatastoreAddrManager) Peers() []peer.ID {
+	q := query.Query{}
+	results, err := mgr.ds.Query(q)
+	if err != nil {
+		log.Error(err)
+		return []peer.ID{}
+	}
+
+	idset := make(map[peer.ID]struct{})
+	for result := range results.Next() {
+		key := ds.RawKey(result.Key)
+		id, err := peerIDFromKey(key)
+		if err != nil {
+			continue
+		}
+		idset[id] = struct{}{}
+	}
+
+	ids := make([]peer.ID, 0, len(idset))
+	for id := range idset {
+		ids = append(ids, id)
+	}
+	return ids
 }
 
 func (mgr *DatastoreAddrManager) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Multiaddr {
