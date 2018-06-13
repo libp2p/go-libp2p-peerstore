@@ -7,10 +7,11 @@ import (
 	"io/ioutil"
 	"os"
 
+	"context"
+
 	"github.com/ipfs/go-ds-badger"
 	"github.com/libp2p/go-libp2p-peer"
 	ma "github.com/multiformats/go-multiaddr"
-	"context"
 )
 
 func IDS(t *testing.T, ids string) peer.ID {
@@ -361,17 +362,14 @@ func TestNilAddrsDontBreak(t *testing.T) {
 	t.Log("AddrManager")
 	m1 := &AddrManager{}
 	testNilAddrsDontBreak(t, m1)
-	t.Log("OK")
 
 	t.Log("BadgerAddrManager")
 	m2, closer2 := setupBadgerAddrManager(t)
 	defer closer2()
 	testNilAddrsDontBreak(t, m2)
-	t.Log("OK")
 
 	t.Log("DatastoreAddrManager")
 	m3, closer3 := setupDatastoreAddrManager(t)
 	defer closer3()
 	testNilAddrsDontBreak(t, m3)
-	t.Log("OK")
 }
