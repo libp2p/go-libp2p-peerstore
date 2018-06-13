@@ -5,7 +5,10 @@ import (
 	"time"
 
 	"bytes"
+	"encoding/binary"
 	"encoding/gob"
+	"errors"
+
 	"github.com/dgraph-io/badger"
 	"github.com/libp2p/go-libp2p-peer"
 	ma "github.com/multiformats/go-multiaddr"
@@ -13,22 +16,13 @@ import (
 )
 
 type BadgerAddrManager struct {
-	DB       *badger.DB
-	addrSubs map[peer.ID][]*addrSub
+	DB          *badger.DB
+	subsManager *AddrSubManager
 }
 
 type addrentry struct {
 	Addr []byte
 	TTL  time.Duration
-}
-
-func (mgr *BadgerAddrManager) sendSubscriptionUpdates(p *peer.ID, addrs []ma.Multiaddr) {
-	subs := mgr.addrSubs[*p]
-	for _, sub := range subs {
-		for _, addr := range addrs {
-			sub.pubAddr(addr)
-		}
-	}
 }
 
 func (mgr *BadgerAddrManager) Close() {
@@ -45,11 +39,7 @@ func NewBadgerAddrManager(dataPath string) (*BadgerAddrManager, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &BadgerAddrManager{DB: db}, nil
-}
-
-func (mgr *BadgerAddrManager) AddAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) {
-	mgr.AddAddrs(p, []ma.Multiaddr{addr}, ttl)
+	return &BadgerAddrManager{DB: db, subsManager: NewAddrSubManager()}, nil
 }
 
 // use murmur3 because it's the most compact
@@ -57,37 +47,58 @@ func hashMultiaddr(addr *ma.Multiaddr) ([]byte, error) {
 	return multihash.Encode((*addr).Bytes(), multihash.MURMUR3)
 }
 
-func createUniqueKey(p *peer.ID, addr *ma.Multiaddr) ([]byte, error) {
+func createKeyPrefix(p *peer.ID) ([]byte, error) {
+	buf := &bytes.Buffer{}
 	prefix := []byte(*p)
-	addrHash, err := hashMultiaddr(addr)
+	prefixlen := uint64(len(prefix))
+	if err := binary.Write(buf, binary.LittleEndian, prefixlen); err != nil {
+		return nil, err
+	}
+	buf.Write(prefix)
+	return buf.Bytes(), nil
+}
+
+func createUniqueKey(p *peer.ID, addr *ma.Multiaddr) ([]byte, error) {
+	buf := &bytes.Buffer{}
+	prefix := []byte(*p)
+	prefixlen := uint64(len(prefix))
+	if err := binary.Write(buf, binary.LittleEndian, prefixlen); err != nil {
+		return nil, err
+	}
+	buf.Write(prefix)
+	addrhash, err := hashMultiaddr(addr)
 	if err != nil {
 		return nil, err
 	}
+	addrhashlen := uint64(len(addrhash))
 
-	return append(prefix, addrHash...), nil
+	if err := binary.Write(buf, binary.LittleEndian, addrhashlen); err != nil {
+		return nil, err
+	}
+
+	buf.Write(addrhash)
+	return buf.Bytes(), nil
 }
 
-func addAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration, txn *badger.Txn) {
-	for _, addr := range addrs {
-		if addr == nil {
-			continue
-		}
-		entry := &addrentry{Addr: addr.Bytes(), TTL: ttl}
-		key, err := createUniqueKey(&p, &addr)
-		if err != nil {
-			log.Error(err)
-			txn.Discard()
-			return
-		}
-		buf := &bytes.Buffer{}
-		enc := gob.NewEncoder(buf)
-		if err := enc.Encode(entry); err != nil {
-			log.Error(err)
-			txn.Discard()
-			return
-		}
-		txn.SetWithTTL(key, buf.Bytes(), ttl)
+func peerIDFromBinaryKey(key []byte) (peer.ID, error) {
+	buf := bytes.NewBuffer(key)
+	idlen, err := binary.ReadUvarint(buf)
+	if err != nil {
+		return peer.ID(""), err
 	}
+	idbytes := make([]byte, idlen)
+	read, err := buf.Read(idbytes)
+	if err != nil {
+		return peer.ID(""), err
+	}
+	if uint64(read) != idlen {
+		return peer.ID(""), errors.New("invalid key length")
+	}
+	return peer.IDFromBytes(idbytes)
+}
+
+func (mgr *BadgerAddrManager) AddAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) {
+	mgr.AddAddrs(p, []ma.Multiaddr{addr}, ttl)
 }
 
 func (mgr *BadgerAddrManager) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
@@ -96,13 +107,7 @@ func (mgr *BadgerAddrManager) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time
 		return
 	}
 
-	txn := mgr.DB.NewTransaction(true)
-	defer txn.Discard()
-
-	go mgr.sendSubscriptionUpdates(&p, addrs)
-	addAddrs(p, addrs, ttl, txn)
-
-	txn.Commit(nil)
+	mgr.SetAddrs(p, addrs, ttl)
 }
 
 func (mgr *BadgerAddrManager) SetAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) {
@@ -128,6 +133,9 @@ func (mgr *BadgerAddrManager) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time
 				continue
 			}
 		}
+		if item, err := txn.Get(key); err != nil || item.IsDeletedOrExpired() {
+			mgr.subsManager.BroadcastAddr(p, addr)
+		}
 		entry := &addrentry{Addr: addr.Bytes(), TTL: ttl}
 		buf := &bytes.Buffer{}
 		enc := gob.NewEncoder(buf)
@@ -142,7 +150,11 @@ func (mgr *BadgerAddrManager) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time
 }
 
 func (mgr *BadgerAddrManager) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.Duration) {
-	prefix := []byte(p)
+	prefix, err := createKeyPrefix(&p)
+	if err != nil {
+		log.Error(err)
+		return
+	}
 	txn := mgr.DB.NewTransaction(true)
 	defer txn.Discard()
 	opts := badger.DefaultIteratorOptions
@@ -184,7 +196,11 @@ func (mgr *BadgerAddrManager) Addrs(p peer.ID) []ma.Multiaddr {
 	txn := mgr.DB.NewTransaction(false)
 	defer txn.Discard()
 
-	prefix := []byte(p)
+	prefix, err := createKeyPrefix(&p)
+	if err != nil {
+		log.Error(err)
+		return []ma.Multiaddr{}
+	}
 	opts := badger.DefaultIteratorOptions
 	iter := txn.NewIterator(opts)
 	iter.Seek(prefix)
@@ -218,19 +234,40 @@ func (mgr *BadgerAddrManager) Addrs(p peer.ID) []ma.Multiaddr {
 	return addrs
 }
 
+func (mgr *BadgerAddrManager) Peers() []peer.ID {
+	txn := mgr.DB.NewTransaction(false)
+	defer txn.Commit(nil)
+	it := txn.NewIterator(badger.DefaultIteratorOptions)
+	idset := make(map[peer.ID]struct{})
+	for ; it.Valid(); it.Next() {
+		item := it.Item()
+		id, err := peerIDFromBinaryKey(item.Key())
+		if err != nil {
+			continue
+		}
+		idset[id] = struct{}{}
+	}
+	ids := make([]peer.ID, 0, len(idset))
+	for id := range idset {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
 func (mgr *BadgerAddrManager) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Multiaddr {
-	addrs := make(chan ma.Multiaddr)
-
-	// TODO: impl
-
-	return addrs
+	initial := mgr.Addrs(p)
+	return mgr.subsManager.AddrStream(ctx, p, initial)
 }
 
 func (mgr *BadgerAddrManager) ClearAddrs(p peer.ID) {
 	txn := mgr.DB.NewTransaction(true)
 	defer txn.Discard()
 	it := txn.NewIterator(badger.DefaultIteratorOptions)
-	prefix := []byte(p)
+	prefix, err := createKeyPrefix(&p)
+	if err != nil {
+		log.Error(err)
+		return
+	}
 	it.Seek(prefix)
 
 	count := 0
