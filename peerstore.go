@@ -30,9 +30,6 @@ type Peerstore interface {
 	KeyBook
 	Metrics
 
-	// Peers returns a list of all peer.IDs in this Peerstore
-	Peers() []peer.ID
-
 	// PeerInfo returns a peer.PeerInfo struct for given peer.ID.
 	// This is a small slice of the information Peerstore has on
 	// that peer, useful to other services.
@@ -83,6 +80,9 @@ type AddrBook interface {
 
 	// ClearAddresses removes all previously stored addresses
 	ClearAddrs(p peer.ID)
+
+	// Peers returns all of the peer IDs stored in the AddrBook
+	Peers() []peer.ID
 }
 
 // KeyBook tracks the Public keys of Peers.
@@ -179,7 +179,7 @@ func (kb *keybook) AddPrivKey(p peer.ID, sk ic.PrivKey) error {
 type peerstore struct {
 	*keybook
 	*metrics
-	AddrManager
+	AddrBook
 
 	// store other data, like versions
 	//ds ds.ThreadSafeDatastore
@@ -231,7 +231,7 @@ func (ps *peerstore) Peers() []peer.ID {
 	for _, p := range ps.keybook.Peers() {
 		set[p] = struct{}{}
 	}
-	for _, p := range ps.AddrManager.Peers() {
+	for _, p := range ps.AddrBook.Peers() {
 		set[p] = struct{}{}
 	}
 
@@ -245,7 +245,7 @@ func (ps *peerstore) Peers() []peer.ID {
 func (ps *peerstore) PeerInfo(p peer.ID) PeerInfo {
 	return PeerInfo{
 		ID:    p,
-		Addrs: ps.AddrManager.Addrs(p),
+		Addrs: ps.AddrBook.Addrs(p),
 	}
 }
 
