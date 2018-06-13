@@ -11,6 +11,7 @@ import (
 
 	//ds "github.com/jbenet/go-datastore"
 	//dssync "github.com/jbenet/go-datastore/sync"
+	"github.com/ipfs/go-datastore"
 	logging "github.com/ipfs/go-log"
 	"github.com/libp2p/go-libp2p-peer"
 	ma "github.com/multiformats/go-multiaddr"
@@ -194,11 +195,21 @@ type peerstore struct {
 // NewPeerstore creates a threadsafe collection of peers.
 func NewPeerstore() Peerstore {
 	return &peerstore{
-		keybook:     newKeybook(),
-		metrics:     NewMetrics(),
-		AddrManager: AddrManager{},
-		//ds:          dssync.MutexWrap(ds.NewMapDatastore()),
-		ds: make(map[string]interface{}),
+		keybook:  newKeybook(),
+		metrics:  NewMetrics(),
+		AddrBook: &AddrManager{},
+		ds:       make(map[string]interface{}),
+	}
+}
+
+// NewPeerstoreDatastore creates a threadsafe collection of peers backed by a
+// Datastore to prevent excess memory pressure.
+func NewPeerstoreDatastore(ctx context.Context, ds datastore.Datastore) Peerstore {
+	return &peerstore{
+		keybook:  newKeybook(),
+		metrics:  NewMetrics(),
+		AddrBook: NewDatastoreAddrManager(ctx, ds, time.Second),
+		ds:       make(map[string]interface{}),
 	}
 }
 
