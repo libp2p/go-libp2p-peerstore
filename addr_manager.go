@@ -250,6 +250,10 @@ func (mgr *AddrManager) ClearAddrs(p peer.ID) {
 }
 
 func (mgr *AddrManager) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Multiaddr {
+	mgr.addrmu.Lock()
+	defer mgr.addrmu.Unlock()
+	mgr.init()
+
 	baseaddrslice := mgr.addrs[p]
 	initial := make([]ma.Multiaddr, 0, len(baseaddrslice))
 	for _, a := range baseaddrslice {
@@ -266,6 +270,7 @@ type AddrSubManager struct {
 
 func NewAddrSubManager() *AddrSubManager {
 	return &AddrSubManager{
+		mu:   sync.RWMutex{},
 		subs: make(map[peer.ID][]*addrSub),
 	}
 }
@@ -292,8 +297,8 @@ func (mgr *AddrSubManager) removeSub(p peer.ID, s *addrSub) {
 }
 
 func (mgr *AddrSubManager) BroadcastAddr(p peer.ID, addr ma.Multiaddr) {
-	mgr.mu.RLock()
-	defer mgr.mu.RUnlock()
+	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
 
 	subs, ok := mgr.subs[p]
 	if !ok {
@@ -313,7 +318,11 @@ func (mgr *AddrSubManager) AddrStream(ctx context.Context, p peer.ID, initial []
 
 	out := make(chan ma.Multiaddr)
 
-	mgr.subs[p] = append(mgr.subs[p], sub)
+	if _, ok := mgr.subs[p]; ok {
+		mgr.subs[p] = append(mgr.subs[p], sub)
+	} else {
+		mgr.subs[p] = []*addrSub{sub}
+	}
 
 	sort.Sort(addr.AddrList(initial))
 

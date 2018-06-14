@@ -36,11 +36,11 @@ func peerAddressKey(p *peer.ID, addr *ma.Multiaddr) (ds.Key, error) {
 	if err != nil {
 		return ds.Key{}, nil
 	}
-	return ds.NewKey(p.Pretty()).ChildString(hash.B58String()), nil
+	return ds.NewKey(peer.IDB58Encode(*p)).ChildString(hash.B58String()), nil
 }
 
 func peerIDFromKey(key ds.Key) (peer.ID, error) {
-	idstring := key.Parent().Type()
+	idstring := key.Parent().Name()
 	return peer.IDB58Decode(idstring)
 }
 
@@ -78,7 +78,7 @@ func (mgr *DatastoreAddrManager) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl t
 			mgr.ds.Delete(key)
 			continue
 		}
-		if has, err := mgr.ds.Has(key); err != nil && has == false {
+		if has, err := mgr.ds.Has(key); err != nil || !has {
 			mgr.subsManager.BroadcastAddr(p, addr)
 		}
 		if err := mgr.ds.Put(key, addr.Bytes()); err != nil {
