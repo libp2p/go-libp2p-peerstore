@@ -204,7 +204,7 @@ func NewPeerstore() Peerstore {
 
 // NewPeerstoreDatastore creates a threadsafe collection of peers backed by a
 // Datastore to prevent excess memory pressure.
-func NewPeerstoreDatastore(ctx context.Context, ds datastore.Datastore) Peerstore {
+func NewPeerstoreDatastore(ctx context.Context, ds datastore.Batching) Peerstore {
 	return &peerstore{
 		keybook:  newKeybook(),
 		metrics:  NewMetrics(),
