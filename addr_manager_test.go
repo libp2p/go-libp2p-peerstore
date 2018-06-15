@@ -69,22 +69,6 @@ func setupBadgerDatastore(t *testing.T) (datastore.Batching, func()) {
 	return ds, closer
 }
 
-func setupBadgerAddrManager(t *testing.T) (*BadgerAddrManager, func()) {
-	dataPath, err := ioutil.TempDir(os.TempDir(), "badger")
-	if err != nil {
-		t.Fatal(err)
-	}
-	mgr, err := NewBadgerAddrManager(dataPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	closer := func() {
-		mgr.Close()
-		os.RemoveAll(dataPath)
-	}
-	return mgr, closer
-}
-
 func setupDatastoreAddrManager(t *testing.T) (*DatastoreAddrManager, func()) {
 	ds, closeDB := setupBadgerDatastore(t)
 	mgr := NewDatastoreAddrManager(context.Background(), ds, 100*time.Microsecond)
@@ -93,6 +77,17 @@ func setupDatastoreAddrManager(t *testing.T) (*DatastoreAddrManager, func()) {
 		closeDB()
 	}
 	return mgr, closer
+}
+
+func runTestWithAddrManagers(t *testing.T, test func(*testing.T, AddrBook)) {
+	t.Log("AddrManager")
+	mgr1 := &AddrManager{}
+	test(t, mgr1)
+
+	t.Log("DatastoreAddrManager")
+	mgr2, closer2 := setupDatastoreAddrManager(t)
+	defer closer2()
+	test(t, mgr2)
 }
 
 func testAddresses(t *testing.T, m AddrBook) {
@@ -146,19 +141,7 @@ func testAddresses(t *testing.T, m AddrBook) {
 }
 
 func TestAddresses(t *testing.T) {
-	t.Log("AddrManager")
-	mgr1 := AddrManager{}
-	testAddresses(t, &mgr1)
-
-	t.Log("BadgerAddrManager")
-	mgr2, closer2 := setupBadgerAddrManager(t)
-	defer closer2()
-	testAddresses(t, mgr2)
-
-	t.Log("DatastoreAddrManager")
-	mgr3, closer3 := setupDatastoreAddrManager(t)
-	defer closer3()
-	testAddresses(t, mgr3)
+	runTestWithAddrManagers(t, testAddresses)
 }
 
 func testAddressesExpire(t *testing.T, m AddrBook) {
@@ -215,19 +198,7 @@ func testAddressesExpire(t *testing.T, m AddrBook) {
 }
 
 func TestAddressesExpire(t *testing.T) {
-	t.Log("AddrManager")
-	m1 := &AddrManager{}
-	testAddressesExpire(t, m1)
-
-	t.Log("BadgerAddrManager")
-	m2, closer2 := setupBadgerAddrManager(t)
-	defer closer2()
-	testAddressesExpire(t, m2)
-
-	t.Log("DatastoreAddrManager")
-	m3, closer3 := setupDatastoreAddrManager(t)
-	defer closer3()
-	testAddressesExpire(t, m3)
+	runTestWithAddrManagers(t, testAddressesExpire)
 }
 
 func testClearWorks(t *testing.T, m AddrBook) {
@@ -256,19 +227,7 @@ func testClearWorks(t *testing.T, m AddrBook) {
 }
 
 func TestClearWorks(t *testing.T) {
-	t.Log("AddrManager")
-	m1 := &AddrManager{}
-	testClearWorks(t, m1)
-
-	t.Log("BadgerAddrManager")
-	m2, closer2 := setupBadgerAddrManager(t)
-	defer closer2()
-	testClearWorks(t, m2)
-
-	t.Log("DatastoreAddrManager")
-	m3, closer3 := setupDatastoreAddrManager(t)
-	defer closer3()
-	testClearWorks(t, m3)
+	runTestWithAddrManagers(t, testClearWorks)
 }
 
 func testSetNegativeTTLClears(t *testing.T, m AddrBook) {
@@ -284,19 +243,7 @@ func testSetNegativeTTLClears(t *testing.T, m AddrBook) {
 	testHas(t, nil, m.Addrs(id1))
 }
 func TestSetNegativeTTLClears(t *testing.T) {
-	t.Log("AddrManager")
-	m1 := &AddrManager{}
-	testSetNegativeTTLClears(t, m1)
-
-	t.Log("BadgerAddrManager")
-	m2, closer2 := setupBadgerAddrManager(t)
-	defer closer2()
-	testSetNegativeTTLClears(t, m2)
-
-	t.Log("DatastoreAddrManager")
-	m3, closer3 := setupDatastoreAddrManager(t)
-	defer closer3()
-	testSetNegativeTTLClears(t, m3)
+	runTestWithAddrManagers(t, testSetNegativeTTLClears)
 }
 
 func testUpdateTTLs(t *testing.T, m AddrBook) {
@@ -344,19 +291,7 @@ func testUpdateTTLs(t *testing.T, m AddrBook) {
 }
 
 func TestUpdateTTLs(t *testing.T) {
-	t.Log("AddrManager")
-	m1 := &AddrManager{}
-	testUpdateTTLs(t, m1)
-
-	t.Log("BadgerAddrManager")
-	m2, closer2 := setupBadgerAddrManager(t)
-	defer closer2()
-	testUpdateTTLs(t, m2)
-
-	t.Log("DatastoreAddrManager")
-	m3, closer3 := setupDatastoreAddrManager(t)
-	defer closer3()
-	testUpdateTTLs(t, m3)
+	runTestWithAddrManagers(t, testUpdateTTLs)
 }
 
 func testNilAddrsDontBreak(t *testing.T, m AddrBook) {
@@ -366,17 +301,5 @@ func testNilAddrsDontBreak(t *testing.T, m AddrBook) {
 }
 
 func TestNilAddrsDontBreak(t *testing.T) {
-	t.Log("AddrManager")
-	m1 := &AddrManager{}
-	testNilAddrsDontBreak(t, m1)
-
-	t.Log("BadgerAddrManager")
-	m2, closer2 := setupBadgerAddrManager(t)
-	defer closer2()
-	testNilAddrsDontBreak(t, m2)
-
-	t.Log("DatastoreAddrManager")
-	m3, closer3 := setupDatastoreAddrManager(t)
-	defer closer3()
-	testNilAddrsDontBreak(t, m3)
+	runTestWithAddrManagers(t, testNilAddrsDontBreak)
 }
