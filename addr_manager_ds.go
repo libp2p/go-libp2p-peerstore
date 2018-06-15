@@ -34,7 +34,7 @@ func NewDatastoreAddrManager(ctx context.Context, ds ds.Batching, ttlInterval ti
 
 // Stop will signal the TTL manager to stop and block until it returns.
 func (mgr *DatastoreAddrManager) Stop() {
-	mgr.ttlManager.stop()
+	mgr.ttlManager.cancel()
 }
 
 func peerAddressKey(p *peer.ID, addr *ma.Multiaddr) (ds.Key, error) {
@@ -210,7 +210,6 @@ type ttlmanager struct {
 	ctx     context.Context
 	cancel  context.CancelFunc
 	ticker  *time.Ticker
-	done    chan struct{}
 	ds      ds.Datastore
 }
 
@@ -222,7 +221,6 @@ func newTTLManager(parent context.Context, d ds.Datastore, tick time.Duration) *
 		cancel:  cancel,
 		ticker:  time.NewTicker(tick),
 		ds:      d,
-		done:    make(chan struct{}),
 	}
 
 	go func() {
@@ -230,7 +228,6 @@ func newTTLManager(parent context.Context, d ds.Datastore, tick time.Duration) *
 			select {
 			case <-mgr.ctx.Done():
 				mgr.ticker.Stop()
-				mgr.done <- struct{}{}
 				return
 			case <-mgr.ticker.C:
 				mgr.tick()
@@ -239,11 +236,6 @@ func newTTLManager(parent context.Context, d ds.Datastore, tick time.Duration) *
 	}()
 
 	return mgr
-}
-
-func (mgr *ttlmanager) stop() {
-	mgr.cancel()
-	<-mgr.done
 }
 
 // To be called by TTL manager's coroutine only.
