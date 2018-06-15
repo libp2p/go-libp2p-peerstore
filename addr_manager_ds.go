@@ -246,7 +246,7 @@ func (mgr *ttlmanager) stop() {
 	<-mgr.done
 }
 
-// For internal use only
+// To be called by TTL manager's coroutine only.
 func (mgr *ttlmanager) tick() {
 	mgr.RLock()
 	defer mgr.RUnlock()
