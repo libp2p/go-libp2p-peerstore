@@ -1,13 +1,11 @@
 package peerstore
 
 import (
-	"testing"
-	"time"
-
+	"context"
 	"io/ioutil"
 	"os"
-
-	"context"
+	"testing"
+	"time"
 
 	"github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-ds-badger"
@@ -55,7 +53,7 @@ func testHas(t *testing.T, exp, act []ma.Multiaddr) {
 	}
 }
 
-func setupBadgerDatastore(t *testing.T) (datastore.Datastore, func()) {
+func setupBadgerDatastore(t *testing.T) (datastore.Batching, func()) {
 	dataPath, err := ioutil.TempDir(os.TempDir(), "badger")
 	if err != nil {
 		t.Fatal(err)
