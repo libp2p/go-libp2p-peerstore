@@ -207,10 +207,11 @@ type ttlentry struct {
 type ttlmanager struct {
 	sync.RWMutex
 	entries map[ds.Key]*ttlentry
-	ctx     context.Context
-	cancel  context.CancelFunc
-	ticker  *time.Ticker
-	ds      ds.Datastore
+
+	ctx    context.Context
+	cancel context.CancelFunc
+	ticker *time.Ticker
+	ds     ds.Datastore
 }
 
 func newTTLManager(parent context.Context, d ds.Datastore, tick time.Duration) *ttlmanager {
