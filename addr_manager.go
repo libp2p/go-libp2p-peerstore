@@ -317,18 +317,17 @@ func (mgr *AddrSubManager) BroadcastAddr(p peer.ID, addr ma.Multiaddr) {
 // AddrStream creates a new subscription for a given peer ID, pre-populating the
 // channel with any addresses we might already have on file.
 func (mgr *AddrSubManager) AddrStream(ctx context.Context, p peer.ID, initial []ma.Multiaddr) <-chan ma.Multiaddr {
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-
 	sub := &addrSub{pubch: make(chan ma.Multiaddr), ctx: ctx}
 
 	out := make(chan ma.Multiaddr)
 
+	mgr.mu.Lock()
 	if _, ok := mgr.subs[p]; ok {
 		mgr.subs[p] = append(mgr.subs[p], sub)
 	} else {
 		mgr.subs[p] = []*addrSub{sub}
 	}
+	mgr.mu.Unlock()
 
 	sort.Sort(addr.AddrList(initial))
 
