@@ -1,13 +1,12 @@
 package peerstore
 
 import (
-	"context"
-	"time"
-
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/gob"
 	"errors"
+	"time"
 
 	"github.com/dgraph-io/badger"
 	"github.com/libp2p/go-libp2p-peer"
@@ -58,7 +57,7 @@ func createKeyPrefix(p *peer.ID) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func createUniqueKey(p *peer.ID, addr *ma.Multiaddr) ([]byte, error) {
+func createAddressKey(p *peer.ID, addr *ma.Multiaddr) ([]byte, error) {
 	buf := &bytes.Buffer{}
 	prefix := []byte(*p)
 	prefixlen := uint64(len(prefix))
@@ -115,38 +114,44 @@ func (mgr *BadgerAddrManager) SetAddr(p peer.ID, addr ma.Multiaddr, ttl time.Dur
 }
 
 func (mgr *BadgerAddrManager) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
-	txn := mgr.DB.NewTransaction(true)
-	defer txn.Discard()
+	// Attempt to commit five times
+	for i := 0; i < 5; i++ {
+		txn := mgr.DB.NewTransaction(true)
+		defer txn.Discard()
 
-	for _, addr := range addrs {
-		if addr == nil {
-			continue
-		}
-		key, err := createUniqueKey(&p, &addr)
-		if err != nil {
-			log.Error(err)
-			continue
-		}
-		if ttl <= 0 {
-			if err := txn.Delete(key); err != nil {
+		for _, addr := range addrs {
+			if addr == nil {
+				continue
+			}
+			key, err := createAddressKey(&p, &addr)
+			if err != nil {
 				log.Error(err)
 				continue
 			}
+			if ttl <= 0 {
+				if err := txn.Delete(key); err != nil {
+					log.Error(err)
+					continue
+				}
+			}
+			if item, err := txn.Get(key); err != nil || item.IsDeletedOrExpired() {
+				mgr.subsManager.BroadcastAddr(p, addr)
+			}
+			entry := &addrentry{Addr: addr.Bytes(), TTL: ttl}
+			buf := &bytes.Buffer{}
+			enc := gob.NewEncoder(buf)
+			if err := enc.Encode(entry); err != nil {
+				log.Error(err)
+				continue
+			}
+			txn.SetWithTTL(key, buf.Bytes(), ttl)
 		}
-		if item, err := txn.Get(key); err != nil || item.IsDeletedOrExpired() {
-			mgr.subsManager.BroadcastAddr(p, addr)
-		}
-		entry := &addrentry{Addr: addr.Bytes(), TTL: ttl}
-		buf := &bytes.Buffer{}
-		enc := gob.NewEncoder(buf)
-		if err := enc.Encode(entry); err != nil {
-			log.Error(err)
-			continue
-		}
-		txn.SetWithTTL(key, buf.Bytes(), ttl)
-	}
 
-	txn.Commit(nil)
+		err := txn.Commit(nil)
+		if err != badger.ErrConflict {
+			return
+		}
+	}
 }
 
 func (mgr *BadgerAddrManager) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.Duration) {
@@ -160,8 +165,7 @@ func (mgr *BadgerAddrManager) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTT
 	opts := badger.DefaultIteratorOptions
 	iter := txn.NewIterator(opts)
 
-	iter.Seek(prefix)
-	for iter.ValidForPrefix(prefix) {
+	for iter.Seek(prefix); iter.ValidForPrefix(prefix); iter.Next() {
 		item := iter.Item()
 		addrbytes, err := item.Value()
 		if err != nil {
@@ -185,8 +189,6 @@ func (mgr *BadgerAddrManager) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTT
 			}
 			txn.SetWithTTL(item.Key(), buf.Bytes(), newTTL)
 		}
-
-		iter.Next()
 	}
 
 	txn.Commit(nil)
