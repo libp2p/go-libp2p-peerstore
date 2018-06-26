@@ -139,7 +139,7 @@ func (mgr *DatastoreAddrManager) Addrs(p peer.ID) []ma.Multiaddr {
 	results, err := mgr.ds.Query(q)
 	if err != nil {
 		log.Error(err)
-		return []ma.Multiaddr{}
+		return nil
 	}
 
 	var addrs []ma.Multiaddr
