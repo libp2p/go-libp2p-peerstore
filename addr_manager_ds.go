@@ -231,7 +231,7 @@ type ttlmanager struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	ticker *time.Ticker
-	ds     ds.Datastore
+	ds     ds.Batching
 }
 
 func newTTLManager(parent context.Context, d ds.Datastore, tick time.Duration) *ttlmanager {
@@ -265,13 +265,22 @@ func (mgr *ttlmanager) tick() {
 	defer mgr.RUnlock()
 
 	now := time.Now()
+	batch, err := mgr.ds.Batch()
+	if err != nil {
+		log.Error(err)
+		return
+	}
 	for key, entry := range mgr.entries {
 		if entry.ExpiresAt.Before(now) {
-			if err := mgr.ds.Delete(key); err != nil {
+			if err := batch.Delete(key); err != nil {
 				log.Error(err)
 			}
 			delete(mgr.entries, key)
 		}
+	}
+	err := batch.Commit()
+	if err != nil {
+		log.Error(err)
 	}
 }
 
