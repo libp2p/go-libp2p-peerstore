@@ -147,6 +147,7 @@ func (mgr *DatastoreAddrManager) Addrs(p peer.ID) []ma.Multiaddr {
 		addrbytes := result.Value.([]byte)
 		addr, err := ma.NewMultiaddrBytes(addrbytes)
 		if err != nil {
+			log.Error(err)
 			continue
 		}
 		addrs = append(addrs, addr)
@@ -205,7 +206,13 @@ func (mgr *DatastoreAddrManager) ClearAddrs(p peer.ID) {
 		}
 
 		for result := range results.Next() {
-			batch.Delete(ds.NewKey(result.Key))
+			err := batch.Delete(ds.NewKey(result.Key))
+			if err != nil {
+				// From inspectin badger, errors here signify a problem with
+				// the transaction as a whole, so we can log and abort.
+				log.Error(err)
+				return
+			}
 		}
 		if err = batch.Commit(); err != nil {
 			log.Errorf("failed to clear addresses for peer %s: %s\n", p.Pretty(), err)
