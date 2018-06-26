@@ -109,7 +109,7 @@ func (mgr *DatastoreAddrManager) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl t
 			}
 
 			// Allows us to support AddAddr and SetAddr in one function
-			if !has || !add {
+			if !has {
 				if err := batch.Put(key, addr.Bytes()); err != nil {
 					log.Error(err)
 				}
@@ -119,7 +119,7 @@ func (mgr *DatastoreAddrManager) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl t
 			log.Errorf("failed to write addresses for peer %s: %s\n", p.Pretty(), err)
 			continue
 		}
-		mgr.ttlManager.setTTLs(keys, ttl)
+		mgr.ttlManager.setTTLs(keys, ttl, add)
 		return
 	}
 	log.Errorf("failed to avoid write conflict for peer %s after %d retries\n", p.Pretty(), dsWriteRetries)
@@ -236,12 +236,16 @@ type ttlmanager struct {
 
 func newTTLManager(parent context.Context, d ds.Datastore, tick time.Duration) *ttlmanager {
 	ctx, cancel := context.WithCancel(parent)
+	batching, ok := d.(ds.Batching)
+	if !ok {
+		panic("must construct ttlmanager with batching datastore")
+	}
 	mgr := &ttlmanager{
 		entries: make(map[ds.Key]*ttlentry),
 		ctx:     ctx,
 		cancel:  cancel,
 		ticker:  time.NewTicker(tick),
-		ds:      d,
+		ds:      batching,
 	}
 
 	go func() {
@@ -278,22 +282,32 @@ func (mgr *ttlmanager) tick() {
 			delete(mgr.entries, key)
 		}
 	}
-	err := batch.Commit()
+	err = batch.Commit()
 	if err != nil {
 		log.Error(err)
 	}
 }
 
-func (mgr *ttlmanager) setTTLs(keys []ds.Key, ttl time.Duration) {
+func (mgr *ttlmanager) setTTLs(keys []ds.Key, ttl time.Duration, add bool) {
 	mgr.Lock()
 	defer mgr.Unlock()
 
 	expiration := time.Now().Add(ttl)
 	for _, key := range keys {
-		if ttl <= 0 {
-			delete(mgr.entries, key)
-		} else {
-			mgr.entries[key] = &ttlentry{TTL: ttl, ExpiresAt: expiration}
+		update := true
+		if add {
+			if entry, ok := mgr.entries[key]; ok {
+				if entry.ExpiresAt.After(expiration) {
+					update = false
+				}
+			}
+		}
+		if update {
+			if ttl <= 0 {
+				delete(mgr.entries, key)
+			} else {
+				mgr.entries[key] = &ttlentry{TTL: ttl, ExpiresAt: expiration}
+			}
 		}
 	}
 }
