@@ -272,8 +272,8 @@ func newTTLManager(parent context.Context, d ds.Datastore, tick time.Duration) *
 
 // To be called by TTL manager's coroutine only.
 func (mgr *ttlmanager) tick() {
-	mgr.RLock()
-	defer mgr.RUnlock()
+	mgr.Lock()
+	defer mgr.Unlock()
 
 	now := time.Now()
 	batch, err := mgr.ds.Batch()
