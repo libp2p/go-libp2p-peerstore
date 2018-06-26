@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hashicorp/golang-lru"
 	ds "github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/query"
 	"github.com/libp2p/go-libp2p-peer"
@@ -18,6 +19,7 @@ var dsWriteRetries = 5
 // DatastoreAddrManager is an address manager backed by a Datastore with both an
 // in-memory TTL manager and an in-memory address stream manager.
 type DatastoreAddrManager struct {
+	cache       *lru.ARCCache
 	ds          ds.Batching
 	ttlManager  *ttlmanager
 	subsManager *AddrSubManager
@@ -26,13 +28,19 @@ type DatastoreAddrManager struct {
 // NewDatastoreAddrManager initializes a new DatastoreAddrManager given a
 // Datastore instance, a context for managing the TTL manager, and the interval
 // at which the TTL manager should sweep the Datastore.
-func NewDatastoreAddrManager(ctx context.Context, ds ds.Batching, ttlInterval time.Duration) *DatastoreAddrManager {
+func NewDatastoreAddrManager(ctx context.Context, ds ds.Batching, ttlInterval time.Duration) (*DatastoreAddrManager, error) {
+	cache, err := lru.NewARC(1024)
+	if err != nil {
+		return nil, err
+	}
+
 	mgr := &DatastoreAddrManager{
+		cache:       cache,
 		ds:          ds,
-		ttlManager:  newTTLManager(ctx, ds, ttlInterval),
+		ttlManager:  newTTLManager(ctx, ds, cache, ttlInterval),
 		subsManager: NewAddrSubManager(),
 	}
-	return mgr
+	return mgr, nil
 }
 
 // Stop will signal the TTL manager to stop and block until it returns.
@@ -100,10 +108,18 @@ func (mgr *DatastoreAddrManager) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl t
 			keys = append(keys, key)
 
 			if ttl <= 0 {
-				batch.Delete(key)
+				if err := batch.Delete(key); err != nil {
+					log.Error(err)
+				} else {
+					mgr.cache.Remove(key)
+				}
 				continue
 			}
-			has, err := mgr.ds.Has(key)
+
+			has := mgr.cache.Contains(key)
+			if !has {
+				has, err = mgr.ds.Has(key)
+			}
 			if err != nil || !has {
 				mgr.subsManager.BroadcastAddr(p, addr)
 			}
@@ -112,6 +128,8 @@ func (mgr *DatastoreAddrManager) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl t
 			if !has {
 				if err := batch.Put(key, addr.Bytes()); err != nil {
 					log.Error(err)
+				} else {
+					mgr.cache.Add(key, addr.Bytes())
 				}
 			}
 		}
@@ -135,7 +153,7 @@ func (mgr *DatastoreAddrManager) UpdateAddrs(p peer.ID, oldTTL time.Duration, ne
 // Addrs Returns all of the non-expired addresses for a given peer.
 func (mgr *DatastoreAddrManager) Addrs(p peer.ID) []ma.Multiaddr {
 	prefix := ds.NewKey(p.Pretty())
-	q := query.Query{Prefix: prefix.String()}
+	q := query.Query{Prefix: prefix.String(), KeysOnly: true}
 	results, err := mgr.ds.Query(q)
 	if err != nil {
 		log.Error(err)
@@ -144,7 +162,17 @@ func (mgr *DatastoreAddrManager) Addrs(p peer.ID) []ma.Multiaddr {
 
 	var addrs []ma.Multiaddr
 	for result := range results.Next() {
-		addrbytes := result.Value.([]byte)
+		key := ds.RawKey(result.Key)
+		var addri interface{}
+		addri, ok := mgr.cache.Get(key)
+		if !ok {
+			addri, err = mgr.ds.Get(key)
+			if err != nil {
+				log.Error(err)
+				continue
+			}
+		}
+		addrbytes := addri.([]byte)
 		addr, err := ma.NewMultiaddrBytes(addrbytes)
 		if err != nil {
 			log.Error(err)
@@ -158,7 +186,7 @@ func (mgr *DatastoreAddrManager) Addrs(p peer.ID) []ma.Multiaddr {
 
 // Peers returns all of the peer IDs for which the AddrBook has addresses.
 func (mgr *DatastoreAddrManager) Peers() []peer.ID {
-	q := query.Query{}
+	q := query.Query{KeysOnly: true}
 	results, err := mgr.ds.Query(q)
 	if err != nil {
 		log.Error(err)
@@ -193,7 +221,7 @@ func (mgr *DatastoreAddrManager) AddrStream(ctx context.Context, p peer.ID) <-ch
 func (mgr *DatastoreAddrManager) ClearAddrs(p peer.ID) {
 	prefix := ds.NewKey(p.Pretty())
 	for i := 0; i < dsWriteRetries; i++ {
-		q := query.Query{Prefix: prefix.String()}
+		q := query.Query{Prefix: prefix.String(), KeysOnly: true}
 		results, err := mgr.ds.Query(q)
 		if err != nil {
 			log.Error(err)
@@ -206,13 +234,15 @@ func (mgr *DatastoreAddrManager) ClearAddrs(p peer.ID) {
 		}
 
 		for result := range results.Next() {
-			err := batch.Delete(ds.NewKey(result.Key))
+			key := ds.NewKey(result.Key)
+			err := batch.Delete(key)
 			if err != nil {
 				// From inspectin badger, errors here signify a problem with
 				// the transaction as a whole, so we can log and abort.
 				log.Error(err)
 				return
 			}
+			mgr.cache.Remove(key)
 		}
 		if err = batch.Commit(); err != nil {
 			log.Errorf("failed to clear addresses for peer %s: %s\n", p.Pretty(), err)
@@ -239,9 +269,10 @@ type ttlmanager struct {
 	cancel context.CancelFunc
 	ticker *time.Ticker
 	ds     ds.Batching
+	cache  *lru.ARCCache
 }
 
-func newTTLManager(parent context.Context, d ds.Datastore, tick time.Duration) *ttlmanager {
+func newTTLManager(parent context.Context, d ds.Datastore, c *lru.ARCCache, tick time.Duration) *ttlmanager {
 	ctx, cancel := context.WithCancel(parent)
 	batching, ok := d.(ds.Batching)
 	if !ok {
@@ -253,6 +284,7 @@ func newTTLManager(parent context.Context, d ds.Datastore, tick time.Duration) *
 		cancel:  cancel,
 		ticker:  time.NewTicker(tick),
 		ds:      batching,
+		cache:   c,
 	}
 
 	go func() {
@@ -285,6 +317,8 @@ func (mgr *ttlmanager) tick() {
 		if entry.ExpiresAt.Before(now) {
 			if err := batch.Delete(key); err != nil {
 				log.Error(err)
+			} else {
+				mgr.cache.Remove(key)
 			}
 			delete(mgr.entries, key)
 		}

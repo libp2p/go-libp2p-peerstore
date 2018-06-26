@@ -204,13 +204,19 @@ func NewPeerstore() Peerstore {
 
 // NewPeerstoreDatastore creates a threadsafe collection of peers backed by a
 // Datastore to prevent excess memory pressure.
-func NewPeerstoreDatastore(ctx context.Context, ds datastore.Batching) Peerstore {
-	return &peerstore{
+func NewPeerstoreDatastore(ctx context.Context, ds datastore.Batching) (Peerstore, error) {
+	addrBook, err := NewDatastoreAddrManager(ctx, ds, time.Second)
+	if err != nil {
+		return nil, err
+	}
+
+	ps := &peerstore{
 		keybook:  newKeybook(),
 		metrics:  NewMetrics(),
-		AddrBook: NewDatastoreAddrManager(ctx, ds, time.Second),
+		AddrBook: addrBook,
 		ds:       make(map[string]interface{}),
 	}
+	return ps, nil
 }
 
 func (ps *peerstore) Put(p peer.ID, key string, val interface{}) error {

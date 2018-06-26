@@ -41,7 +41,10 @@ func runTestWithPeerstores(t *testing.T, testFunc func(*testing.T, Peerstore)) {
 func setupDatastorePeerstore(t *testing.T) (Peerstore, func()) {
 	ds, closeDB := setupBadgerDatastore(t)
 	ctx, cancel := context.WithCancel(context.Background())
-	ps := NewPeerstoreDatastore(ctx, ds)
+	ps, err := NewPeerstoreDatastore(ctx, ds)
+	if err != nil {
+		t.Fatal(err)
+	}
 	closer := func() {
 		cancel()
 		closeDB()

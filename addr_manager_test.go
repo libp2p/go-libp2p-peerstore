@@ -71,7 +71,10 @@ func setupBadgerDatastore(t *testing.T) (datastore.Batching, func()) {
 
 func setupDatastoreAddrManager(t *testing.T) (*DatastoreAddrManager, func()) {
 	ds, closeDB := setupBadgerDatastore(t)
-	mgr := NewDatastoreAddrManager(context.Background(), ds, 100*time.Microsecond)
+	mgr, err := NewDatastoreAddrManager(context.Background(), ds, 100*time.Microsecond)
+	if err != nil {
+		t.Fatal(err)
+	}
 	closer := func() {
 		mgr.Stop()
 		closeDB()
