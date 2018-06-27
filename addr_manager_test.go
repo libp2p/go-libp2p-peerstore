@@ -53,7 +53,7 @@ func testHas(t *testing.T, exp, act []ma.Multiaddr) {
 	}
 }
 
-func setupBadgerDatastore(t *testing.T) (datastore.Batching, func()) {
+func setupBadgerDatastore(t testing.TB) (datastore.Batching, func()) {
 	dataPath, err := ioutil.TempDir(os.TempDir(), "badger")
 	if err != nil {
 		t.Fatal(err)
