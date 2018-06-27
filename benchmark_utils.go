@@ -6,10 +6,11 @@ import (
 	"testing"
 	"time"
 
+	"math/rand"
+
 	"github.com/mr-tron/base58/base58"
 	ma "github.com/multiformats/go-multiaddr"
 	mh "github.com/multiformats/go-multihash"
-	"math/rand"
 )
 
 type peerpair struct {

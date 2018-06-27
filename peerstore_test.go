@@ -331,7 +331,7 @@ func benchmarkPeerstoreRateLimited(ps Peerstore) func(*testing.B) {
 		producer := make(chan *peerpair, 100)
 		addrs := make(chan *peerpair, 100)
 
-		go rateLimitedAddressProducer(b, addrs, producer, 10000, time.Millisecond, 500*time.Microsecond)
+		go rateLimitedAddressProducer(b, addrs, producer, 60000, 100*time.Microsecond, 100*time.Microsecond)
 
 		b.ResetTimer()
 		for {
