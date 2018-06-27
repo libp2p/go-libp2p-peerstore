@@ -309,21 +309,37 @@ func TestBasicPeerstore(t *testing.T) {
 	runTestWithPeerstores(t, testBasicPeerstore)
 }
 
-func BenchmarkBasicPeerstore(b *testing.B) {
-	ps := NewPeerstore()
+func benchmarkPeerstore(ps Peerstore) func(*testing.B) {
+	return func(b *testing.B) {
+		addrs := make(chan *peerpair, 100)
 
-	addrs := make(chan *peerpair, 100)
+		go addressProducer(b, addrs, time.After(10*time.Second))
 
-	go addressProducer(b, addrs, 50000)
-
-	for {
-		pp, ok := <-addrs
-		if !ok {
-			break
+		start := time.Now()
+		count := 0
+		b.ResetTimer()
+		for {
+			pp, ok := <-addrs
+			if !ok {
+				break
+			}
+			count++
+			pid := peer.ID(pp.ID)
+			ps.AddAddr(pid, pp.Addr, PermanentAddrTTL)
 		}
-		pid := peer.ID(pp.ID)
-		ps.AddAddr(pid, pp.Addr, PermanentAddrTTL)
+		elapsed := time.Since(start)
+		rate := float64(count) / elapsed.Seconds()
+		b.Logf("Added %d addresses in %s, rate: %f addrs/s\n", count, elapsed, rate)
 	}
+}
+
+func BenchmarkPeerstore(b *testing.B) {
+	ps := NewPeerstore()
+	b.Run("PeerstoreBasic", benchmarkPeerstore(ps))
+
+	dsps, closer := setupDatastorePeerstore(b)
+	defer closer()
+	b.Run("PeerstoreDatastore", benchmarkPeerstore(dsps))
 }
 
 func benchmarkPeerstoreRateLimited(ps Peerstore) func(*testing.B) {
@@ -331,17 +347,23 @@ func benchmarkPeerstoreRateLimited(ps Peerstore) func(*testing.B) {
 		producer := make(chan *peerpair, 100)
 		addrs := make(chan *peerpair, 100)
 
-		go rateLimitedAddressProducer(b, addrs, producer, 60000, 100*time.Microsecond, 100*time.Microsecond)
+		go rateLimitedAddressProducer(b, addrs, producer, time.After(10*time.Second), 100*time.Microsecond, 100*time.Microsecond)
 
+		start := time.Now()
+		count := 0
 		b.ResetTimer()
 		for {
 			pp, ok := <-addrs
 			if !ok {
 				break
 			}
+			count++
 			pid := peer.ID(pp.ID)
 			ps.AddAddr(pid, pp.Addr, PermanentAddrTTL)
 		}
+		elapsed := time.Since(start)
+		rate := float64(count) / elapsed.Seconds()
+		b.Logf("Added %d addresses in %s, rate: %f addrs/s\n", count, elapsed, rate)
 	}
 }
 
