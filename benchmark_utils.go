@@ -45,23 +45,18 @@ func randomPeer(b *testing.B) *peerpair {
 	return &peerpair{b58ID, addr}
 }
 
-func addressProducer(b *testing.B, addrs chan *peerpair, done <-chan time.Time) {
+func addressProducer(b *testing.B, addrs chan *peerpair) {
 	defer close(addrs)
-	for {
-		select {
-		case <-done:
-			return
-		default:
-			p := randomPeer(b)
-			addrs <- p
-		}
+	for i := 0; i < b.N; i++ {
+		p := randomPeer(b)
+		addrs <- p
 	}
 }
 
-func rateLimitedAddressProducer(b *testing.B, addrs chan *peerpair, producer chan *peerpair, done <-chan time.Time, avgTime time.Duration, errBound time.Duration) {
+func rateLimitedAddressProducer(b *testing.B, addrs chan *peerpair, producer chan *peerpair, avgTime time.Duration, errBound time.Duration) {
 	defer close(addrs)
 
-	go addressProducer(b, producer, done)
+	go addressProducer(b, producer)
 
 	eb := int64(errBound)
 	for {
