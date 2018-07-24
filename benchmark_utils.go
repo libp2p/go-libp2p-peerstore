@@ -1,12 +1,10 @@
 package peerstore
 
 import (
+	"context"
 	cr "crypto/rand"
 	"fmt"
 	"testing"
-	"time"
-
-	"math/rand"
 
 	"github.com/mr-tron/base58/base58"
 	ma "github.com/multiformats/go-multiaddr"
@@ -45,31 +43,14 @@ func randomPeer(b *testing.B) *peerpair {
 	return &peerpair{b58ID, addr}
 }
 
-func addressProducer(b *testing.B, addrs chan *peerpair) {
+func addressProducer(ctx context.Context, b *testing.B, addrs chan *peerpair) {
 	defer close(addrs)
-	for i := 0; i < b.N; i++ {
-		p := randomPeer(b)
-		addrs <- p
-	}
-}
-
-func rateLimitedAddressProducer(b *testing.B, addrs chan *peerpair, producer chan *peerpair, avgTime time.Duration, errBound time.Duration) {
-	defer close(addrs)
-
-	go addressProducer(b, producer)
-
-	eb := int64(errBound)
 	for {
-		addr, ok := <-producer
-		if !ok {
-			break
+		p := randomPeer(b)
+		select {
+		case addrs <- p:
+		case <-ctx.Done():
+			return
 		}
-		addrs <- addr
-		wiggle := time.Duration(0)
-		if eb > 0 {
-			wiggle = time.Duration(rand.Int63n(eb*2) - eb)
-		}
-		sleepDur := avgTime + wiggle
-		time.Sleep(sleepDur)
 	}
 }

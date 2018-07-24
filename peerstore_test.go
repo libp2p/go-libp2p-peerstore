@@ -313,17 +313,16 @@ func benchmarkPeerstore(ps Peerstore) func(*testing.B) {
 	return func(b *testing.B) {
 		addrs := make(chan *peerpair, 100)
 
-		go addressProducer(b, addrs)
+		ctx, cancel := context.WithCancel(context.Background())
+		go addressProducer(ctx, b, addrs)
 
 		b.ResetTimer()
-		for {
-			pp, ok := <-addrs
-			if !ok {
-				break
-			}
+		for i := 0; i < b.N; i++ {
+			pp := <-addrs
 			pid := peer.ID(pp.ID)
 			ps.AddAddr(pid, pp.Addr, PermanentAddrTTL)
 		}
+		cancel()
 	}
 }
 
@@ -334,32 +333,4 @@ func BenchmarkPeerstore(b *testing.B) {
 	dsps, closer := setupDatastorePeerstore(b)
 	defer closer()
 	b.Run("PeerstoreDatastore", benchmarkPeerstore(dsps))
-}
-
-func benchmarkPeerstoreRateLimited(ps Peerstore) func(*testing.B) {
-	return func(b *testing.B) {
-		producer := make(chan *peerpair, 100)
-		addrs := make(chan *peerpair, 100)
-
-		go rateLimitedAddressProducer(b, addrs, producer, 100*time.Microsecond, 100*time.Microsecond)
-
-		b.ResetTimer()
-		for {
-			pp, ok := <-addrs
-			if !ok {
-				break
-			}
-			pid := peer.ID(pp.ID)
-			ps.AddAddr(pid, pp.Addr, PermanentAddrTTL)
-		}
-	}
-}
-
-func BenchmarkPeerstoreRateLimited(b *testing.B) {
-	ps := NewPeerstore()
-	b.Run("PeerstoreBasic", benchmarkPeerstoreRateLimited(ps))
-
-	dsps, closer := setupDatastorePeerstore(b)
-	defer closer()
-	b.Run("PeerstoreDatastore", benchmarkPeerstoreRateLimited(dsps))
 }
