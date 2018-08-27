@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	peer "github.com/libp2p/go-libp2p-peer"
-	addr "github.com/libp2p/go-libp2p-peerstore/addr"
+	"github.com/libp2p/go-libp2p-peer"
+	"github.com/libp2p/go-libp2p-peerstore/addr"
 	ma "github.com/multiformats/go-multiaddr"
 )
 
@@ -60,7 +60,7 @@ type AddrManager struct {
 	addrmu sync.Mutex // guards addrs
 	addrs  map[peer.ID]addrSlice
 
-	addrSubs map[peer.ID][]*addrSub
+	subManager *AddrSubManager
 }
 
 // ensures the AddrManager is initialized.
@@ -69,8 +69,8 @@ func (mgr *AddrManager) init() {
 	if mgr.addrs == nil {
 		mgr.addrs = make(map[peer.ID]addrSlice)
 	}
-	if mgr.addrSubs == nil {
-		mgr.addrSubs = make(map[peer.ID][]*addrSub)
+	if mgr.subManager == nil {
+		mgr.subManager = NewAddrSubManager()
 	}
 }
 
@@ -114,8 +114,6 @@ func (mgr *AddrManager) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Durat
 		amap[string(ea.Addr.Bytes())] = ea
 	}
 
-	subs := mgr.addrSubs[p]
-
 	// only expand ttls
 	exp := time.Now().Add(ttl)
 	for _, addr := range addrs {
@@ -129,9 +127,7 @@ func (mgr *AddrManager) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Durat
 		if !found || exp.After(a.Expires) {
 			amap[addrstr] = expiringAddr{Addr: addr, Expires: exp, TTL: ttl}
 
-			for _, sub := range subs {
-				sub.pubAddr(addr)
-			}
+			mgr.subManager.BroadcastAddr(p, addr)
 		}
 	}
 	newAddrs := make([]expiringAddr, 0, len(amap))
@@ -161,8 +157,6 @@ func (mgr *AddrManager) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Durat
 		amap[string(ea.Addr.Bytes())] = ea
 	}
 
-	subs := mgr.addrSubs[p]
-
 	exp := time.Now().Add(ttl)
 	for _, addr := range addrs {
 		if addr == nil {
@@ -175,9 +169,7 @@ func (mgr *AddrManager) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Durat
 		if ttl > 0 {
 			amap[addrs] = expiringAddr{Addr: addr, Expires: exp, TTL: ttl}
 
-			for _, sub := range subs {
-				sub.pubAddr(addr)
-			}
+			mgr.subManager.BroadcastAddr(p, addr)
 		} else {
 			delete(amap, addrs)
 		}
@@ -248,7 +240,7 @@ func (mgr *AddrManager) Addrs(p peer.ID) []ma.Multiaddr {
 	return good
 }
 
-// ClearAddresses removes all previously stored addresses
+// ClearAddrs removes all previously stored addresses
 func (mgr *AddrManager) ClearAddrs(p peer.ID) {
 	mgr.addrmu.Lock()
 	defer mgr.addrmu.Unlock()
@@ -257,57 +249,85 @@ func (mgr *AddrManager) ClearAddrs(p peer.ID) {
 	delete(mgr.addrs, p)
 }
 
-func (mgr *AddrManager) removeSub(p peer.ID, s *addrSub) {
-	mgr.addrmu.Lock()
-	defer mgr.addrmu.Unlock()
-	subs := mgr.addrSubs[p]
-	if len(subs) == 1 {
-		if subs[0] != s {
-			return
-		}
-		delete(mgr.addrSubs, p)
-		return
-	}
-	for i, v := range subs {
-		if v == s {
-			subs[i] = subs[len(subs)-1]
-			subs[len(subs)-1] = nil
-			mgr.addrSubs[p] = subs[:len(subs)-1]
-			return
-		}
-	}
-}
-
-type addrSub struct {
-	pubch  chan ma.Multiaddr
-	lk     sync.Mutex
-	buffer []ma.Multiaddr
-	ctx    context.Context
-}
-
-func (s *addrSub) pubAddr(a ma.Multiaddr) {
-	select {
-	case s.pubch <- a:
-	case <-s.ctx.Done():
-	}
-}
-
+// AddrStream returns a channel on which all new addresses discovered for a
+// given peer ID will be published.
 func (mgr *AddrManager) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Multiaddr {
 	mgr.addrmu.Lock()
 	defer mgr.addrmu.Unlock()
 	mgr.init()
-
-	sub := &addrSub{pubch: make(chan ma.Multiaddr), ctx: ctx}
-
-	out := make(chan ma.Multiaddr)
-
-	mgr.addrSubs[p] = append(mgr.addrSubs[p], sub)
 
 	baseaddrslice := mgr.addrs[p]
 	initial := make([]ma.Multiaddr, 0, len(baseaddrslice))
 	for _, a := range baseaddrslice {
 		initial = append(initial, a.Addr)
 	}
+
+	return mgr.subManager.AddrStream(ctx, p, initial)
+}
+
+// An abstracted, pub-sub manager for address streams. Extracted from
+// AddrManager in order to support additional implementations.
+type AddrSubManager struct {
+	mu   sync.RWMutex
+	subs map[peer.ID][]*addrSub
+}
+
+// NewAddrSubManager initializes an AddrSubManager.
+func NewAddrSubManager() *AddrSubManager {
+	return &AddrSubManager{
+		subs: make(map[peer.ID][]*addrSub),
+	}
+}
+
+// Used internally by the address stream coroutine to remove a subscription
+// from the manager.
+func (mgr *AddrSubManager) removeSub(p peer.ID, s *addrSub) {
+	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
+	subs := mgr.subs[p]
+	if len(subs) == 1 {
+		if subs[0] != s {
+			return
+		}
+		delete(mgr.subs, p)
+		return
+	}
+	for i, v := range subs {
+		if v == s {
+			subs[i] = subs[len(subs)-1]
+			subs[len(subs)-1] = nil
+			mgr.subs[p] = subs[:len(subs)-1]
+			return
+		}
+	}
+}
+
+// BroadcastAddr broadcasts a new address to all subscribed streams.
+func (mgr *AddrSubManager) BroadcastAddr(p peer.ID, addr ma.Multiaddr) {
+	mgr.mu.RLock()
+	defer mgr.mu.RUnlock()
+
+	if subs, ok := mgr.subs[p]; ok {
+		for _, sub := range subs {
+			sub.pubAddr(addr)
+		}
+	}
+}
+
+// AddrStream creates a new subscription for a given peer ID, pre-populating the
+// channel with any addresses we might already have on file.
+func (mgr *AddrSubManager) AddrStream(ctx context.Context, p peer.ID, initial []ma.Multiaddr) <-chan ma.Multiaddr {
+	sub := &addrSub{pubch: make(chan ma.Multiaddr), ctx: ctx}
+
+	out := make(chan ma.Multiaddr)
+
+	mgr.mu.Lock()
+	if _, ok := mgr.subs[p]; ok {
+		mgr.subs[p] = append(mgr.subs[p], sub)
+	} else {
+		mgr.subs[p] = []*addrSub{sub}
+	}
+	mgr.mu.Unlock()
 
 	sort.Sort(addr.AddrList(initial))
 
@@ -359,4 +379,18 @@ func (mgr *AddrManager) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Mul
 	}(initial)
 
 	return out
+}
+
+type addrSub struct {
+	pubch  chan ma.Multiaddr
+	lk     sync.Mutex
+	buffer []ma.Multiaddr
+	ctx    context.Context
+}
+
+func (s *addrSub) pubAddr(a ma.Multiaddr) {
+	select {
+	case s.pubch <- a:
+	case <-s.ctx.Done():
+	}
 }

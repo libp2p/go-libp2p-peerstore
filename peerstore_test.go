@@ -8,7 +8,8 @@ import (
 	"testing"
 	"time"
 
-	peer "github.com/libp2p/go-libp2p-peer"
+	"github.com/libp2p/go-libp2p-crypto"
+	"github.com/libp2p/go-libp2p-peer"
 	ma "github.com/multiformats/go-multiaddr"
 )
 
@@ -25,12 +26,36 @@ func getAddrs(t *testing.T, n int) []ma.Multiaddr {
 	return addrs
 }
 
-func TestAddrStream(t *testing.T) {
+func runTestWithPeerstores(t *testing.T, testFunc func(*testing.T, Peerstore)) {
+	t.Helper()
+	t.Log("NewPeerstore")
+	ps1 := NewPeerstore()
+	testFunc(t, ps1)
+
+	t.Log("NewPeerstoreDatastore")
+	ps2, closer2 := setupDatastorePeerstore(t)
+	defer closer2()
+	testFunc(t, ps2)
+}
+
+func setupDatastorePeerstore(t testing.TB) (Peerstore, func()) {
+	ds, closeDB := setupBadgerDatastore(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	ps, err := NewPeerstoreDatastore(ctx, ds)
+	if err != nil {
+		t.Fatal(err)
+	}
+	closer := func() {
+		cancel()
+		closeDB()
+	}
+	return ps, closer
+}
+
+func testAddrStream(t *testing.T, ps Peerstore) {
 	addrs := getAddrs(t, 100)
 
 	pid := peer.ID("testpeer")
-
-	ps := NewPeerstore()
 
 	ps.AddAddrs(pid, addrs[:10], time.Hour)
 
@@ -103,11 +128,13 @@ func TestAddrStream(t *testing.T) {
 	}
 }
 
-func TestGetStreamBeforePeerAdded(t *testing.T) {
+func TestAddrStream(t *testing.T) {
+	runTestWithPeerstores(t, testAddrStream)
+}
+
+func testGetStreamBeforePeerAdded(t *testing.T, ps Peerstore) {
 	addrs := getAddrs(t, 10)
 	pid := peer.ID("testpeer")
-
-	ps := NewPeerstore()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -154,11 +181,13 @@ func TestGetStreamBeforePeerAdded(t *testing.T) {
 	}
 }
 
-func TestAddrStreamDuplicates(t *testing.T) {
+func TestGetStreamBeforePeerAdded(t *testing.T) {
+	runTestWithPeerstores(t, testGetStreamBeforePeerAdded)
+}
+
+func testAddrStreamDuplicates(t *testing.T, ps Peerstore) {
 	addrs := getAddrs(t, 10)
 	pid := peer.ID("testpeer")
-
-	ps := NewPeerstore()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -193,8 +222,11 @@ func TestAddrStreamDuplicates(t *testing.T) {
 	}
 }
 
-func TestPeerstoreProtoStore(t *testing.T) {
-	ps := NewPeerstore()
+func TestAddrStreamDuplicates(t *testing.T) {
+	runTestWithPeerstores(t, testAddrStreamDuplicates)
+}
+
+func testPeerstoreProtoStore(t *testing.T, ps Peerstore) {
 	p1 := peer.ID("TESTPEER")
 
 	protos := []string{"a", "b", "c", "d"}
@@ -248,24 +280,57 @@ func TestPeerstoreProtoStore(t *testing.T) {
 	}
 }
 
-func TestBasicPeerstore(t *testing.T) {
-	ps := NewPeerstore()
+func TestPeerstoreProtoStore(t *testing.T) {
+	runTestWithPeerstores(t, testAddrStreamDuplicates)
+}
 
+func testBasicPeerstore(t *testing.T, ps Peerstore) {
 	var pids []peer.ID
 	addrs := getAddrs(t, 10)
-	for i, a := range addrs {
-		p := peer.ID(fmt.Sprint(i))
+	for _, a := range addrs {
+		priv, _, _ := crypto.GenerateKeyPair(crypto.RSA, 512)
+		p, _ := peer.IDFromPrivateKey(priv)
 		pids = append(pids, p)
 		ps.AddAddr(p, a, PermanentAddrTTL)
 	}
 
 	peers := ps.Peers()
 	if len(peers) != 10 {
-		t.Fatal("expected ten peers")
+		t.Fatal("expected ten peers, got", len(peers))
 	}
 
 	pinfo := ps.PeerInfo(pids[0])
 	if !pinfo.Addrs[0].Equal(addrs[0]) {
 		t.Fatal("stored wrong address")
 	}
+}
+
+func TestBasicPeerstore(t *testing.T) {
+	runTestWithPeerstores(t, testBasicPeerstore)
+}
+
+func benchmarkPeerstore(ps Peerstore) func(*testing.B) {
+	return func(b *testing.B) {
+		addrs := make(chan *peerpair, 100)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		go addressProducer(ctx, b, addrs)
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			pp := <-addrs
+			pid := peer.ID(pp.ID)
+			ps.AddAddr(pid, pp.Addr, PermanentAddrTTL)
+		}
+		cancel()
+	}
+}
+
+func BenchmarkPeerstore(b *testing.B) {
+	ps := NewPeerstore()
+	b.Run("PeerstoreBasic", benchmarkPeerstore(ps))
+
+	dsps, closer := setupDatastorePeerstore(b)
+	defer closer()
+	b.Run("PeerstoreDatastore", benchmarkPeerstore(dsps))
 }
