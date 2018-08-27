@@ -65,6 +65,11 @@
       "hash": "QmSpg1CvpXQQow5ernt1gNBXaXV6yxyNqi7XoeerWfzB5w",
       "name": "go-datastore",
       "version": "3.1.0"
+    },
+    {
+      "hash": "QmQjMHF8ptRgx4E57UFMiT4YM6kqaJeYxZ1MCDX23aw4rK",
+      "name": "golang-lru",
+      "version": "2017.10.18"
     }
   ],
   "gxVersion": "0.4.0",
