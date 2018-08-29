@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/ipfs/go-datastore"
-	"github.com/ipfs/go-ds-badger"
 	"github.com/libp2p/go-libp2p-peer"
 	ma "github.com/multiformats/go-multiaddr"
 )

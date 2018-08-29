@@ -10,6 +10,7 @@ import (
 
 	"github.com/libp2p/go-libp2p-crypto"
 	"github.com/libp2p/go-libp2p-peer"
+	dspstore "github.com/libp2p/go-libp2p-peerstore/ds"
 	ma "github.com/multiformats/go-multiaddr"
 )
 
@@ -41,7 +42,7 @@ func runTestWithPeerstores(t *testing.T, testFunc func(*testing.T, Peerstore)) {
 func setupDatastorePeerstore(t testing.TB) (Peerstore, func()) {
 	ds, closeDB := setupBadgerDatastore(t)
 	ctx, cancel := context.WithCancel(context.Background())
-	ps, err := NewPeerstoreDatastore(ctx, ds)
+	ps, err := dspstore.NewPeerstore(ctx, ds)
 	if err != nil {
 		t.Fatal(err)
 	}

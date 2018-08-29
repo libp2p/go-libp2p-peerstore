@@ -7,10 +7,13 @@ import (
 	"sync"
 	"time"
 
+	logging "github.com/ipfs/go-log"
 	"github.com/libp2p/go-libp2p-peer"
 	"github.com/libp2p/go-libp2p-peerstore/addr"
 	ma "github.com/multiformats/go-multiaddr"
 )
+
+var log = logging.Logger("peerstore")
 
 var (
 
@@ -54,6 +57,8 @@ func (e *expiringAddr) ExpiredBy(t time.Time) bool {
 
 type addrSlice []expiringAddr
 
+var _ AddrBook = (*AddrManager)(nil)
+
 // AddrManager manages addresses.
 // The zero-value is ready to be used.
 type AddrManager struct {
@@ -74,7 +79,7 @@ func (mgr *AddrManager) init() {
 	}
 }
 
-func (mgr *AddrManager) Peers() []peer.ID {
+func (mgr *AddrManager) AddrsPeers() []peer.ID {
 	mgr.addrmu.Lock()
 	defer mgr.addrmu.Unlock()
 	if mgr.addrs == nil {
@@ -197,6 +202,7 @@ func (mgr *AddrManager) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time
 	}
 
 	exp := time.Now().Add(newTTL)
+	// TODO: RK - Shorthand.
 	for i := range addrs {
 		aexp := &addrs[i]
 		if oldTTL == aexp.TTL {
