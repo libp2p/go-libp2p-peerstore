@@ -3,14 +3,8 @@ package peerstore
 import (
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/libp2p/go-libp2p-peer"
-)
-
-const (
-	// AddressTTL is the expiration time of addresses.
-	AddressTTL = time.Hour
 )
 
 var _ Peerstore = (*peerstore)(nil)
@@ -24,20 +18,6 @@ type peerstore struct {
 
 	// lock for protocol information, separate from datastore lock
 	protolock sync.Mutex
-}
-
-// NewPeerstore creates a threadsafe collection of peers.
-//
-// TODO: (RK) move in-memory AddrBook, KeyBook and PeerMetadata to mem
-// package. Adapt consumers (IPFS) to instantiate mem.NewPeerstore().
-//
-// Preserving this function for backwards compatibility is not possible, as
-// we would have to import the mem package, which in turn imports this one, thus
-// creating a cycle.
-//
-// DEPRECATED: use an implementation-specific peerstore.
-func NewPeerstore() Peerstore {
-	return NewPeerstoreWith(NewKeybook(), &AddrManager{}, NewPeerMetadata())
 }
 
 // NewPeerstore creates a threadsafe collection of peers.

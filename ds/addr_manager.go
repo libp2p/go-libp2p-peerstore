@@ -11,6 +11,7 @@ import (
 	logging "github.com/ipfs/go-log"
 	"github.com/libp2p/go-libp2p-peer"
 	pstore "github.com/libp2p/go-libp2p-peerstore"
+	"github.com/libp2p/go-libp2p-peerstore/mem"
 	ma "github.com/multiformats/go-multiaddr"
 	mh "github.com/multiformats/go-multihash"
 )
@@ -28,7 +29,7 @@ type addrManager struct {
 	cache       *lru.ARCCache
 	ds          ds.Batching
 	ttlManager  *ttlmanager
-	subsManager *pstore.AddrSubManager
+	subsManager *mem.AddrSubManager
 }
 
 // NewAddrManager initializes a new address manager given a
@@ -44,7 +45,7 @@ func NewAddrManager(ctx context.Context, ds ds.Batching, ttlInterval time.Durati
 		cache:       cache,
 		ds:          ds,
 		ttlManager:  newTTLManager(ctx, ds, cache, ttlInterval),
-		subsManager: pstore.NewAddrSubManager(),
+		subsManager: mem.NewAddrSubManager(),
 	}
 	return mgr, nil
 }

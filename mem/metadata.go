@@ -1,9 +1,10 @@
-package peerstore
+package mem
 
 import (
 	"sync"
 
 	"github.com/libp2p/go-libp2p-peer"
+	pstore "github.com/libp2p/go-libp2p-peerstore"
 )
 
 type memoryPeerMetadata struct {
@@ -14,7 +15,7 @@ type memoryPeerMetadata struct {
 	dslock sync.Mutex
 }
 
-func NewPeerMetadata() PeerMetadata {
+func NewPeerMetadata() pstore.PeerMetadata {
 	return &memoryPeerMetadata{
 		ds: make(map[string]interface{}),
 	}
@@ -37,7 +38,7 @@ func (ps *memoryPeerMetadata) Get(p peer.ID, key string) (interface{}, error) {
 	defer ps.dslock.Unlock()
 	i, ok := ps.ds[string(p)+"/"+key]
 	if !ok {
-		return nil, ErrNotFound
+		return nil, pstore.ErrNotFound
 	}
 	return i, nil
 }

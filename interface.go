@@ -2,6 +2,7 @@ package peerstore
 
 import (
 	"context"
+	"math"
 	"time"
 
 	"gx/ipfs/QmVmDhyTTUcQXFD1rRQ64fGLMSAoaQvNH3hwuaCFAPq2hy/errors"
@@ -12,6 +13,39 @@ import (
 )
 
 var ErrNotFound = errors.New("item not found")
+
+var (
+	// AddressTTL is the expiration time of addresses.
+	AddressTTL = time.Hour
+
+	// TempAddrTTL is the ttl used for a short lived address
+	TempAddrTTL = time.Second * 10
+
+	// ProviderAddrTTL is the TTL of an address we've received from a provider.
+	// This is also a temporary address, but lasts longer. After this expires,
+	// the records we return will require an extra lookup.
+	ProviderAddrTTL = time.Minute * 10
+
+	// RecentlyConnectedAddrTTL is used when we recently connected to a peer.
+	// It means that we are reasonably certain of the peer's address.
+	RecentlyConnectedAddrTTL = time.Minute * 10
+
+	// OwnObservedAddrTTL is used for our own external addresses observed by peers.
+	OwnObservedAddrTTL = time.Minute * 10
+)
+
+// Permanent TTLs (distinct so we can distinguish between them, constant as they
+// are, in fact, permanent)
+const (
+
+	// PermanentAddrTTL is the ttl for a "permanent address" (e.g. bootstrap nodes).
+	PermanentAddrTTL = math.MaxInt64 - iota
+
+	// ConnectedAddrTTL is the ttl used for the addresses of a peer to whom
+	// we're connected directly. This is basically permanent, as we will
+	// clear them + re-add under a TempAddrTTL after disconnecting.
+	ConnectedAddrTTL
+)
 
 // Peerstore provides a threadsafe store of Peer related
 // information.

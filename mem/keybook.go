@@ -1,4 +1,4 @@
-package peerstore
+package mem
 
 import (
 	"errors"
@@ -6,6 +6,7 @@ import (
 
 	ic "github.com/libp2p/go-libp2p-crypto"
 	"github.com/libp2p/go-libp2p-peer"
+	pstore "github.com/libp2p/go-libp2p-peerstore"
 )
 
 type memoryKeyBook struct {
@@ -14,10 +15,10 @@ type memoryKeyBook struct {
 	sks          map[peer.ID]ic.PrivKey
 }
 
-var _ KeyBook = (*memoryKeyBook)(nil)
+var _ pstore.KeyBook = (*memoryKeyBook)(nil)
 
 // noop new, but in the future we may want to do some init work.
-func NewKeybook() KeyBook {
+func NewKeybook() pstore.KeyBook {
 	return &memoryKeyBook{
 		pks: map[peer.ID]ic.PubKey{},
 		sks: map[peer.ID]ic.PrivKey{},

@@ -1,49 +1,19 @@
-package peerstore
+package mem
 
 import (
 	"context"
-	"math"
 	"sort"
 	"sync"
 	"time"
 
 	logging "github.com/ipfs/go-log"
 	"github.com/libp2p/go-libp2p-peer"
+	pstore "github.com/libp2p/go-libp2p-peerstore"
 	"github.com/libp2p/go-libp2p-peerstore/addr"
 	ma "github.com/multiformats/go-multiaddr"
 )
 
 var log = logging.Logger("peerstore")
-
-var (
-
-	// TempAddrTTL is the ttl used for a short lived address
-	TempAddrTTL = time.Second * 10
-
-	// ProviderAddrTTL is the TTL of an address we've received from a provider.
-	// This is also a temporary address, but lasts longer. After this expires,
-	// the records we return will require an extra lookup.
-	ProviderAddrTTL = time.Minute * 10
-
-	// RecentlyConnectedAddrTTL is used when we recently connected to a peer.
-	// It means that we are reasonably certain of the peer's address.
-	RecentlyConnectedAddrTTL = time.Minute * 10
-
-	// OwnObservedAddrTTL is used for our own external addresses observed by peers.
-	OwnObservedAddrTTL = time.Minute * 10
-)
-
-// Permanent TTLs (distinct so we can distinguish between them, constant as they
-// are, in fact, permanent)
-const (
-	// PermanentAddrTTL is the ttl for a "permanent address" (e.g. bootstrap nodes).
-	PermanentAddrTTL = math.MaxInt64 - iota
-
-	// ConnectedAddrTTL is the ttl used for the addresses of a peer to whom
-	// we're connected directly. This is basically permanent, as we will
-	// clear them + re-add under a TempAddrTTL after disconnecting.
-	ConnectedAddrTTL
-)
 
 type expiringAddr struct {
 	Addr    ma.Multiaddr
@@ -57,7 +27,7 @@ func (e *expiringAddr) ExpiredBy(t time.Time) bool {
 
 type addrSlice []expiringAddr
 
-var _ AddrBook = (*AddrManager)(nil)
+var _ pstore.AddrBook = (*AddrManager)(nil)
 
 // AddrManager manages addresses.
 // The zero-value is ready to be used.
