@@ -3,9 +3,9 @@ package addr
 import (
 	"bytes"
 
-	ma "github.com/multiformats/go-multiaddr"
-	manet "github.com/multiformats/go-multiaddr-net"
-	mafmt "github.com/whyrusleeping/mafmt"
+	mafmt "gx/ipfs/QmQscWDtDBDsWAM58aY6gU2KtxyFFmvvZgdfJExYPLgtXA/mafmt"
+	manet "gx/ipfs/QmV6FjemM1K8oXjrvuq3wuVWWoU2TLDPmNnKrxHzY3v6Ai/go-multiaddr-net"
+	ma "gx/ipfs/QmYmsdtJ3HsodkePE3eU3TsCaP2YvPZJ4LoXnNkDE5Tpt7/go-multiaddr"
 )
 
 func isFDCostlyTransport(a ma.Multiaddr) bool {

@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/ipfs/go-datastore"
 	pstore "github.com/libp2p/go-libp2p-peerstore"
 	"github.com/libp2p/go-libp2p-peerstore/mem"
+	"gx/ipfs/QmSpg1CvpXQQow5ernt1gNBXaXV6yxyNqi7XoeerWfzB5w/go-datastore"
 )
 
 // NewPeerstore creates a peerstore backed by the provided persistent datastore.
