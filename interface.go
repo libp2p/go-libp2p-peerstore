@@ -77,14 +77,13 @@ type PeerMetadata interface {
 	Put(p peer.ID, key string, val interface{}) error
 }
 
-// AddrBook is an interface that fits the new AddrManager. I'm patching
-// it up in here to avoid changing a ton of the codebase.
+// AddrBook holds the multiaddrs of peers.
 type AddrBook interface {
 
 	// AddAddr calls AddAddrs(p, []ma.Multiaddr{addr}, ttl)
 	AddAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration)
 
-	// AddAddrs gives AddrManager addresses to use, with a given ttl
+	// AddAddrs gives this AddrBook addresses to use, with a given ttl
 	// (time-to-live), after which the address is no longer valid.
 	// If the manager has a longer TTL, the operation is a no-op for that address
 	AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration)
@@ -111,17 +110,25 @@ type AddrBook interface {
 	// ClearAddresses removes all previously stored addresses
 	ClearAddrs(p peer.ID)
 
-	// Peers returns all of the peer IDs stored in the AddrBook
+	// AddrsPeers returns all of the peer IDs stored in the AddrBook
 	AddrsPeers() []peer.ID
 }
 
-// KeyBook tracks the Public keys of Peers.
+// KeyBook tracks the keys of Peers.
 type KeyBook interface {
-	KeyBookPeers() []peer.ID
 
+	// PubKey stores the public key of a peer.
 	PubKey(peer.ID) ic.PubKey
+
+	// AddPubKey stores the public key of a peer.
 	AddPubKey(peer.ID, ic.PubKey) error
 
+	// PrivKey returns the private key of a peer.
 	PrivKey(peer.ID) ic.PrivKey
+
+	// AddPrivKey stores the private key of a peer.
 	AddPrivKey(peer.ID, ic.PrivKey) error
+
+	// KeyBookPeers returns all the peer IDs stored in the KeyBook
+	KeyBookPeers() []peer.ID
 }

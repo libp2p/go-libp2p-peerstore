@@ -15,7 +15,7 @@ func TestInMemoryPeerstore(t *testing.T) {
 
 func TestInMemoryAddrMgr(t *testing.T) {
 	test.TestAddrMgr(t, func() (pstore.AddrBook, func()) {
-		return &AddrManager{}, nil
+		return NewAddrBook(), nil
 	})
 }
 

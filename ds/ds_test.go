@@ -51,7 +51,7 @@ func TestBadgerDsAddrBook(t *testing.T) {
 	test.TestAddrMgr(t, func() (peerstore.AddrBook, func()) {
 		ds, closeDB := setupBadgerDatastore(t)
 
-		mgr, err := NewAddrManager(context.Background(), ds, 100*time.Microsecond)
+		mgr, err := NewAddrBook(context.Background(), ds, 100*time.Microsecond)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -25,9 +25,6 @@ func NewPeerstoreWith(kb KeyBook, ab AddrBook, md PeerMetadata) Peerstore {
 	return &peerstore{
 		KeyBook:      kb,
 		PeerMetadata: md,
-
-		// TODO: normalise the naming here AddrBook vs AddrManager.
-		// TODO: add a constructor NewAddrBook and make the struct private.
 		AddrBook: ab,
 		Metrics:  NewMetrics(),
 	}

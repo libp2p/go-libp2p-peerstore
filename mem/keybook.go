@@ -19,7 +19,7 @@ type memoryKeyBook struct {
 var _ pstore.KeyBook = (*memoryKeyBook)(nil)
 
 // noop new, but in the future we may want to do some init work.
-func NewKeybook() pstore.KeyBook {
+func NewKeyBook() pstore.KeyBook {
 	return &memoryKeyBook{
 		pks: map[peer.ID]ic.PubKey{},
 		sks: map[peer.ID]ic.PrivKey{},

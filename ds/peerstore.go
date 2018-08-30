@@ -12,11 +12,11 @@ import (
 
 // NewPeerstore creates a peerstore backed by the provided persistent datastore.
 func NewPeerstore(ctx context.Context, ds datastore.Batching) (pstore.Peerstore, error) {
-	addrBook, err := NewAddrManager(ctx, ds, time.Second)
+	addrBook, err := NewAddrBook(ctx, ds, time.Second)
 	if err != nil {
 		return nil, err
 	}
 
-	ps := pstore.NewPeerstoreWith(mem.NewKeybook(), addrBook, mem.NewPeerMetadata())
+	ps := pstore.NewPeerstoreWith(mem.NewKeyBook(), addrBook, mem.NewPeerMetadata())
 	return ps, nil
 }

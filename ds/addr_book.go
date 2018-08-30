@@ -22,27 +22,27 @@ var log = logging.Logger("peerstore/ds")
 // Number of times to retry transactional writes
 var dsWriteRetries = 5
 
-var _ pstore.AddrBook = (*addrManager)(nil)
+var _ pstore.AddrBook = (*dsAddrBook)(nil)
 
-// addrManager is an address manager backed by a Datastore with both an
+// dsAddrBook is an address manager backed by a Datastore with both an
 // in-memory TTL manager and an in-memory address stream manager.
-type addrManager struct {
+type dsAddrBook struct {
 	cache       *lru.ARCCache
 	ds          ds.Batching
 	ttlManager  *ttlmanager
 	subsManager *mem.AddrSubManager
 }
 
-// NewAddrManager initializes a new address manager given a
+// NewAddrBook initializes a new address manager given a
 // Datastore instance, a context for managing the TTL manager,
 // and the interval at which the TTL manager should sweep the Datastore.
-func NewAddrManager(ctx context.Context, ds ds.Batching, ttlInterval time.Duration) (*addrManager, error) {
+func NewAddrBook(ctx context.Context, ds ds.Batching, ttlInterval time.Duration) (*dsAddrBook, error) {
 	cache, err := lru.NewARC(1024)
 	if err != nil {
 		return nil, err
 	}
 
-	mgr := &addrManager{
+	mgr := &dsAddrBook{
 		cache:       cache,
 		ds:          ds,
 		ttlManager:  newTTLManager(ctx, ds, cache, ttlInterval),
@@ -52,7 +52,7 @@ func NewAddrManager(ctx context.Context, ds ds.Batching, ttlInterval time.Durati
 }
 
 // Stop will signal the TTL manager to stop and block until it returns.
-func (mgr *addrManager) Stop() {
+func (mgr *dsAddrBook) Stop() {
 	mgr.ttlManager.cancel()
 }
 
@@ -70,12 +70,12 @@ func peerIDFromKey(key ds.Key) (peer.ID, error) {
 }
 
 // AddAddr will add a new address if it's not already in the AddrBook.
-func (mgr *addrManager) AddAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) {
+func (mgr *dsAddrBook) AddAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) {
 	mgr.AddAddrs(p, []ma.Multiaddr{addr}, ttl)
 }
 
 // AddAddrs will add many new addresses if they're not already in the AddrBook.
-func (mgr *addrManager) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
+func (mgr *dsAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
 	if ttl <= 0 {
 		return
 	}
@@ -84,16 +84,16 @@ func (mgr *addrManager) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Durat
 }
 
 // SetAddr will add or update the TTL of an address in the AddrBook.
-func (mgr *addrManager) SetAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) {
+func (mgr *dsAddrBook) SetAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) {
 	mgr.SetAddrs(p, []ma.Multiaddr{addr}, ttl)
 }
 
 // SetAddrs will add or update the TTLs of addresses in the AddrBook.
-func (mgr *addrManager) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
+func (mgr *dsAddrBook) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
 	mgr.setAddrs(p, addrs, ttl, false)
 }
 
-func (mgr *addrManager) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration, add bool) {
+func (mgr *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration, add bool) {
 	for i := 0; i < dsWriteRetries; i++ {
 		// keys to add to the TTL manager
 		var keys []ds.Key
@@ -153,13 +153,13 @@ func (mgr *addrManager) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Durat
 
 // UpdateAddrs will update any addresses for a given peer and TTL combination to
 // have a new TTL.
-func (mgr *addrManager) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.Duration) {
+func (mgr *dsAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.Duration) {
 	prefix := ds.NewKey(p.Pretty())
 	mgr.ttlManager.updateTTLs(prefix, oldTTL, newTTL)
 }
 
 // Addrs Returns all of the non-expired addresses for a given peer.
-func (mgr *addrManager) Addrs(p peer.ID) []ma.Multiaddr {
+func (mgr *dsAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
 	prefix := ds.NewKey(p.Pretty())
 	q := query.Query{Prefix: prefix.String(), KeysOnly: true}
 	results, err := mgr.ds.Query(q)
@@ -193,7 +193,7 @@ func (mgr *addrManager) Addrs(p peer.ID) []ma.Multiaddr {
 }
 
 // Peers returns all of the peer IDs for which the AddrBook has addresses.
-func (mgr *addrManager) AddrsPeers() []peer.ID {
+func (mgr *dsAddrBook) AddrsPeers() []peer.ID {
 	q := query.Query{KeysOnly: true}
 	results, err := mgr.ds.Query(q)
 	if err != nil {
@@ -220,13 +220,13 @@ func (mgr *addrManager) AddrsPeers() []peer.ID {
 
 // AddrStream returns a channel on which all new addresses discovered for a
 // given peer ID will be published.
-func (mgr *addrManager) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Multiaddr {
+func (mgr *dsAddrBook) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Multiaddr {
 	initial := mgr.Addrs(p)
 	return mgr.subsManager.AddrStream(ctx, p, initial)
 }
 
 // ClearAddrs will delete all known addresses for a peer ID.
-func (mgr *addrManager) ClearAddrs(p peer.ID) {
+func (mgr *dsAddrBook) ClearAddrs(p peer.ID) {
 	prefix := ds.NewKey(p.Pretty())
 	for i := 0; i < dsWriteRetries; i++ {
 		q := query.Query{Prefix: prefix.String(), KeysOnly: true}
