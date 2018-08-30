@@ -25,8 +25,8 @@ func NewPeerstoreWith(kb KeyBook, ab AddrBook, md PeerMetadata) Peerstore {
 	return &peerstore{
 		KeyBook:      kb,
 		PeerMetadata: md,
-		AddrBook: ab,
-		Metrics:  NewMetrics(),
+		AddrBook:     ab,
+		Metrics:      NewMetrics(),
 	}
 }
 
