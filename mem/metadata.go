@@ -3,8 +3,9 @@ package mem
 import (
 	"sync"
 
-	pstore "github.com/libp2p/go-libp2p-peerstore"
 	"gx/ipfs/QmQsErDt8Qgw1XrsXf2BpEzDgGWtB1YLsTAARBup5b6B9W/go-libp2p-peer"
+
+	pstore "github.com/libp2p/go-libp2p-peerstore"
 )
 
 type memoryPeerMetadata struct {

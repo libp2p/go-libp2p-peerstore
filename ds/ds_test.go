@@ -7,10 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/libp2p/go-libp2p-peerstore"
-	"github.com/libp2p/go-libp2p-peerstore/test"
 	"gx/ipfs/QmSpg1CvpXQQow5ernt1gNBXaXV6yxyNqi7XoeerWfzB5w/go-datastore"
 	"gx/ipfs/QmUCfrikzKVGAfpE31RPwPd32fu1DYxSG7HTGCadba5Wza/go-ds-badger"
+
+	"github.com/libp2p/go-libp2p-peerstore"
+	"github.com/libp2p/go-libp2p-peerstore/test"
 )
 
 func setupBadgerDatastore(t testing.TB) (datastore.Batching, func()) {
