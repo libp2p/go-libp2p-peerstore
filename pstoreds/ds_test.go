@@ -14,7 +14,7 @@ import (
 	"github.com/libp2p/go-libp2p-peerstore/test"
 )
 
-func setupBadgerDatastore(t testing.TB) (datastore.Batching, func()) {
+func setupBadgerDatastore(t testing.TB) (datastore.TxnDatastore, func()) {
 	dataPath, err := ioutil.TempDir(os.TempDir(), "badger")
 	if err != nil {
 		t.Fatal(err)

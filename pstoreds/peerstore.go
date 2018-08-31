@@ -11,7 +11,7 @@ import (
 )
 
 // NewPeerstore creates a peerstore backed by the provided persistent datastore.
-func NewPeerstore(ctx context.Context, ds datastore.Batching) (pstore.Peerstore, error) {
+func NewPeerstore(ctx context.Context, ds datastore.TxnDatastore) (pstore.Peerstore, error) {
 	addrBook, err := NewAddrBook(ctx, ds, time.Second)
 	if err != nil {
 		return nil, err
