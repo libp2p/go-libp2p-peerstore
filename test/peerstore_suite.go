@@ -42,9 +42,12 @@ func TestPeerstore(t *testing.T, factory PeerstoreFactory) {
 
 func BenchmarkPeerstore(b *testing.B, factory PeerstoreFactory) {
 	ps, closeFunc := factory()
-	defer closeFunc()
 
 	b.Run("Peerstore", benchmarkPeerstore(ps))
+
+	if closeFunc != nil {
+		closeFunc()
+	}
 }
 
 func testAddrStream(ps pstore.Peerstore) func(t *testing.T) {
