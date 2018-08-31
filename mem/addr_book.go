@@ -40,7 +40,7 @@ type memoryAddrBook struct {
 
 func NewAddrBook() pstore.AddrBook {
 	return &memoryAddrBook{
-		addrs: make(map[peer.ID]addrSlice),
+		addrs:      make(map[peer.ID]addrSlice),
 		subManager: NewAddrSubManager(),
 	}
 }
@@ -262,7 +262,7 @@ func NewAddrSubManager() *AddrSubManager {
 func (mgr *AddrSubManager) removeSub(p peer.ID, s *addrSub) {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
-	
+
 	subs := mgr.subs[p]
 	if len(subs) == 1 {
 		if subs[0] != s {
