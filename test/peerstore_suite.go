@@ -299,8 +299,7 @@ func benchmarkPeerstore(ps pstore.Peerstore) func(*testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			pp := <-addrs
-			pid := peer.ID(pp.ID)
-			ps.AddAddr(pid, pp.Addr, pstore.PermanentAddrTTL)
+			ps.AddAddr(pp.ID, pp.Addr, pstore.PermanentAddrTTL)
 		}
 		cancel()
 	}

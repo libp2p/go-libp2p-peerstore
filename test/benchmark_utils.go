@@ -2,45 +2,33 @@ package test
 
 import (
 	"context"
-	cr "crypto/rand"
 	"fmt"
 	"testing"
 
-	"github.com/mr-tron/base58/base58"
+	"github.com/libp2p/go-libp2p-peer"
+	pt "github.com/libp2p/go-libp2p-peer/test"
 	ma "github.com/multiformats/go-multiaddr"
-	mh "github.com/multiformats/go-multihash"
 )
 
 type peerpair struct {
-	ID   string
+	ID   peer.ID
 	Addr ma.Multiaddr
 }
 
 func randomPeer(b *testing.B) *peerpair {
-	buf := make([]byte, 50)
+	var pid peer.ID
+	var err error
+	var addr ma.Multiaddr
 
-	for {
-		n, err := cr.Read(buf)
-		if err != nil {
-			b.Fatal(err)
-		}
-		if n > 0 {
-			break
-		}
-	}
-
-	id, err := mh.Encode(buf, mh.SHA2_256)
-	if err != nil {
-		b.Fatal(err)
-	}
-	b58ID := base58.Encode(id)
-
-	addr, err := ma.NewMultiaddr(fmt.Sprintf("/ip4/127.0.0.1/tcp/6666/ipfs/%s", b58ID))
-	if err != nil {
+	if pid, err = pt.RandPeerID(); err != nil {
 		b.Fatal(err)
 	}
 
-	return &peerpair{b58ID, addr}
+	if addr, err = ma.NewMultiaddr(fmt.Sprintf("/ip4/127.0.0.1/tcp/6666/ipfs/%s", pid.Pretty())); err != nil {
+		b.Fatal(err)
+	}
+
+	return &peerpair{pid, addr}
 }
 
 func addressProducer(ctx context.Context, b *testing.B, addrs chan *peerpair) {
