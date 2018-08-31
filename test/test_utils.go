@@ -1,36 +1,26 @@
 package test
 
 import (
-	"io"
-	"math/rand"
-	"time"
+	"testing"
 
-	ci "github.com/libp2p/go-libp2p-crypto"
 	"github.com/libp2p/go-libp2p-peer"
-	mh "github.com/multiformats/go-multihash"
+	ma "github.com/multiformats/go-multiaddr"
 )
 
-func timeSeededRand() io.Reader {
-	return rand.New(rand.NewSource(time.Now().UnixNano()))
-}
-
-func RandPeerID() (peer.ID, error) {
-	buf := make([]byte, 16)
-	if _, err := io.ReadFull(timeSeededRand(), buf); err != nil {
-		return "", err
-	}
-	h, err := mh.Sum(buf, mh.SHA2_256, -1)
+func peerId(t *testing.T, ids string) peer.ID {
+	t.Helper()
+	id, err := peer.IDB58Decode(ids)
 	if err != nil {
-		return "", err
+		t.Fatalf("id %q is bad: %s", ids, err)
 	}
-
-	return peer.ID(h), nil
+	return id
 }
 
-func RandTestKeyPair(bits int) (ci.PrivKey, ci.PubKey, error) {
-	return ci.GenerateKeyPairWithReader(ci.RSA, bits, timeSeededRand())
-}
-
-func SeededTestKeyPair(seed int64) (ci.PrivKey, ci.PubKey, error) {
-	return ci.GenerateKeyPairWithReader(ci.RSA, 512, rand.New(rand.NewSource(seed)))
+func multiaddr(t *testing.T, m string) ma.Multiaddr {
+	t.Helper()
+	maddr, err := ma.NewMultiaddr(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return maddr
 }

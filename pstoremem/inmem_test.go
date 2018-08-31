@@ -19,6 +19,12 @@ func TestInMemoryAddrBook(t *testing.T) {
 	})
 }
 
+func TestInMemoryKeyBook(t *testing.T) {
+	test.TestKeyBook(t, func() (pstore.KeyBook, func()) {
+		return NewKeyBook(), nil
+	})
+}
+
 func BenchmarkInMemoryPeerstore(b *testing.B) {
 	test.BenchmarkPeerstore(b, func() (pstore.Peerstore, func()) {
 		return NewPeerstore(), nil

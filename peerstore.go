@@ -31,7 +31,7 @@ func NewPeerstore(kb KeyBook, ab AddrBook, md PeerMetadata) Peerstore {
 	}
 }
 
-func (ps *peerstore) Peers() []peer.ID {
+func (ps *peerstore) Peers() peer.IDSlice {
 	set := map[peer.ID]struct{}{}
 	for _, p := range ps.PeersWithKeys() {
 		set[p] = struct{}{}
@@ -40,7 +40,7 @@ func (ps *peerstore) Peers() []peer.ID {
 		set[p] = struct{}{}
 	}
 
-	pps := make([]peer.ID, 0, len(set))
+	pps := make(peer.IDSlice, 0, len(set))
 	for p := range set {
 		pps = append(pps, p)
 	}
@@ -132,7 +132,7 @@ func (ps *peerstore) SupportsProtocols(p peer.ID, protos ...string) ([]string, e
 	return out, nil
 }
 
-func PeerInfos(ps Peerstore, peers []peer.ID) []PeerInfo {
+func PeerInfos(ps Peerstore, peers peer.IDSlice) []PeerInfo {
 	pi := make([]PeerInfo, len(peers))
 	for i, p := range peers {
 		pi[i] = ps.PeerInfo(p)
@@ -140,8 +140,8 @@ func PeerInfos(ps Peerstore, peers []peer.ID) []PeerInfo {
 	return pi
 }
 
-func PeerInfoIDs(pis []PeerInfo) []peer.ID {
-	ps := make([]peer.ID, len(pis))
+func PeerInfoIDs(pis []PeerInfo) peer.IDSlice {
+	ps := make(peer.IDSlice, len(pis))
 	for i, pi := range pis {
 		ps[i] = pi.ID
 	}

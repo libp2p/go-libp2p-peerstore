@@ -4,10 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/libp2p/go-libp2p-peer"
-	ma "github.com/multiformats/go-multiaddr"
-
 	pstore "github.com/libp2p/go-libp2p-peerstore"
+	ma "github.com/multiformats/go-multiaddr"
 )
 
 var addressBookSuite = map[string]func(book pstore.AddrBook) func(*testing.T){
@@ -38,27 +36,27 @@ func TestAddrBook(t *testing.T, factory AddrBookFactory) {
 
 func testAddresses(m pstore.AddrBook) func(*testing.T) {
 	return func(t *testing.T) {
-		id1 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
-		id2 := IDS(t, "QmRmPL3FDZKE3Qiwv1RosLdwdvbvg17b2hB39QPScgWKKZ")
-		id3 := IDS(t, "QmPhi7vBsChP7sjRoZGgg7bcKqF6MmCcQwvRbDte8aJ6Kn")
-		id4 := IDS(t, "QmPhi7vBsChP7sjRoZGgg7bcKqF6MmCcQwvRbDte8aJ5Kn")
-		id5 := IDS(t, "QmPhi7vBsChP7sjRoZGgg7bcKqF6MmCcQwvRbDte8aJ5Km")
+		id1 := peerId(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
+		id2 := peerId(t, "QmRmPL3FDZKE3Qiwv1RosLdwdvbvg17b2hB39QPScgWKKZ")
+		id3 := peerId(t, "QmPhi7vBsChP7sjRoZGgg7bcKqF6MmCcQwvRbDte8aJ6Kn")
+		id4 := peerId(t, "QmPhi7vBsChP7sjRoZGgg7bcKqF6MmCcQwvRbDte8aJ5Kn")
+		id5 := peerId(t, "QmPhi7vBsChP7sjRoZGgg7bcKqF6MmCcQwvRbDte8aJ5Km")
 
-		ma11 := MA(t, "/ip4/1.2.3.1/tcp/1111")
-		ma21 := MA(t, "/ip4/2.2.3.2/tcp/1111")
-		ma22 := MA(t, "/ip4/2.2.3.2/tcp/2222")
-		ma31 := MA(t, "/ip4/3.2.3.3/tcp/1111")
-		ma32 := MA(t, "/ip4/3.2.3.3/tcp/2222")
-		ma33 := MA(t, "/ip4/3.2.3.3/tcp/3333")
-		ma41 := MA(t, "/ip4/4.2.3.3/tcp/1111")
-		ma42 := MA(t, "/ip4/4.2.3.3/tcp/2222")
-		ma43 := MA(t, "/ip4/4.2.3.3/tcp/3333")
-		ma44 := MA(t, "/ip4/4.2.3.3/tcp/4444")
-		ma51 := MA(t, "/ip4/5.2.3.3/tcp/1111")
-		ma52 := MA(t, "/ip4/5.2.3.3/tcp/2222")
-		ma53 := MA(t, "/ip4/5.2.3.3/tcp/3333")
-		ma54 := MA(t, "/ip4/5.2.3.3/tcp/4444")
-		ma55 := MA(t, "/ip4/5.2.3.3/tcp/5555")
+		ma11 := multiaddr(t, "/ip4/1.2.3.1/tcp/1111")
+		ma21 := multiaddr(t, "/ip4/2.2.3.2/tcp/1111")
+		ma22 := multiaddr(t, "/ip4/2.2.3.2/tcp/2222")
+		ma31 := multiaddr(t, "/ip4/3.2.3.3/tcp/1111")
+		ma32 := multiaddr(t, "/ip4/3.2.3.3/tcp/2222")
+		ma33 := multiaddr(t, "/ip4/3.2.3.3/tcp/3333")
+		ma41 := multiaddr(t, "/ip4/4.2.3.3/tcp/1111")
+		ma42 := multiaddr(t, "/ip4/4.2.3.3/tcp/2222")
+		ma43 := multiaddr(t, "/ip4/4.2.3.3/tcp/3333")
+		ma44 := multiaddr(t, "/ip4/4.2.3.3/tcp/4444")
+		ma51 := multiaddr(t, "/ip4/5.2.3.3/tcp/1111")
+		ma52 := multiaddr(t, "/ip4/5.2.3.3/tcp/2222")
+		ma53 := multiaddr(t, "/ip4/5.2.3.3/tcp/3333")
+		ma54 := multiaddr(t, "/ip4/5.2.3.3/tcp/4444")
+		ma55 := multiaddr(t, "/ip4/5.2.3.3/tcp/5555")
 
 		ttl := time.Hour
 		m.AddAddr(id1, ma11, ttl)
@@ -90,13 +88,13 @@ func testAddresses(m pstore.AddrBook) func(*testing.T) {
 
 func testClearWorks(m pstore.AddrBook) func(t *testing.T) {
 	return func(t *testing.T) {
-		id1 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
-		id2 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQM")
-		ma11 := MA(t, "/ip4/1.2.3.1/tcp/1111")
-		ma12 := MA(t, "/ip4/2.2.3.2/tcp/2222")
-		ma13 := MA(t, "/ip4/3.2.3.3/tcp/3333")
-		ma24 := MA(t, "/ip4/4.2.3.3/tcp/4444")
-		ma25 := MA(t, "/ip4/5.2.3.3/tcp/5555")
+		id1 := peerId(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
+		id2 := peerId(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQM")
+		ma11 := multiaddr(t, "/ip4/1.2.3.1/tcp/1111")
+		ma12 := multiaddr(t, "/ip4/2.2.3.2/tcp/2222")
+		ma13 := multiaddr(t, "/ip4/3.2.3.3/tcp/3333")
+		ma24 := multiaddr(t, "/ip4/4.2.3.3/tcp/4444")
+		ma25 := multiaddr(t, "/ip4/5.2.3.3/tcp/5555")
 
 		m.AddAddr(id1, ma11, time.Hour)
 		m.AddAddr(id1, ma12, time.Hour)
@@ -117,8 +115,8 @@ func testClearWorks(m pstore.AddrBook) func(t *testing.T) {
 
 func testSetNegativeTTLClears(m pstore.AddrBook) func(t *testing.T) {
 	return func(t *testing.T) {
-		id1 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
-		ma11 := MA(t, "/ip4/1.2.3.1/tcp/1111")
+		id1 := peerId(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
+		ma11 := multiaddr(t, "/ip4/1.2.3.1/tcp/1111")
 
 		m.SetAddr(id1, ma11, time.Hour)
 
@@ -132,12 +130,12 @@ func testSetNegativeTTLClears(m pstore.AddrBook) func(t *testing.T) {
 
 func testUpdateTTLs(m pstore.AddrBook) func(t *testing.T) {
 	return func(t *testing.T) {
-		id1 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
-		id2 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQM")
-		ma11 := MA(t, "/ip4/1.2.3.1/tcp/1111")
-		ma12 := MA(t, "/ip4/1.2.3.1/tcp/1112")
-		ma21 := MA(t, "/ip4/1.2.3.1/tcp/1121")
-		ma22 := MA(t, "/ip4/1.2.3.1/tcp/1122")
+		id1 := peerId(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
+		id2 := peerId(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQM")
+		ma11 := multiaddr(t, "/ip4/1.2.3.1/tcp/1111")
+		ma12 := multiaddr(t, "/ip4/1.2.3.1/tcp/1112")
+		ma21 := multiaddr(t, "/ip4/1.2.3.1/tcp/1121")
+		ma22 := multiaddr(t, "/ip4/1.2.3.1/tcp/1122")
 
 		// Shouldn't panic.
 		m.UpdateAddrs(id1, time.Hour, time.Minute)
@@ -178,7 +176,7 @@ func testUpdateTTLs(m pstore.AddrBook) func(t *testing.T) {
 
 func testNilAddrsDontBreak(m pstore.AddrBook) func(t *testing.T) {
 	return func(t *testing.T) {
-		id1 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
+		id1 := peerId(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
 		m.SetAddr(id1, nil, time.Hour)
 		m.AddAddr(id1, nil, time.Hour)
 	}
@@ -186,13 +184,13 @@ func testNilAddrsDontBreak(m pstore.AddrBook) func(t *testing.T) {
 
 func testAddressesExpire(m pstore.AddrBook) func(t *testing.T) {
 	return func(t *testing.T) {
-		id1 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
-		id2 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQM")
-		ma11 := MA(t, "/ip4/1.2.3.1/tcp/1111")
-		ma12 := MA(t, "/ip4/2.2.3.2/tcp/2222")
-		ma13 := MA(t, "/ip4/3.2.3.3/tcp/3333")
-		ma24 := MA(t, "/ip4/4.2.3.3/tcp/4444")
-		ma25 := MA(t, "/ip4/5.2.3.3/tcp/5555")
+		id1 := peerId(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
+		id2 := peerId(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQM")
+		ma11 := multiaddr(t, "/ip4/1.2.3.1/tcp/1111")
+		ma12 := multiaddr(t, "/ip4/2.2.3.2/tcp/2222")
+		ma13 := multiaddr(t, "/ip4/3.2.3.3/tcp/3333")
+		ma24 := multiaddr(t, "/ip4/4.2.3.3/tcp/4444")
+		ma25 := multiaddr(t, "/ip4/5.2.3.3/tcp/5555")
 
 		m.AddAddr(id1, ma11, time.Hour)
 		m.AddAddr(id1, ma12, time.Hour)
@@ -237,24 +235,6 @@ func testAddressesExpire(m pstore.AddrBook) func(t *testing.T) {
 		testHas(t, nil, m.Addrs(id1))
 		testHas(t, nil, m.Addrs(id2))
 	}
-}
-
-func IDS(t *testing.T, ids string) peer.ID {
-	t.Helper()
-	id, err := peer.IDB58Decode(ids)
-	if err != nil {
-		t.Fatalf("id %q is bad: %s", ids, err)
-	}
-	return id
-}
-
-func MA(t *testing.T, m string) ma.Multiaddr {
-	t.Helper()
-	maddr, err := ma.NewMultiaddr(m)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return maddr
 }
 
 func testHas(t *testing.T, exp, act []ma.Multiaddr) {

@@ -45,14 +45,14 @@ func NewAddrBook() pstore.AddrBook {
 	}
 }
 
-func (mab *memoryAddrBook) PeersWithAddrs() []peer.ID {
+func (mab *memoryAddrBook) PeersWithAddrs() peer.IDSlice {
 	mab.addrmu.Lock()
 	defer mab.addrmu.Unlock()
 	if mab.addrs == nil {
 		return nil
 	}
 
-	pids := make([]peer.ID, 0, len(mab.addrs))
+	pids := make(peer.IDSlice, 0, len(mab.addrs))
 	for pid := range mab.addrs {
 		pids = append(pids, pid)
 	}

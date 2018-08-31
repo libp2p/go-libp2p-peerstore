@@ -26,9 +26,9 @@ func NewKeyBook() pstore.KeyBook {
 	}
 }
 
-func (mkb *memoryKeyBook) PeersWithKeys() []peer.ID {
+func (mkb *memoryKeyBook) PeersWithKeys() peer.IDSlice {
 	mkb.RLock()
-	ps := make([]peer.ID, 0, len(mkb.pks)+len(mkb.sks))
+	ps := make(peer.IDSlice, 0, len(mkb.pks)+len(mkb.sks))
 	for p := range mkb.pks {
 		ps = append(ps, p)
 	}

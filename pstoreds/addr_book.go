@@ -193,12 +193,12 @@ func (mgr *dsAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
 }
 
 // Peers returns all of the peer IDs for which the AddrBook has addresses.
-func (mgr *dsAddrBook) PeersWithAddrs() []peer.ID {
+func (mgr *dsAddrBook) PeersWithAddrs() peer.IDSlice {
 	q := query.Query{KeysOnly: true}
 	results, err := mgr.ds.Query(q)
 	if err != nil {
 		log.Error(err)
-		return []peer.ID{}
+		return peer.IDSlice{}
 	}
 
 	idset := make(map[peer.ID]struct{})
@@ -211,7 +211,7 @@ func (mgr *dsAddrBook) PeersWithAddrs() []peer.ID {
 		idset[id] = struct{}{}
 	}
 
-	ids := make([]peer.ID, 0, len(idset))
+	ids := make(peer.IDSlice, 0, len(idset))
 	for id := range idset {
 		ids = append(ids, id)
 	}
