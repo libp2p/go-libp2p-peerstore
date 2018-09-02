@@ -110,8 +110,8 @@ type AddrBook interface {
 	// ClearAddresses removes all previously stored addresses
 	ClearAddrs(p peer.ID)
 
-	// AddrsPeers returns all of the peer IDs stored in the AddrBook
-	AddrsPeers() []peer.ID
+	// PeersWithAddrs returns all of the peer IDs stored in the AddrBook
+	PeersWithAddrs() []peer.ID
 }
 
 // KeyBook tracks the keys of Peers.
@@ -129,6 +129,6 @@ type KeyBook interface {
 	// AddPrivKey stores the private key of a peer.
 	AddPrivKey(peer.ID, ic.PrivKey) error
 
-	// KeyBookPeers returns all the peer IDs stored in the KeyBook
-	KeyBookPeers() []peer.ID
+	// PeersWithKeys returns all the peer IDs stored in the KeyBook
+	PeersWithKeys() []peer.ID
 }

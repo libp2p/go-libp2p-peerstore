@@ -32,10 +32,10 @@ func NewPeerstoreWith(kb KeyBook, ab AddrBook, md PeerMetadata) Peerstore {
 
 func (ps *peerstore) Peers() []peer.ID {
 	set := map[peer.ID]struct{}{}
-	for _, p := range ps.KeyBookPeers() {
+	for _, p := range ps.PeersWithKeys() {
 		set[p] = struct{}{}
 	}
-	for _, p := range ps.AddrsPeers() {
+	for _, p := range ps.PeersWithAddrs() {
 		set[p] = struct{}{}
 	}
 

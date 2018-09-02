@@ -193,7 +193,7 @@ func (mgr *dsAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
 }
 
 // Peers returns all of the peer IDs for which the AddrBook has addresses.
-func (mgr *dsAddrBook) AddrsPeers() []peer.ID {
+func (mgr *dsAddrBook) PeersWithAddrs() []peer.ID {
 	q := query.Query{KeysOnly: true}
 	results, err := mgr.ds.Query(q)
 	if err != nil {

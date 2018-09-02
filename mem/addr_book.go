@@ -45,7 +45,7 @@ func NewAddrBook() pstore.AddrBook {
 	}
 }
 
-func (mab *memoryAddrBook) AddrsPeers() []peer.ID {
+func (mab *memoryAddrBook) PeersWithAddrs() []peer.ID {
 	mab.addrmu.Lock()
 	defer mab.addrmu.Unlock()
 	if mab.addrs == nil {
