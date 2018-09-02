@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"gx/ipfs/QmSpg1CvpXQQow5ernt1gNBXaXV6yxyNqi7XoeerWfzB5w/go-datastore"
-	"gx/ipfs/QmUCfrikzKVGAfpE31RPwPd32fu1DYxSG7HTGCadba5Wza/go-ds-badger"
+	"github.com/ipfs/go-datastore"
+	"github.com/ipfs/go-ds-badger"
 
 	"github.com/libp2p/go-libp2p-peerstore"
 	"github.com/libp2p/go-libp2p-peerstore/test"

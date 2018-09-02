@@ -1,6 +1,6 @@
 package queue
 
-import "gx/ipfs/QmQsErDt8Qgw1XrsXf2BpEzDgGWtB1YLsTAARBup5b6B9W/go-libp2p-peer"
+import "github.com/libp2p/go-libp2p-peer"
 
 // PeerQueue maintains a set of peers ordered according to a metric.
 // Implementations of PeerQueue could order peers based on distances along

@@ -3,7 +3,7 @@ package mem
 import (
 	"sync"
 
-	"gx/ipfs/QmQsErDt8Qgw1XrsXf2BpEzDgGWtB1YLsTAARBup5b6B9W/go-libp2p-peer"
+	"github.com/libp2p/go-libp2p-peer"
 
 	pstore "github.com/libp2p/go-libp2p-peerstore"
 )

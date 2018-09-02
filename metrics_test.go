@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"gx/ipfs/QmQsErDt8Qgw1XrsXf2BpEzDgGWtB1YLsTAARBup5b6B9W/go-libp2p-peer/test"
+	"github.com/libp2p/go-libp2p-peer/test"
 )
 
 func TestLatencyEWMAFun(t *testing.T) {

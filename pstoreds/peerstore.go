@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"gx/ipfs/QmSpg1CvpXQQow5ernt1gNBXaXV6yxyNqi7XoeerWfzB5w/go-datastore"
+	"github.com/ipfs/go-datastore"
 
 	pstore "github.com/libp2p/go-libp2p-peerstore"
 	"github.com/libp2p/go-libp2p-peerstore/mem"
