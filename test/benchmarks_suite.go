@@ -50,3 +50,45 @@ func BenchmarkPeerstore(b *testing.B, factory PeerstoreFactory, variant string) 
 		}
 	}
 }
+
+func benchmarkAddAddr(ps pstore.Peerstore, addrs chan *peerpair) func(*testing.B) {
+	return func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			pp := <-addrs
+			ps.AddAddr(pp.ID, pp.Addr[0], pstore.PermanentAddrTTL)
+		}
+	}
+}
+
+func benchmarkAddAddrs(ps pstore.Peerstore, addrs chan *peerpair) func(*testing.B) {
+	return func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			pp := <-addrs
+			ps.AddAddrs(pp.ID, pp.Addr, pstore.PermanentAddrTTL)
+		}
+	}
+}
+
+func benchmarkSetAddrs(ps pstore.Peerstore, addrs chan *peerpair) func(*testing.B) {
+	return func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			pp := <-addrs
+			ps.SetAddrs(pp.ID, pp.Addr, pstore.PermanentAddrTTL)
+		}
+	}
+}
+
+func benchmarkGetAddrs(ps pstore.Peerstore, addrs chan *peerpair) func(*testing.B) {
+	return func(b *testing.B) {
+		pp := <-addrs
+		ps.SetAddrs(pp.ID, pp.Addr, pstore.PermanentAddrTTL)
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_ = ps.Addrs(pp.ID)
+		}
+	}
+}

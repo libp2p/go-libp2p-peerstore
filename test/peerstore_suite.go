@@ -279,48 +279,6 @@ func testBasicPeerstore(ps pstore.Peerstore) func(t *testing.T) {
 	}
 }
 
-func benchmarkAddAddr(ps pstore.Peerstore, addrs chan *peerpair) func(*testing.B) {
-	return func(b *testing.B) {
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			pp := <-addrs
-			ps.AddAddr(pp.ID, pp.Addr[0], pstore.PermanentAddrTTL)
-		}
-	}
-}
-
-func benchmarkAddAddrs(ps pstore.Peerstore, addrs chan *peerpair) func(*testing.B) {
-	return func(b *testing.B) {
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			pp := <-addrs
-			ps.AddAddrs(pp.ID, pp.Addr, pstore.PermanentAddrTTL)
-		}
-	}
-}
-
-func benchmarkSetAddrs(ps pstore.Peerstore, addrs chan *peerpair) func(*testing.B) {
-	return func(b *testing.B) {
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			pp := <-addrs
-			ps.SetAddrs(pp.ID, pp.Addr, pstore.PermanentAddrTTL)
-		}
-	}
-}
-
-func benchmarkGetAddrs(ps pstore.Peerstore, addrs chan *peerpair) func(*testing.B) {
-	return func(b *testing.B) {
-		pp := <-addrs
-		ps.SetAddrs(pp.ID, pp.Addr, pstore.PermanentAddrTTL)
-
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			_ = ps.Addrs(pp.ID)
-		}
-	}
-}
-
 func getAddrs(t *testing.T, n int) []ma.Multiaddr {
 	var addrs []ma.Multiaddr
 	for i := 0; i < n; i++ {
