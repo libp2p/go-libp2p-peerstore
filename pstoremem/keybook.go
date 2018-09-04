@@ -1,4 +1,4 @@
-package mem
+package pstoremem
 
 import (
 	"errors"

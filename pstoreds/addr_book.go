@@ -14,7 +14,7 @@ import (
 	mh "github.com/multiformats/go-multihash"
 
 	pstore "github.com/libp2p/go-libp2p-peerstore"
-	"github.com/libp2p/go-libp2p-peerstore/mem"
+	"github.com/libp2p/go-libp2p-peerstore/pstoremem"
 )
 
 var log = logging.Logger("peerstore/ds")
@@ -30,7 +30,7 @@ type dsAddrBook struct {
 	cache       *lru.ARCCache
 	ds          ds.Batching
 	ttlManager  *ttlmanager
-	subsManager *mem.AddrSubManager
+	subsManager *pstoremem.AddrSubManager
 }
 
 // NewAddrBook initializes a new address manager given a
@@ -46,7 +46,7 @@ func NewAddrBook(ctx context.Context, ds ds.Batching, ttlInterval time.Duration)
 		cache:       cache,
 		ds:          ds,
 		ttlManager:  newTTLManager(ctx, ds, cache, ttlInterval),
-		subsManager: mem.NewAddrSubManager(),
+		subsManager: pstoremem.NewAddrSubManager(),
 	}
 	return mgr, nil
 }

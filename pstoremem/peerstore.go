@@ -1,4 +1,4 @@
-package mem
+package pstoremem
 
 import pstore "github.com/libp2p/go-libp2p-peerstore"
 
