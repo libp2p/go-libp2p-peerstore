@@ -9,10 +9,10 @@ import (
 )
 
 var peerstoreBenchmarks = map[string]func(pstore.Peerstore, chan *peerpair) func(*testing.B){
-	"AddAddr":  benchmarkAddAddr,
-	"AddAddrs": benchmarkAddAddrs,
-	"SetAddrs": benchmarkSetAddrs,
-	"GetAddrs": benchmarkGetAddrs,
+	"AddAddrs":         benchmarkAddAddrs,
+	"SetAddrs":         benchmarkSetAddrs,
+	"GetAddrs":         benchmarkGetAddrs,
+	"AddAndClearAddrs": benchmarkAddAndClearAddrs,
 }
 
 func BenchmarkPeerstore(b *testing.B, factory PeerstoreFactory, variant string) {
@@ -51,16 +51,6 @@ func BenchmarkPeerstore(b *testing.B, factory PeerstoreFactory, variant string) 
 	}
 }
 
-func benchmarkAddAddr(ps pstore.Peerstore, addrs chan *peerpair) func(*testing.B) {
-	return func(b *testing.B) {
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			pp := <-addrs
-			ps.AddAddr(pp.ID, pp.Addr[0], pstore.PermanentAddrTTL)
-		}
-	}
-}
-
 func benchmarkAddAddrs(ps pstore.Peerstore, addrs chan *peerpair) func(*testing.B) {
 	return func(b *testing.B) {
 		b.ResetTimer()
@@ -89,6 +79,23 @@ func benchmarkGetAddrs(ps pstore.Peerstore, addrs chan *peerpair) func(*testing.
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			_ = ps.Addrs(pp.ID)
+		}
+	}
+}
+
+func benchmarkAddAndClearAddrs(ps pstore.Peerstore, addrs chan *peerpair) func(*testing.B) {
+	// 1000 peers.
+	return func(b *testing.B) {
+		var peers = make([]*peerpair, 1000)
+		for i := 0; i < len(peers); peers[i], i = <-addrs, i+1 {
+		}
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			for _, pp := range peers {
+				ps.AddAddrs(pp.ID, pp.Addr, pstore.PermanentAddrTTL)
+				ps.ClearAddrs(pp.ID)
+			}
 		}
 	}
 }
