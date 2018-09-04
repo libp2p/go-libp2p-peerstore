@@ -4,7 +4,7 @@ import (
 	"bytes"
 
 	ma "github.com/multiformats/go-multiaddr"
-	"github.com/multiformats/go-multiaddr-net"
+	manet "github.com/multiformats/go-multiaddr-net"
 	"github.com/whyrusleeping/mafmt"
 )
 
