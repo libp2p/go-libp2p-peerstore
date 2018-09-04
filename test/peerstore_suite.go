@@ -15,7 +15,7 @@ import (
 	pstore "github.com/libp2p/go-libp2p-peerstore"
 )
 
-var peerstoreSuite = map[string]func(book pstore.Peerstore) func(*testing.T){
+var peerstoreSuite = map[string]func(pstore.Peerstore) func(*testing.T){
 	"AddrStream":               testAddrStream,
 	"GetStreamBeforePeerAdded": testGetStreamBeforePeerAdded,
 	"AddStreamDuplicates":      testAddrStreamDuplicates,
@@ -37,16 +37,6 @@ func TestPeerstore(t *testing.T, factory PeerstoreFactory) {
 		if closeFunc != nil {
 			closeFunc()
 		}
-	}
-}
-
-func BenchmarkPeerstore(b *testing.B, factory PeerstoreFactory) {
-	ps, closeFunc := factory()
-
-	b.Run("Peerstore", benchmarkPeerstore(ps))
-
-	if closeFunc != nil {
-		closeFunc()
 	}
 }
 
@@ -289,19 +279,45 @@ func testBasicPeerstore(ps pstore.Peerstore) func(t *testing.T) {
 	}
 }
 
-func benchmarkPeerstore(ps pstore.Peerstore) func(*testing.B) {
+func benchmarkAddAddr(ps pstore.Peerstore, addrs chan *peerpair) func(*testing.B) {
 	return func(b *testing.B) {
-		addrs := make(chan *peerpair, 100)
-
-		ctx, cancel := context.WithCancel(context.Background())
-		go addressProducer(ctx, b, addrs)
-
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			pp := <-addrs
-			ps.AddAddr(pp.ID, pp.Addr, pstore.PermanentAddrTTL)
+			ps.AddAddr(pp.ID, pp.Addr[0], pstore.PermanentAddrTTL)
 		}
-		cancel()
+	}
+}
+
+func benchmarkAddAddrs(ps pstore.Peerstore, addrs chan *peerpair) func(*testing.B) {
+	return func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			pp := <-addrs
+			ps.AddAddrs(pp.ID, pp.Addr, pstore.PermanentAddrTTL)
+		}
+	}
+}
+
+func benchmarkSetAddrs(ps pstore.Peerstore, addrs chan *peerpair) func(*testing.B) {
+	return func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			pp := <-addrs
+			ps.SetAddrs(pp.ID, pp.Addr, pstore.PermanentAddrTTL)
+		}
+	}
+}
+
+func benchmarkGetAddrs(ps pstore.Peerstore, addrs chan *peerpair) func(*testing.B) {
+	return func(b *testing.B) {
+		pp := <-addrs
+		ps.SetAddrs(pp.ID, pp.Addr, pstore.PermanentAddrTTL)
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_ = ps.Addrs(pp.ID)
+		}
 	}
 }
 

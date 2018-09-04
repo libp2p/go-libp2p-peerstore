@@ -19,9 +19,6 @@ import (
 
 var (
 	log = logging.Logger("peerstore/ds")
-
-	// Number of times to retry transactional writes
-	dsWriteRetries = 5
 )
 
 var _ pstore.AddrBook = (*dsAddrBook)(nil)
@@ -29,26 +26,34 @@ var _ pstore.AddrBook = (*dsAddrBook)(nil)
 // dsAddrBook is an address book backed by a Datastore with both an
 // in-memory TTL manager and an in-memory address stream manager.
 type dsAddrBook struct {
-	cache       *lru.ARCCache
-	ds          ds.TxnDatastore
-	ttlManager  *ttlManager
-	subsManager *pstoremem.AddrSubManager
+	cache        cache
+	ds           ds.TxnDatastore
+	ttlManager   *ttlManager
+	subsManager  *pstoremem.AddrSubManager
+	writeRetries int
 }
 
 // NewAddrBook initializes a new address book given a
 // Datastore instance, a context for managing the TTL manager,
 // and the interval at which the TTL manager should sweep the Datastore.
-func NewAddrBook(ctx context.Context, ds ds.TxnDatastore, ttlInterval time.Duration) (*dsAddrBook, error) {
-	cache, err := lru.NewARC(1024)
-	if err != nil {
-		return nil, err
+func NewAddrBook(ctx context.Context, ds ds.TxnDatastore, opts PeerstoreOpts) (*dsAddrBook, error) {
+	var (
+		cache cache = &noopCache{}
+		err   error
+	)
+
+	if opts.CacheSize > 0 {
+		if cache, err = lru.NewARC(int(opts.CacheSize)); err != nil {
+			return nil, err
+		}
 	}
 
 	mgr := &dsAddrBook{
-		cache:       cache,
-		ds:          ds,
-		ttlManager:  newTTLManager(ctx, ds, cache, ttlInterval),
-		subsManager: pstoremem.NewAddrSubManager(),
+		cache:        cache,
+		ds:           ds,
+		ttlManager:   newTTLManager(ctx, ds, &cache, opts.TTLInterval),
+		subsManager:  pstoremem.NewAddrSubManager(),
+		writeRetries: int(opts.WriteRetries),
 	}
 	return mgr, nil
 }
@@ -130,7 +135,7 @@ func (mgr *dsAddrBook) deleteAddrs(p peer.ID, addrs []ma.Multiaddr) error {
 	}
 
 	// Attempt transactional KV deletion.
-	for i := 0; i < dsWriteRetries; i++ {
+	for i := 0; i < mgr.writeRetries; i++ {
 		if err = mgr.dbDelete(keys); err == nil {
 			break
 		}
@@ -138,7 +143,7 @@ func (mgr *dsAddrBook) deleteAddrs(p peer.ID, addrs []ma.Multiaddr) error {
 	}
 
 	if err != nil {
-		log.Errorf("failed to avoid write conflict for peer %s after %d retries: %v\n", p.Pretty(), dsWriteRetries, err)
+		log.Errorf("failed to avoid write conflict for peer %s after %d retries: %v\n", p.Pretty(), mgr.writeRetries, err)
 		return err
 	}
 
@@ -160,7 +165,7 @@ func (mgr *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Durati
 
 	// Attempt transactional KV insertion.
 	var existed []bool
-	for i := 0; i < dsWriteRetries; i++ {
+	for i := 0; i < mgr.writeRetries; i++ {
 		if existed, err = mgr.dbInsert(keys, addrs); err == nil {
 			break
 		}
@@ -168,7 +173,7 @@ func (mgr *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Durati
 	}
 
 	if err != nil {
-		log.Errorf("failed to avoid write conflict for peer %s after %d retries: %v\n", p.Pretty(), dsWriteRetries, err)
+		log.Errorf("failed to avoid write conflict for peer %s after %d retries: %v\n", p.Pretty(), mgr.writeRetries, err)
 		return err
 	}
 
@@ -337,7 +342,7 @@ func (mgr *dsAddrBook) ClearAddrs(p peer.ID) {
 	)
 
 	// Attempt transactional KV deletion.
-	for i := 0; i < dsWriteRetries; i++ {
+	for i := 0; i < mgr.writeRetries; i++ {
 		if keys, err = mgr.dbClear(prefix); err == nil {
 			break
 		}
@@ -345,7 +350,7 @@ func (mgr *dsAddrBook) ClearAddrs(p peer.ID) {
 	}
 
 	if err != nil {
-		log.Errorf("failed to clear addresses for peer %s after %d attempts\n", p.Pretty(), dsWriteRetries)
+		log.Errorf("failed to clear addresses for peer %s after %d attempts\n", p.Pretty(), mgr.writeRetries)
 		// TODO: return error
 	}
 
@@ -407,35 +412,35 @@ func (mgr *dsAddrBook) doInTransaction(readOnly bool, op func(txn ds.Txn) error)
 	return nil
 }
 
-type ttlentry struct {
+type ttlEntry struct {
 	TTL       time.Duration
 	ExpiresAt time.Time
 }
 
 type ttlManager struct {
 	sync.RWMutex
-	entries map[ds.Key]*ttlentry
+	entries map[ds.Key]*ttlEntry
 
 	ctx    context.Context
 	cancel context.CancelFunc
 	ticker *time.Ticker
 	ds     ds.Batching
-	cache  *lru.ARCCache
+	cache  cache
 }
 
-func newTTLManager(parent context.Context, d ds.Datastore, c *lru.ARCCache, tick time.Duration) *ttlManager {
+func newTTLManager(parent context.Context, d ds.Datastore, c *cache, tick time.Duration) *ttlManager {
 	ctx, cancel := context.WithCancel(parent)
 	batching, ok := d.(ds.Batching)
 	if !ok {
 		panic("must construct ttlManager with batching datastore")
 	}
 	mgr := &ttlManager{
-		entries: make(map[ds.Key]*ttlentry),
+		entries: make(map[ds.Key]*ttlEntry),
 		ctx:     ctx,
 		cancel:  cancel,
 		ticker:  time.NewTicker(tick),
 		ds:      batching,
-		cache:   c,
+		cache:   *c,
 	}
 
 	go func() {
@@ -496,7 +501,7 @@ func (mgr *ttlManager) insertTTLs(keys []ds.Key, ttl time.Duration) {
 	expiration := time.Now().Add(ttl)
 	for _, key := range keys {
 		if entry, ok := mgr.entries[key]; !ok || (ok && entry.ExpiresAt.Before(expiration)) {
-			mgr.entries[key] = &ttlentry{TTL: ttl, ExpiresAt: expiration}
+			mgr.entries[key] = &ttlEntry{TTL: ttl, ExpiresAt: expiration}
 		}
 	}
 }
@@ -507,7 +512,7 @@ func (mgr *ttlManager) setTTLs(keys []ds.Key, ttl time.Duration) {
 
 	expiration := time.Now().Add(ttl)
 	for _, key := range keys {
-		mgr.entries[key] = &ttlentry{TTL: ttl, ExpiresAt: expiration}
+		mgr.entries[key] = &ttlEntry{TTL: ttl, ExpiresAt: expiration}
 	}
 }
 
