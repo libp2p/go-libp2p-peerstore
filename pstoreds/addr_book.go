@@ -463,14 +463,23 @@ func (mgr *ttlManager) tick() {
 	mgr.Lock()
 	defer mgr.Unlock()
 
-	txn := mgr.ds.NewTransaction(false)
-	defer txn.Discard()
-
 	now := time.Now()
+	var toDel []ds.Key
 	for key, entry := range mgr.entries {
 		if entry.ExpiresAt.After(now) {
 			continue
 		}
+		toDel = append(toDel, key)
+	}
+
+	if len(toDel) == 0 {
+		return
+	}
+
+	txn := mgr.ds.NewTransaction(false)
+	defer txn.Discard()
+
+	for _, key := range toDel {
 		if err := txn.Delete(key); err != nil {
 			log.Error("failed to delete TTL key: %v, cause: %v", key.String(), err)
 			break
