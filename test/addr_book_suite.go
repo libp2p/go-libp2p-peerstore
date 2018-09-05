@@ -19,9 +19,9 @@ var addressBookSuite = map[string]func(book pstore.AddrBook) func(*testing.T){
 	"AddressesExpire":      testAddressesExpire,
 }
 
-type AddrMgrFactory func() (pstore.AddrBook, func())
+type AddrBookFactory func() (pstore.AddrBook, func())
 
-func TestAddrMgr(t *testing.T, factory AddrMgrFactory) {
+func TestAddrBook(t *testing.T, factory AddrBookFactory) {
 	for name, test := range addressBookSuite {
 		// Create a new peerstore.
 		ab, closeFunc := factory()
