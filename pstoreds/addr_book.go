@@ -24,7 +24,7 @@ var dsWriteRetries = 5
 
 var _ pstore.AddrBook = (*dsAddrBook)(nil)
 
-// dsAddrBook is an address manager backed by a Datastore with both an
+// dsAddrBook is an address book backed by a Datastore with both an
 // in-memory TTL manager and an in-memory address stream manager.
 type dsAddrBook struct {
 	cache       *lru.ARCCache
@@ -33,7 +33,7 @@ type dsAddrBook struct {
 	subsManager *pstoremem.AddrSubManager
 }
 
-// NewAddrBook initializes a new address manager given a
+// NewAddrBook initializes a new address book given a
 // Datastore instance, a context for managing the TTL manager,
 // and the interval at which the TTL manager should sweep the Datastore.
 func NewAddrBook(ctx context.Context, ds ds.Batching, ttlInterval time.Duration) (*dsAddrBook, error) {

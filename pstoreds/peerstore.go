@@ -17,6 +17,6 @@ func NewPeerstore(ctx context.Context, ds datastore.Batching) (pstore.Peerstore,
 		return nil, err
 	}
 
-	ps := pstore.NewPeerstoreWith(pstoremem.NewKeyBook(), addrBook, pstoremem.NewPeerMetadata())
+	ps := pstore.NewPeerstore(pstoremem.NewKeyBook(), addrBook, pstoremem.NewPeerMetadata())
 	return ps, nil
 }

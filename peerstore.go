@@ -20,12 +20,13 @@ type peerstore struct {
 	protolock sync.Mutex
 }
 
-// NewPeerstore creates a threadsafe collection of peers.
-func NewPeerstoreWith(kb KeyBook, ab AddrBook, md PeerMetadata) Peerstore {
+// NewPeerstore creates a data structure that stores peer data, backed by the
+// supplied implementations of KeyBook, AddrBook and PeerMetadata.
+func NewPeerstore(kb KeyBook, ab AddrBook, md PeerMetadata) Peerstore {
 	return &peerstore{
 		KeyBook:      kb,
-		PeerMetadata: md,
 		AddrBook:     ab,
+		PeerMetadata: md,
 		Metrics:      NewMetrics(),
 	}
 }
