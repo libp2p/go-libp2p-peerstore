@@ -213,27 +213,27 @@ func testAddressesExpire(m pstore.AddrBook) func(t *testing.T) {
 		testHas(t, []ma.Multiaddr{ma24, ma25}, m.Addrs(id2))
 
 		m.SetAddr(id1, ma11, time.Millisecond)
-		<-time.After(time.Millisecond * 2)
+		<-time.After(time.Millisecond * 5)
 		testHas(t, []ma.Multiaddr{ma12, ma13}, m.Addrs(id1))
 		testHas(t, []ma.Multiaddr{ma24, ma25}, m.Addrs(id2))
 
 		m.SetAddr(id1, ma13, time.Millisecond)
-		<-time.After(time.Millisecond * 2)
+		<-time.After(time.Millisecond * 5)
 		testHas(t, []ma.Multiaddr{ma12}, m.Addrs(id1))
 		testHas(t, []ma.Multiaddr{ma24, ma25}, m.Addrs(id2))
 
 		m.SetAddr(id2, ma24, time.Millisecond)
-		<-time.After(time.Millisecond * 2)
+		<-time.After(time.Millisecond * 5)
 		testHas(t, []ma.Multiaddr{ma12}, m.Addrs(id1))
 		testHas(t, []ma.Multiaddr{ma25}, m.Addrs(id2))
 
 		m.SetAddr(id2, ma25, time.Millisecond)
-		<-time.After(time.Millisecond * 2)
+		<-time.After(time.Millisecond * 5)
 		testHas(t, []ma.Multiaddr{ma12}, m.Addrs(id1))
 		testHas(t, nil, m.Addrs(id2))
 
 		m.SetAddr(id1, ma12, time.Millisecond)
-		<-time.After(time.Millisecond * 2)
+		<-time.After(time.Millisecond * 5)
 		testHas(t, nil, m.Addrs(id1))
 		testHas(t, nil, m.Addrs(id2))
 	}
