@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/libp2p/go-libp2p-peer"
+	peer "github.com/libp2p/go-libp2p-peer"
 	pt "github.com/libp2p/go-libp2p-peer/test"
 	ma "github.com/multiformats/go-multiaddr"
 )
@@ -41,4 +41,12 @@ func addressProducer(ctx context.Context, b *testing.B, addrs chan *peerpair) {
 			return
 		}
 	}
+}
+
+func multiaddr(m string) ma.Multiaddr {
+	maddr, err := ma.NewMultiaddr(m)
+	if err != nil {
+		panic(err)
+	}
+	return maddr
 }

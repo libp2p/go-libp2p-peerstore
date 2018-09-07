@@ -5,16 +5,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru"
 	ds "github.com/ipfs/go-datastore"
-	"github.com/ipfs/go-datastore/query"
+	query "github.com/ipfs/go-datastore/query"
 	logging "github.com/ipfs/go-log"
-	"github.com/libp2p/go-libp2p-peer"
+	peer "github.com/libp2p/go-libp2p-peer"
 	ma "github.com/multiformats/go-multiaddr"
 	mh "github.com/multiformats/go-multihash"
 
 	pstore "github.com/libp2p/go-libp2p-peerstore"
-	"github.com/libp2p/go-libp2p-peerstore/pstoremem"
+	pstoremem "github.com/libp2p/go-libp2p-peerstore/pstoremem"
 )
 
 var log = logging.Logger("peerstore/ds")

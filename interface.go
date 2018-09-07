@@ -2,13 +2,12 @@ package peerstore
 
 import (
 	"context"
+	"errors"
 	"math"
 	"time"
 
-	"github.com/pkg/errors"
-
 	ic "github.com/libp2p/go-libp2p-crypto"
-	"github.com/libp2p/go-libp2p-peer"
+	peer "github.com/libp2p/go-libp2p-peer"
 	ma "github.com/multiformats/go-multiaddr"
 )
 
