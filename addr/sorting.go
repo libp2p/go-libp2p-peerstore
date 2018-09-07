@@ -5,7 +5,7 @@ import (
 
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr-net"
-	"github.com/whyrusleeping/mafmt"
+	mafmt "github.com/whyrusleeping/mafmt"
 )
 
 func isFDCostlyTransport(a ma.Multiaddr) bool {
