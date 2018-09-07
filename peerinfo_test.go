@@ -3,7 +3,7 @@ package peerstore
 import (
 	"testing"
 
-	peer "github.com/libp2p/go-libp2p-peer"
+	"github.com/libp2p/go-libp2p-peer"
 	ma "github.com/multiformats/go-multiaddr"
 )
 

@@ -1,46 +1,20 @@
-package peerstore
+package pstoremem
 
 import (
 	"context"
-	"math"
 	"sort"
 	"sync"
 	"time"
 
+	logging "github.com/ipfs/go-log"
 	"github.com/libp2p/go-libp2p-peer"
-	"github.com/libp2p/go-libp2p-peerstore/addr"
 	ma "github.com/multiformats/go-multiaddr"
+
+	pstore "github.com/libp2p/go-libp2p-peerstore"
+	"github.com/libp2p/go-libp2p-peerstore/addr"
 )
 
-var (
-
-	// TempAddrTTL is the ttl used for a short lived address
-	TempAddrTTL = time.Second * 10
-
-	// ProviderAddrTTL is the TTL of an address we've received from a provider.
-	// This is also a temporary address, but lasts longer. After this expires,
-	// the records we return will require an extra lookup.
-	ProviderAddrTTL = time.Minute * 10
-
-	// RecentlyConnectedAddrTTL is used when we recently connected to a peer.
-	// It means that we are reasonably certain of the peer's address.
-	RecentlyConnectedAddrTTL = time.Minute * 10
-
-	// OwnObservedAddrTTL is used for our own external addresses observed by peers.
-	OwnObservedAddrTTL = time.Minute * 10
-)
-
-// Permanent TTLs (distinct so we can distinguish between them, constant as they
-// are, in fact, permanent)
-const (
-	// PermanentAddrTTL is the ttl for a "permanent address" (e.g. bootstrap nodes).
-	PermanentAddrTTL = math.MaxInt64 - iota
-
-	// ConnectedAddrTTL is the ttl used for the addresses of a peer to whom
-	// we're connected directly. This is basically permanent, as we will
-	// clear them + re-add under a TempAddrTTL after disconnecting.
-	ConnectedAddrTTL
-)
+var log = logging.Logger("peerstore")
 
 type expiringAddr struct {
 	Addr    ma.Multiaddr
@@ -54,61 +28,55 @@ func (e *expiringAddr) ExpiredBy(t time.Time) bool {
 
 type addrSlice []expiringAddr
 
-// AddrManager manages addresses.
-// The zero-value is ready to be used.
-type AddrManager struct {
-	addrmu sync.Mutex // guards addrs
+var _ pstore.AddrBook = (*memoryAddrBook)(nil)
+
+// memoryAddrBook manages addresses.
+type memoryAddrBook struct {
+	addrmu sync.Mutex
 	addrs  map[peer.ID]addrSlice
 
 	subManager *AddrSubManager
 }
 
-// ensures the AddrManager is initialized.
-// So we can use the zero value.
-func (mgr *AddrManager) init() {
-	if mgr.addrs == nil {
-		mgr.addrs = make(map[peer.ID]addrSlice)
-	}
-	if mgr.subManager == nil {
-		mgr.subManager = NewAddrSubManager()
+func NewAddrBook() pstore.AddrBook {
+	return &memoryAddrBook{
+		addrs:      make(map[peer.ID]addrSlice),
+		subManager: NewAddrSubManager(),
 	}
 }
 
-func (mgr *AddrManager) Peers() []peer.ID {
-	mgr.addrmu.Lock()
-	defer mgr.addrmu.Unlock()
-	if mgr.addrs == nil {
+func (mab *memoryAddrBook) PeersWithAddrs() []peer.ID {
+	mab.addrmu.Lock()
+	defer mab.addrmu.Unlock()
+	if mab.addrs == nil {
 		return nil
 	}
 
-	pids := make([]peer.ID, 0, len(mgr.addrs))
-	for pid := range mgr.addrs {
+	pids := make([]peer.ID, 0, len(mab.addrs))
+	for pid := range mab.addrs {
 		pids = append(pids, pid)
 	}
 	return pids
 }
 
 // AddAddr calls AddAddrs(p, []ma.Multiaddr{addr}, ttl)
-func (mgr *AddrManager) AddAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) {
-	mgr.AddAddrs(p, []ma.Multiaddr{addr}, ttl)
+func (mab *memoryAddrBook) AddAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) {
+	mab.AddAddrs(p, []ma.Multiaddr{addr}, ttl)
 }
 
-// AddAddrs gives AddrManager addresses to use, with a given ttl
+// AddAddrs gives memoryAddrBook addresses to use, with a given ttl
 // (time-to-live), after which the address is no longer valid.
 // If the manager has a longer TTL, the operation is a no-op for that address
-func (mgr *AddrManager) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
-	mgr.addrmu.Lock()
-	defer mgr.addrmu.Unlock()
+func (mab *memoryAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
+	mab.addrmu.Lock()
+	defer mab.addrmu.Unlock()
 
 	// if ttl is zero, exit. nothing to do.
 	if ttl <= 0 {
 		return
 	}
 
-	// so zero value can be used
-	mgr.init()
-
-	oldAddrs := mgr.addrs[p]
+	oldAddrs := mab.addrs[p]
 	amap := make(map[string]expiringAddr, len(oldAddrs))
 	for _, ea := range oldAddrs {
 		amap[string(ea.Addr.Bytes())] = ea
@@ -127,31 +95,28 @@ func (mgr *AddrManager) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Durat
 		if !found || exp.After(a.Expires) {
 			amap[addrstr] = expiringAddr{Addr: addr, Expires: exp, TTL: ttl}
 
-			mgr.subManager.BroadcastAddr(p, addr)
+			mab.subManager.BroadcastAddr(p, addr)
 		}
 	}
 	newAddrs := make([]expiringAddr, 0, len(amap))
 	for _, ea := range amap {
 		newAddrs = append(newAddrs, ea)
 	}
-	mgr.addrs[p] = newAddrs
+	mab.addrs[p] = newAddrs
 }
 
 // SetAddr calls mgr.SetAddrs(p, addr, ttl)
-func (mgr *AddrManager) SetAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) {
-	mgr.SetAddrs(p, []ma.Multiaddr{addr}, ttl)
+func (mab *memoryAddrBook) SetAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) {
+	mab.SetAddrs(p, []ma.Multiaddr{addr}, ttl)
 }
 
 // SetAddrs sets the ttl on addresses. This clears any TTL there previously.
 // This is used when we receive the best estimate of the validity of an address.
-func (mgr *AddrManager) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
-	mgr.addrmu.Lock()
-	defer mgr.addrmu.Unlock()
+func (mab *memoryAddrBook) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
+	mab.addrmu.Lock()
+	defer mab.addrmu.Unlock()
 
-	// so zero value can be used
-	mgr.init()
-
-	oldAddrs := mgr.addrs[p]
+	oldAddrs := mab.addrs[p]
 	amap := make(map[string]expiringAddr, len(oldAddrs))
 	for _, ea := range oldAddrs {
 		amap[string(ea.Addr.Bytes())] = ea
@@ -169,7 +134,7 @@ func (mgr *AddrManager) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Durat
 		if ttl > 0 {
 			amap[addrs] = expiringAddr{Addr: addr, Expires: exp, TTL: ttl}
 
-			mgr.subManager.BroadcastAddr(p, addr)
+			mab.subManager.BroadcastAddr(p, addr)
 		} else {
 			delete(amap, addrs)
 		}
@@ -178,25 +143,26 @@ func (mgr *AddrManager) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Durat
 	for _, ea := range amap {
 		newAddrs = append(newAddrs, ea)
 	}
-	mgr.addrs[p] = newAddrs
+	mab.addrs[p] = newAddrs
 }
 
 // UpdateAddrs updates the addresses associated with the given peer that have
 // the given oldTTL to have the given newTTL.
-func (mgr *AddrManager) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.Duration) {
-	mgr.addrmu.Lock()
-	defer mgr.addrmu.Unlock()
+func (mab *memoryAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.Duration) {
+	mab.addrmu.Lock()
+	defer mab.addrmu.Unlock()
 
-	if mgr.addrs == nil {
+	if mab.addrs == nil {
 		return
 	}
 
-	addrs, found := mgr.addrs[p]
+	addrs, found := mab.addrs[p]
 	if !found {
 		return
 	}
 
 	exp := time.Now().Add(newTTL)
+	// TODO: RK - Shorthand.
 	for i := range addrs {
 		aexp := &addrs[i]
 		if oldTTL == aexp.TTL {
@@ -207,16 +173,16 @@ func (mgr *AddrManager) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time
 }
 
 // Addresses returns all known (and valid) addresses for a given
-func (mgr *AddrManager) Addrs(p peer.ID) []ma.Multiaddr {
-	mgr.addrmu.Lock()
-	defer mgr.addrmu.Unlock()
+func (mab *memoryAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
+	mab.addrmu.Lock()
+	defer mab.addrmu.Unlock()
 
 	// not initialized? nothing to give.
-	if mgr.addrs == nil {
+	if mab.addrs == nil {
 		return nil
 	}
 
-	maddrs, found := mgr.addrs[p]
+	maddrs, found := mab.addrs[p]
 	if !found {
 		return nil
 	}
@@ -233,40 +199,52 @@ func (mgr *AddrManager) Addrs(p peer.ID) []ma.Multiaddr {
 
 	// clean up the expired ones.
 	if len(cleaned) == 0 {
-		delete(mgr.addrs, p)
+		delete(mab.addrs, p)
 	} else {
-		mgr.addrs[p] = cleaned
+		mab.addrs[p] = cleaned
 	}
 	return good
 }
 
 // ClearAddrs removes all previously stored addresses
-func (mgr *AddrManager) ClearAddrs(p peer.ID) {
-	mgr.addrmu.Lock()
-	defer mgr.addrmu.Unlock()
-	mgr.init()
+func (mab *memoryAddrBook) ClearAddrs(p peer.ID) {
+	mab.addrmu.Lock()
+	defer mab.addrmu.Unlock()
 
-	delete(mgr.addrs, p)
+	delete(mab.addrs, p)
 }
 
 // AddrStream returns a channel on which all new addresses discovered for a
 // given peer ID will be published.
-func (mgr *AddrManager) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Multiaddr {
-	mgr.addrmu.Lock()
-	defer mgr.addrmu.Unlock()
-	mgr.init()
+func (mab *memoryAddrBook) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Multiaddr {
+	mab.addrmu.Lock()
+	defer mab.addrmu.Unlock()
 
-	baseaddrslice := mgr.addrs[p]
+	baseaddrslice := mab.addrs[p]
 	initial := make([]ma.Multiaddr, 0, len(baseaddrslice))
 	for _, a := range baseaddrslice {
 		initial = append(initial, a.Addr)
 	}
 
-	return mgr.subManager.AddrStream(ctx, p, initial)
+	return mab.subManager.AddrStream(ctx, p, initial)
+}
+
+type addrSub struct {
+	pubch  chan ma.Multiaddr
+	lk     sync.Mutex
+	buffer []ma.Multiaddr
+	ctx    context.Context
+}
+
+func (s *addrSub) pubAddr(a ma.Multiaddr) {
+	select {
+	case s.pubch <- a:
+	case <-s.ctx.Done():
+	}
 }
 
 // An abstracted, pub-sub manager for address streams. Extracted from
-// AddrManager in order to support additional implementations.
+// memoryAddrBook in order to support additional implementations.
 type AddrSubManager struct {
 	mu   sync.RWMutex
 	subs map[peer.ID][]*addrSub
@@ -284,6 +262,7 @@ func NewAddrSubManager() *AddrSubManager {
 func (mgr *AddrSubManager) removeSub(p peer.ID, s *addrSub) {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
+
 	subs := mgr.subs[p]
 	if len(subs) == 1 {
 		if subs[0] != s {
@@ -292,6 +271,7 @@ func (mgr *AddrSubManager) removeSub(p peer.ID, s *addrSub) {
 		delete(mgr.subs, p)
 		return
 	}
+
 	for i, v := range subs {
 		if v == s {
 			subs[i] = subs[len(subs)-1]
@@ -318,7 +298,6 @@ func (mgr *AddrSubManager) BroadcastAddr(p peer.ID, addr ma.Multiaddr) {
 // channel with any addresses we might already have on file.
 func (mgr *AddrSubManager) AddrStream(ctx context.Context, p peer.ID, initial []ma.Multiaddr) <-chan ma.Multiaddr {
 	sub := &addrSub{pubch: make(chan ma.Multiaddr), ctx: ctx}
-
 	out := make(chan ma.Multiaddr)
 
 	mgr.mu.Lock()
@@ -379,18 +358,4 @@ func (mgr *AddrSubManager) AddrStream(ctx context.Context, p peer.ID, initial []
 	}(initial)
 
 	return out
-}
-
-type addrSub struct {
-	pubch  chan ma.Multiaddr
-	lk     sync.Mutex
-	buffer []ma.Multiaddr
-	ctx    context.Context
-}
-
-func (s *addrSub) pubAddr(a ma.Multiaddr) {
-	select {
-	case s.pubch <- a:
-	case <-s.ctx.Done():
-	}
 }
