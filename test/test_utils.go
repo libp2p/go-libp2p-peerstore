@@ -1,26 +1,22 @@
 package test
 
 import (
-	"testing"
-
 	"github.com/libp2p/go-libp2p-peer"
 	ma "github.com/multiformats/go-multiaddr"
 )
 
-func peerId(t *testing.T, ids string) peer.ID {
-	t.Helper()
+func peerId(ids string) peer.ID {
 	id, err := peer.IDB58Decode(ids)
 	if err != nil {
-		t.Fatalf("id %q is bad: %s", ids, err)
+		panic(err)
 	}
 	return id
 }
 
-func multiaddr(t *testing.T, m string) ma.Multiaddr {
-	t.Helper()
+func multiaddr(m string) ma.Multiaddr {
 	maddr, err := ma.NewMultiaddr(m)
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 	return maddr
 }
