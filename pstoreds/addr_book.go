@@ -89,11 +89,6 @@ func keysAndAddrs(p peer.ID, addrs []ma.Multiaddr) ([]ds.Key, []ma.Multiaddr, er
 	return keys[:i], clean[:i], nil
 }
 
-func peerIDFromKey(key ds.Key) (peer.ID, error) {
-	idstring := key.Parent().Name()
-	return peer.IDB58Decode(idstring)
-}
-
 // AddAddr will add a new address if it's not already in the AddrBook.
 func (mgr *dsAddrBook) AddAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) {
 	mgr.AddAddrs(p, []ma.Multiaddr{addr}, ttl)
@@ -264,36 +259,41 @@ func (mgr *dsAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.
 	mgr.ttlManager.adjustTTLs(prefix, oldTTL, newTTL)
 }
 
-// Addrs Returns all of the non-expired addresses for a given peer.
+// Addrs returns all of the non-expired addresses for a given peer.
 func (mgr *dsAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
-	prefix := ds.NewKey(p.Pretty())
-	q := query.Query{Prefix: prefix.String(), KeysOnly: true}
-	results, err := mgr.ds.Query(q)
+	var (
+		prefix  = ds.NewKey(p.Pretty())
+		q       = query.Query{Prefix: prefix.String(), KeysOnly: true}
+		results query.Results
+		err     error
+	)
 
-	if err != nil {
+	txn := mgr.ds.NewTransaction(true)
+	defer txn.Discard()
+
+	if results, err = txn.Query(q); err != nil {
 		log.Error(err)
 		return nil
 	}
+
+	defer results.Close()
 
 	var addrs []ma.Multiaddr
 	for result := range results.Next() {
 		key := ds.RawKey(result.Key)
 		var addri interface{}
 		addri, ok := mgr.cache.Get(key)
+
 		if !ok {
-			addri, err = mgr.ds.Get(key)
-			if err != nil {
+			if addri, err = txn.Get(key); err != nil {
 				log.Error(err)
 				continue
 			}
 		}
-		addrbytes := addri.([]byte)
-		addr, err := ma.NewMultiaddrBytes(addrbytes)
-		if err != nil {
-			log.Error(err)
-			continue
+
+		if addr, err := ma.NewMultiaddrBytes(addri.([]byte)); err != nil {
+			addrs = append(addrs, addr)
 		}
-		addrs = append(addrs, addr)
 	}
 
 	return addrs
@@ -301,27 +301,36 @@ func (mgr *dsAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
 
 // Peers returns all of the peer IDs for which the AddrBook has addresses.
 func (mgr *dsAddrBook) PeersWithAddrs() peer.IDSlice {
-	q := query.Query{KeysOnly: true}
-	results, err := mgr.ds.Query(q)
+	var (
+		q       = query.Query{KeysOnly: true}
+		results query.Results
+		err     error
+	)
 
-	if err != nil {
+	txn := mgr.ds.NewTransaction(true)
+	defer txn.Discard()
+
+	if results, err = txn.Query(q); err != nil {
 		log.Error(err)
 		return peer.IDSlice{}
 	}
 
-	idset := make(map[peer.ID]struct{})
+	defer results.Close()
+
+	idset := make(map[string]struct{})
 	for result := range results.Next() {
 		key := ds.RawKey(result.Key)
-		id, err := peerIDFromKey(key)
-		if err != nil {
-			continue
-		}
-		idset[id] = struct{}{}
+		idset[key.Parent().Name()] = struct{}{}
 	}
 
-	ids := make(peer.IDSlice, 0, len(idset))
+	if len(idset) == 0 {
+		return peer.IDSlice{}
+	}
+
+	ids := make(peer.IDSlice, 1, len(idset))
 	for id := range idset {
-		ids = append(ids, id)
+		i, _ := peer.IDB58Decode(id)
+		ids = append(ids, i)
 	}
 	return ids
 }
@@ -395,21 +404,6 @@ func (mgr *dsAddrBook) dbClear(prefix ds.Key) ([]ds.Key, error) {
 	}
 
 	return keys, nil
-}
-
-func (mgr *dsAddrBook) doInTransaction(readOnly bool, op func(txn ds.Txn) error) error {
-	txn := mgr.ds.NewTransaction(false)
-	defer txn.Discard()
-
-	if err := op(txn); err != nil {
-		return err
-	}
-
-	if err := txn.Commit(); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 type ttlEntry struct {
