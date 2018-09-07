@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/libp2p/go-libp2p-crypto"
-	"github.com/libp2p/go-libp2p-peer"
+	crypto "github.com/libp2p/go-libp2p-crypto"
+	peer "github.com/libp2p/go-libp2p-peer"
 	ma "github.com/multiformats/go-multiaddr"
 
 	pstore "github.com/libp2p/go-libp2p-peerstore"
@@ -299,8 +299,7 @@ func benchmarkPeerstore(ps pstore.Peerstore) func(*testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			pp := <-addrs
-			pid := peer.ID(pp.ID)
-			ps.AddAddr(pid, pp.Addr, pstore.PermanentAddrTTL)
+			ps.AddAddr(pp.ID, pp.Addr, pstore.PermanentAddrTTL)
 		}
 		cancel()
 	}

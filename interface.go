@@ -2,13 +2,12 @@ package peerstore
 
 import (
 	"context"
+	"errors"
 	"math"
 	"time"
 
-	"github.com/pkg/errors"
-
 	ic "github.com/libp2p/go-libp2p-crypto"
-	"github.com/libp2p/go-libp2p-peer"
+	peer "github.com/libp2p/go-libp2p-peer"
 	ma "github.com/multiformats/go-multiaddr"
 )
 
@@ -66,7 +65,7 @@ type Peerstore interface {
 	SupportsProtocols(peer.ID, ...string) ([]string, error)
 
 	// Peers returns all of the peer IDs stored across all inner stores.
-	Peers() []peer.ID
+	Peers() peer.IDSlice
 }
 
 type PeerMetadata interface {
@@ -111,7 +110,7 @@ type AddrBook interface {
 	ClearAddrs(p peer.ID)
 
 	// PeersWithAddrs returns all of the peer IDs stored in the AddrBook
-	PeersWithAddrs() []peer.ID
+	PeersWithAddrs() peer.IDSlice
 }
 
 // KeyBook tracks the keys of Peers.
@@ -130,5 +129,5 @@ type KeyBook interface {
 	AddPrivKey(peer.ID, ic.PrivKey) error
 
 	// PeersWithKeys returns all the peer IDs stored in the KeyBook
-	PeersWithKeys() []peer.ID
+	PeersWithKeys() peer.IDSlice
 }

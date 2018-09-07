@@ -1,17 +1,18 @@
 package test
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
-	"github.com/libp2p/go-libp2p-peer"
-	ma "github.com/multiformats/go-multiaddr"
-
+	peer "github.com/libp2p/go-libp2p-peer"
+	pt "github.com/libp2p/go-libp2p-peer/test"
 	pstore "github.com/libp2p/go-libp2p-peerstore"
+	ma "github.com/multiformats/go-multiaddr"
 )
 
 var addressBookSuite = map[string]func(book pstore.AddrBook) func(*testing.T){
-	"Addresses":            testAddresses,
+	"AddAddress":           testAddAddress,
 	"Clear":                testClearWorks,
 	"SetNegativeTTLClears": testSetNegativeTTLClears,
 	"UpdateTTLs":           testUpdateTTLs,
@@ -36,225 +37,201 @@ func TestAddrBook(t *testing.T, factory AddrBookFactory) {
 	}
 }
 
-func testAddresses(m pstore.AddrBook) func(*testing.T) {
+func generateAddrs(count int) []ma.Multiaddr {
+	var addrs = make([]ma.Multiaddr, count)
+	for i := 0; i < count; i++ {
+		addrs[i] = multiaddr(fmt.Sprintf("/ip4/1.1.1.%d/tcp/1111", i))
+	}
+	return addrs
+}
+
+func generatePeerIds(count int) []peer.ID {
+	var ids = make([]peer.ID, count)
+	for i := 0; i < count; i++ {
+		ids[i], _ = pt.RandPeerID()
+	}
+	return ids
+}
+
+func testAddAddress(ab pstore.AddrBook) func(*testing.T) {
 	return func(t *testing.T) {
-		id1 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
-		id2 := IDS(t, "QmRmPL3FDZKE3Qiwv1RosLdwdvbvg17b2hB39QPScgWKKZ")
-		id3 := IDS(t, "QmPhi7vBsChP7sjRoZGgg7bcKqF6MmCcQwvRbDte8aJ6Kn")
-		id4 := IDS(t, "QmPhi7vBsChP7sjRoZGgg7bcKqF6MmCcQwvRbDte8aJ5Kn")
-		id5 := IDS(t, "QmPhi7vBsChP7sjRoZGgg7bcKqF6MmCcQwvRbDte8aJ5Km")
+		t.Run("add a single address", func(t *testing.T) {
+			id := generatePeerIds(1)[0]
+			addrs := generateAddrs(1)
 
-		ma11 := MA(t, "/ip4/1.2.3.1/tcp/1111")
-		ma21 := MA(t, "/ip4/2.2.3.2/tcp/1111")
-		ma22 := MA(t, "/ip4/2.2.3.2/tcp/2222")
-		ma31 := MA(t, "/ip4/3.2.3.3/tcp/1111")
-		ma32 := MA(t, "/ip4/3.2.3.3/tcp/2222")
-		ma33 := MA(t, "/ip4/3.2.3.3/tcp/3333")
-		ma41 := MA(t, "/ip4/4.2.3.3/tcp/1111")
-		ma42 := MA(t, "/ip4/4.2.3.3/tcp/2222")
-		ma43 := MA(t, "/ip4/4.2.3.3/tcp/3333")
-		ma44 := MA(t, "/ip4/4.2.3.3/tcp/4444")
-		ma51 := MA(t, "/ip4/5.2.3.3/tcp/1111")
-		ma52 := MA(t, "/ip4/5.2.3.3/tcp/2222")
-		ma53 := MA(t, "/ip4/5.2.3.3/tcp/3333")
-		ma54 := MA(t, "/ip4/5.2.3.3/tcp/4444")
-		ma55 := MA(t, "/ip4/5.2.3.3/tcp/5555")
+			ab.AddAddr(id, addrs[0], time.Hour)
 
-		ttl := time.Hour
-		m.AddAddr(id1, ma11, ttl)
+			testHas(t, addrs, ab.Addrs(id))
+		})
 
-		m.AddAddrs(id2, []ma.Multiaddr{ma21, ma22}, ttl)
-		m.AddAddrs(id2, []ma.Multiaddr{ma21, ma22}, ttl) // idempotency
+		t.Run("idempotent add single address", func(t *testing.T) {
+			id := generatePeerIds(1)[0]
+			addrs := generateAddrs(1)
 
-		m.AddAddr(id3, ma31, ttl)
-		m.AddAddr(id3, ma32, ttl)
-		m.AddAddr(id3, ma33, ttl)
-		m.AddAddr(id3, ma33, ttl) // idempotency
-		m.AddAddr(id3, ma33, ttl)
+			ab.AddAddr(id, addrs[0], time.Hour)
+			ab.AddAddr(id, addrs[0], time.Hour)
 
-		m.AddAddrs(id4, []ma.Multiaddr{ma41, ma42, ma43, ma44}, ttl) // multiple
+			testHas(t, addrs, ab.Addrs(id))
+		})
 
-		m.AddAddrs(id5, []ma.Multiaddr{ma21, ma22}, ttl)             // clearing
-		m.AddAddrs(id5, []ma.Multiaddr{ma41, ma42, ma43, ma44}, ttl) // clearing
-		m.ClearAddrs(id5)
-		m.AddAddrs(id5, []ma.Multiaddr{ma51, ma52, ma53, ma54, ma55}, ttl) // clearing
+		t.Run("add multiple addresses", func(t *testing.T) {
+			id := generatePeerIds(1)[0]
+			addrs := generateAddrs(3)
 
-		// test the Addresses return value
-		testHas(t, []ma.Multiaddr{ma11}, m.Addrs(id1))
-		testHas(t, []ma.Multiaddr{ma21, ma22}, m.Addrs(id2))
-		testHas(t, []ma.Multiaddr{ma31, ma32, ma33}, m.Addrs(id3))
-		testHas(t, []ma.Multiaddr{ma41, ma42, ma43, ma44}, m.Addrs(id4))
-		testHas(t, []ma.Multiaddr{ma51, ma52, ma53, ma54, ma55}, m.Addrs(id5))
+			ab.AddAddrs(id, addrs, time.Hour)
+			testHas(t, addrs, ab.Addrs(id))
+		})
+
+		t.Run("idempotent add multiple addresses", func(t *testing.T) {
+			id := generatePeerIds(1)[0]
+			addrs := generateAddrs(3)
+
+			ab.AddAddrs(id, addrs, time.Hour)
+			ab.AddAddrs(id, addrs, time.Hour)
+
+			testHas(t, addrs, ab.Addrs(id))
+		})
 	}
 }
 
-func testClearWorks(m pstore.AddrBook) func(t *testing.T) {
+func testClearWorks(ab pstore.AddrBook) func(t *testing.T) {
 	return func(t *testing.T) {
-		id1 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
-		id2 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQM")
-		ma11 := MA(t, "/ip4/1.2.3.1/tcp/1111")
-		ma12 := MA(t, "/ip4/2.2.3.2/tcp/2222")
-		ma13 := MA(t, "/ip4/3.2.3.3/tcp/3333")
-		ma24 := MA(t, "/ip4/4.2.3.3/tcp/4444")
-		ma25 := MA(t, "/ip4/5.2.3.3/tcp/5555")
+		ids := generatePeerIds(2)
+		addrs := generateAddrs(5)
 
-		m.AddAddr(id1, ma11, time.Hour)
-		m.AddAddr(id1, ma12, time.Hour)
-		m.AddAddr(id1, ma13, time.Hour)
-		m.AddAddr(id2, ma24, time.Hour)
-		m.AddAddr(id2, ma25, time.Hour)
+		ab.AddAddrs(ids[0], addrs[0:3], time.Hour)
+		ab.AddAddrs(ids[1], addrs[3:], time.Hour)
 
-		testHas(t, []ma.Multiaddr{ma11, ma12, ma13}, m.Addrs(id1))
-		testHas(t, []ma.Multiaddr{ma24, ma25}, m.Addrs(id2))
+		testHas(t, addrs[0:3], ab.Addrs(ids[0]))
+		testHas(t, addrs[3:], ab.Addrs(ids[1]))
 
-		m.ClearAddrs(id1)
-		m.ClearAddrs(id2)
+		ab.ClearAddrs(ids[0])
+		testHas(t, nil, ab.Addrs(ids[0]))
+		testHas(t, addrs[3:], ab.Addrs(ids[1]))
 
-		testHas(t, nil, m.Addrs(id1))
-		testHas(t, nil, m.Addrs(id2))
+		ab.ClearAddrs(ids[1])
+		testHas(t, nil, ab.Addrs(ids[0]))
+		testHas(t, nil, ab.Addrs(ids[1]))
 	}
 }
 
 func testSetNegativeTTLClears(m pstore.AddrBook) func(t *testing.T) {
 	return func(t *testing.T) {
-		id1 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
-		ma11 := MA(t, "/ip4/1.2.3.1/tcp/1111")
+		id := generatePeerIds(1)[0]
+		addr := generateAddrs(1)[0]
 
-		m.SetAddr(id1, ma11, time.Hour)
+		m.SetAddr(id, addr, time.Hour)
+		testHas(t, []ma.Multiaddr{addr}, m.Addrs(id))
 
-		testHas(t, []ma.Multiaddr{ma11}, m.Addrs(id1))
-
-		m.SetAddr(id1, ma11, -1)
-
-		testHas(t, nil, m.Addrs(id1))
+		m.SetAddr(id, addr, -1)
+		testHas(t, nil, m.Addrs(id))
 	}
 }
 
 func testUpdateTTLs(m pstore.AddrBook) func(t *testing.T) {
 	return func(t *testing.T) {
-		id1 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
-		id2 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQM")
-		ma11 := MA(t, "/ip4/1.2.3.1/tcp/1111")
-		ma12 := MA(t, "/ip4/1.2.3.1/tcp/1112")
-		ma21 := MA(t, "/ip4/1.2.3.1/tcp/1121")
-		ma22 := MA(t, "/ip4/1.2.3.1/tcp/1122")
+		t.Run("update ttl of peer with no addrs", func(t *testing.T) {
+			id := generatePeerIds(1)[0]
 
-		// Shouldn't panic.
-		m.UpdateAddrs(id1, time.Hour, time.Minute)
+			// Shouldn't panic.
+			m.UpdateAddrs(id, time.Hour, time.Minute)
+		})
 
-		m.SetAddr(id1, ma11, time.Hour)
-		m.SetAddr(id1, ma12, time.Minute)
+		t.Run("update ttls successfully", func(t *testing.T) {
+			ids := generatePeerIds(2)
+			addrs1, addrs2 := generateAddrs(2), generateAddrs(2)
 
-		// Shouldn't panic.
-		m.UpdateAddrs(id2, time.Hour, time.Minute)
+			// set two keys with different ttls for each peer.
+			m.SetAddr(ids[0], addrs1[0], time.Hour)
+			m.SetAddr(ids[0], addrs1[1], time.Minute)
+			m.SetAddr(ids[1], addrs2[0], time.Hour)
+			m.SetAddr(ids[1], addrs2[1], time.Minute)
 
-		m.SetAddr(id2, ma21, time.Hour)
-		m.SetAddr(id2, ma22, time.Minute)
+			// Sanity check.
+			testHas(t, addrs1, m.Addrs(ids[0]))
+			testHas(t, addrs2, m.Addrs(ids[1]))
 
-		testHas(t, []ma.Multiaddr{ma11, ma12}, m.Addrs(id1))
-		testHas(t, []ma.Multiaddr{ma21, ma22}, m.Addrs(id2))
+			// Will only affect addrs1[0].
+			m.UpdateAddrs(ids[0], time.Hour, time.Second)
 
-		m.UpdateAddrs(id1, time.Hour, time.Second)
+			// No immediate effect.
+			testHas(t, addrs1, m.Addrs(ids[0]))
+			testHas(t, addrs2, m.Addrs(ids[1]))
 
-		testHas(t, []ma.Multiaddr{ma11, ma12}, m.Addrs(id1))
-		testHas(t, []ma.Multiaddr{ma21, ma22}, m.Addrs(id2))
+			// After a wait, addrs[0] is gone.
+			time.Sleep(1200 * time.Millisecond)
+			testHas(t, addrs1[1:2], m.Addrs(ids[0]))
+			testHas(t, addrs2, m.Addrs(ids[1]))
 
-		time.Sleep(1200 * time.Millisecond)
+			// Will only affect addrs2[0].
+			m.UpdateAddrs(ids[1], time.Hour, time.Second)
 
-		testHas(t, []ma.Multiaddr{ma12}, m.Addrs(id1))
-		testHas(t, []ma.Multiaddr{ma21, ma22}, m.Addrs(id2))
+			// No immediate effect.
+			testHas(t, addrs1[1:2], m.Addrs(ids[0]))
+			testHas(t, addrs2, m.Addrs(ids[1]))
 
-		m.UpdateAddrs(id2, time.Hour, time.Second)
+			time.Sleep(1200 * time.Millisecond)
 
-		testHas(t, []ma.Multiaddr{ma12}, m.Addrs(id1))
-		testHas(t, []ma.Multiaddr{ma21, ma22}, m.Addrs(id2))
+			// First addrs is gone in both.
+			testHas(t, addrs1[1:], m.Addrs(ids[0]))
+			testHas(t, addrs2[1:], m.Addrs(ids[1]))
+		})
 
-		time.Sleep(1200 * time.Millisecond)
-
-		testHas(t, []ma.Multiaddr{ma12}, m.Addrs(id1))
-		testHas(t, []ma.Multiaddr{ma22}, m.Addrs(id2))
 	}
 }
 
 func testNilAddrsDontBreak(m pstore.AddrBook) func(t *testing.T) {
 	return func(t *testing.T) {
-		id1 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
-		m.SetAddr(id1, nil, time.Hour)
-		m.AddAddr(id1, nil, time.Hour)
+		id := generatePeerIds(1)[0]
+
+		m.SetAddr(id, nil, time.Hour)
+		m.AddAddr(id, nil, time.Hour)
 	}
 }
 
 func testAddressesExpire(m pstore.AddrBook) func(t *testing.T) {
 	return func(t *testing.T) {
-		id1 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQN")
-		id2 := IDS(t, "QmcNstKuwBBoVTpSCSDrwzjgrRcaYXK833Psuz2EMHwyQM")
-		ma11 := MA(t, "/ip4/1.2.3.1/tcp/1111")
-		ma12 := MA(t, "/ip4/2.2.3.2/tcp/2222")
-		ma13 := MA(t, "/ip4/3.2.3.3/tcp/3333")
-		ma24 := MA(t, "/ip4/4.2.3.3/tcp/4444")
-		ma25 := MA(t, "/ip4/5.2.3.3/tcp/5555")
+		ids := generatePeerIds(2)
+		addrs1 := generateAddrs(3)
+		addrs2 := generateAddrs(2)
 
-		m.AddAddr(id1, ma11, time.Hour)
-		m.AddAddr(id1, ma12, time.Hour)
-		m.AddAddr(id1, ma13, time.Hour)
-		m.AddAddr(id2, ma24, time.Hour)
-		m.AddAddr(id2, ma25, time.Hour)
+		m.AddAddrs(ids[0], addrs1, time.Hour)
+		m.AddAddrs(ids[1], addrs2, time.Hour)
 
-		testHas(t, []ma.Multiaddr{ma11, ma12, ma13}, m.Addrs(id1))
-		testHas(t, []ma.Multiaddr{ma24, ma25}, m.Addrs(id2))
+		testHas(t, addrs1, m.Addrs(ids[0]))
+		testHas(t, addrs2, m.Addrs(ids[1]))
 
-		m.SetAddr(id1, ma11, 2*time.Hour)
-		m.SetAddr(id1, ma12, 2*time.Hour)
-		m.SetAddr(id1, ma13, 2*time.Hour)
-		m.SetAddr(id2, ma24, 2*time.Hour)
-		m.SetAddr(id2, ma25, 2*time.Hour)
+		m.AddAddrs(ids[0], addrs1, 2*time.Hour)
+		m.AddAddrs(ids[1], addrs2, 2*time.Hour)
 
-		testHas(t, []ma.Multiaddr{ma11, ma12, ma13}, m.Addrs(id1))
-		testHas(t, []ma.Multiaddr{ma24, ma25}, m.Addrs(id2))
+		testHas(t, addrs1, m.Addrs(ids[0]))
+		testHas(t, addrs2, m.Addrs(ids[1]))
 
-		m.SetAddr(id1, ma11, time.Millisecond)
+		m.SetAddr(ids[0], addrs1[0], time.Millisecond)
 		<-time.After(time.Millisecond * 5)
-		testHas(t, []ma.Multiaddr{ma12, ma13}, m.Addrs(id1))
-		testHas(t, []ma.Multiaddr{ma24, ma25}, m.Addrs(id2))
+		testHas(t, addrs1[1:3], m.Addrs(ids[0]))
+		testHas(t, addrs2, m.Addrs(ids[1]))
 
-		m.SetAddr(id1, ma13, time.Millisecond)
+		m.SetAddr(ids[0], addrs1[2], time.Millisecond)
 		<-time.After(time.Millisecond * 5)
-		testHas(t, []ma.Multiaddr{ma12}, m.Addrs(id1))
-		testHas(t, []ma.Multiaddr{ma24, ma25}, m.Addrs(id2))
+		testHas(t, addrs1[1:2], m.Addrs(ids[0]))
+		testHas(t, addrs2, m.Addrs(ids[1]))
 
-		m.SetAddr(id2, ma24, time.Millisecond)
+		m.SetAddr(ids[1], addrs2[0], time.Millisecond)
 		<-time.After(time.Millisecond * 5)
-		testHas(t, []ma.Multiaddr{ma12}, m.Addrs(id1))
-		testHas(t, []ma.Multiaddr{ma25}, m.Addrs(id2))
+		testHas(t, addrs1[1:2], m.Addrs(ids[0]))
+		testHas(t, addrs2[1:], m.Addrs(ids[1]))
 
-		m.SetAddr(id2, ma25, time.Millisecond)
+		m.SetAddr(ids[1], addrs2[1], time.Millisecond)
 		<-time.After(time.Millisecond * 5)
-		testHas(t, []ma.Multiaddr{ma12}, m.Addrs(id1))
-		testHas(t, nil, m.Addrs(id2))
+		testHas(t, addrs1[1:2], m.Addrs(ids[0]))
+		testHas(t, nil, m.Addrs(ids[1]))
 
-		m.SetAddr(id1, ma12, time.Millisecond)
+		m.SetAddr(ids[0], addrs1[1], time.Millisecond)
 		<-time.After(time.Millisecond * 5)
-		testHas(t, nil, m.Addrs(id1))
-		testHas(t, nil, m.Addrs(id2))
+		testHas(t, nil, m.Addrs(ids[0]))
+		testHas(t, nil, m.Addrs(ids[1]))
 	}
-}
-
-func IDS(t *testing.T, ids string) peer.ID {
-	t.Helper()
-	id, err := peer.IDB58Decode(ids)
-	if err != nil {
-		t.Fatalf("id %q is bad: %s", ids, err)
-	}
-	return id
-}
-
-func MA(t *testing.T, m string) ma.Multiaddr {
-	t.Helper()
-	maddr, err := ma.NewMultiaddr(m)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return maddr
 }
 
 func testHas(t *testing.T, exp, act []ma.Multiaddr) {

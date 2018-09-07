@@ -77,6 +77,6 @@
   "license": "MIT",
   "name": "go-libp2p-peerstore",
   "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
-  "version": "1.5.0"
+  "version": "2.0.0"
 }
 

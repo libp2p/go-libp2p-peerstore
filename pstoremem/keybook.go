@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	ic "github.com/libp2p/go-libp2p-crypto"
-	"github.com/libp2p/go-libp2p-peer"
+	peer "github.com/libp2p/go-libp2p-peer"
 
 	pstore "github.com/libp2p/go-libp2p-peerstore"
 )
@@ -26,9 +26,9 @@ func NewKeyBook() pstore.KeyBook {
 	}
 }
 
-func (mkb *memoryKeyBook) PeersWithKeys() []peer.ID {
+func (mkb *memoryKeyBook) PeersWithKeys() peer.IDSlice {
 	mkb.RLock()
-	ps := make([]peer.ID, 0, len(mkb.pks)+len(mkb.sks))
+	ps := make(peer.IDSlice, 0, len(mkb.pks)+len(mkb.sks))
 	for p := range mkb.pks {
 		ps = append(ps, p)
 	}

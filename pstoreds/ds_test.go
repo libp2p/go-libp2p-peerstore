@@ -7,14 +7,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ipfs/go-datastore"
+	ds "github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-ds-badger"
 
-	"github.com/libp2p/go-libp2p-peerstore"
-	"github.com/libp2p/go-libp2p-peerstore/test"
+	pstore "github.com/libp2p/go-libp2p-peerstore"
+	pt "github.com/libp2p/go-libp2p-peerstore/test"
 )
 
-func setupBadgerDatastore(t testing.TB) (datastore.Batching, func()) {
+func setupBadgerDatastore(t testing.TB) (ds.Batching, func()) {
 	dataPath, err := ioutil.TempDir(os.TempDir(), "badger")
 	if err != nil {
 		t.Fatal(err)
@@ -30,8 +30,8 @@ func setupBadgerDatastore(t testing.TB) (datastore.Batching, func()) {
 	return ds, closer
 }
 
-func newPeerstoreFactory(tb testing.TB) test.PeerstoreFactory {
-	return func() (peerstore.Peerstore, func()) {
+func newPeerstoreFactory(tb testing.TB) pt.PeerstoreFactory {
+	return func() (pstore.Peerstore, func()) {
 		ds, closeFunc := setupBadgerDatastore(tb)
 
 		ps, err := NewPeerstore(context.Background(), ds)
@@ -44,11 +44,11 @@ func newPeerstoreFactory(tb testing.TB) test.PeerstoreFactory {
 }
 
 func TestBadgerDsPeerstore(t *testing.T) {
-	test.TestPeerstore(t, newPeerstoreFactory(t))
+	pt.TestPeerstore(t, newPeerstoreFactory(t))
 }
 
 func TestBadgerDsAddrBook(t *testing.T) {
-	test.TestAddrBook(t, func() (peerstore.AddrBook, func()) {
+	pt.TestAddrBook(t, func() (pstore.AddrBook, func()) {
 		ds, closeDB := setupBadgerDatastore(t)
 
 		mgr, err := NewAddrBook(context.Background(), ds, 100*time.Microsecond)
@@ -65,5 +65,5 @@ func TestBadgerDsAddrBook(t *testing.T) {
 }
 
 func BenchmarkBadgerDsPeerstore(b *testing.B) {
-	test.BenchmarkPeerstore(b, newPeerstoreFactory(b))
+	pt.BenchmarkPeerstore(b, newPeerstoreFactory(b))
 }
