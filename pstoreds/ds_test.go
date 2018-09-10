@@ -2,16 +2,120 @@ package pstoreds
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
 	"time"
 
+	bd "github.com/dgraph-io/badger"
+
 	"github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-ds-badger"
+
 	"github.com/libp2p/go-libp2p-peerstore"
 	"github.com/libp2p/go-libp2p-peerstore/test"
 )
+
+func BenchmarkBaselineBadgerDatastorePutEntry(b *testing.B) {
+	bds, closer := badgerStore(b)
+	defer closer()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		txn := bds.NewTransaction(false)
+
+		key := datastore.RawKey(fmt.Sprintf("/key/%d", i))
+		txn.Put(key, []byte(fmt.Sprintf("/value/%d", i)))
+
+		txn.Commit()
+		txn.Discard()
+	}
+}
+
+func BenchmarkBaselineBadgerDatastoreGetEntry(b *testing.B) {
+	bds, closer := badgerStore(b)
+	defer closer()
+
+	txn := bds.NewTransaction(false)
+	keys := make([]datastore.Key, 1000)
+	for i := 0; i < 1000; i++ {
+		key := datastore.RawKey(fmt.Sprintf("/key/%d", i))
+		txn.Put(key, []byte(fmt.Sprintf("/value/%d", i)))
+		keys[i] = key
+	}
+	if err := txn.Commit(); err != nil {
+		b.Fatal(err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		txn := bds.NewTransaction(true)
+		if _, err := txn.Get(keys[i%1000]); err != nil {
+			b.Fatal(err)
+		}
+		txn.Discard()
+	}
+}
+
+func BenchmarkBaselineBadgerDirectPutEntry(b *testing.B) {
+	opts := bd.DefaultOptions
+
+	dataPath, err := ioutil.TempDir(os.TempDir(), "badger")
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	opts.Dir = dataPath
+	opts.ValueDir = dataPath
+	opts.SyncWrites = false
+
+	db, err := bd.Open(opts)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	defer db.Close()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		txn := db.NewTransaction(true)
+		txn.Set([]byte(fmt.Sprintf("/key/%d", i)), []byte(fmt.Sprintf("/value/%d", i)))
+		txn.Commit(nil)
+	}
+}
+
+func BenchmarkBaselineBadgerDirectGetEntry(b *testing.B) {
+	opts := bd.DefaultOptions
+
+	dataPath, err := ioutil.TempDir(os.TempDir(), "badger")
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	opts.Dir = dataPath
+	opts.ValueDir = dataPath
+
+	db, err := bd.Open(opts)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	defer db.Close()
+
+	txn := db.NewTransaction(true)
+	for i := 0; i < 1000; i++ {
+		txn.Set([]byte(fmt.Sprintf("/key/%d", i)), []byte(fmt.Sprintf("/value/%d", i)))
+	}
+	txn.Commit(nil)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		txn := db.NewTransaction(false)
+		txn.Get([]byte(fmt.Sprintf("/key/%d", i%1000)))
+		txn.Discard()
+	}
+}
 
 func TestBadgerDsPeerstore(t *testing.T) {
 	test.TestPeerstore(t, peerstoreFactory(t, DefaultOpts()))
