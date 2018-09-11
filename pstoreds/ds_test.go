@@ -122,10 +122,25 @@ func TestBadgerDsPeerstore(t *testing.T) {
 }
 
 func TestBadgerDsAddrBook(t *testing.T) {
-	opts := DefaultOpts()
-	opts.TTLInterval = 100 * time.Microsecond
+	t.Run("Cacheful", func(t *testing.T) {
+		t.Parallel()
 
-	pt.TestAddrBook(t, addressBookFactory(t, opts))
+		opts := DefaultOpts()
+		opts.TTLInterval = 100 * time.Microsecond
+		opts.CacheSize = 1024
+
+		pt.TestAddrBook(t, addressBookFactory(t, opts))
+	})
+
+	t.Run("Cacheless", func(t *testing.T) {
+		t.Parallel()
+
+		opts := DefaultOpts()
+		opts.TTLInterval = 100 * time.Microsecond
+		opts.CacheSize = 0
+
+		pt.TestAddrBook(t, addressBookFactory(t, opts))
+	})
 }
 
 func BenchmarkBadgerDsPeerstore(b *testing.B) {

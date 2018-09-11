@@ -321,7 +321,6 @@ func (mgr *dsAddrBook) ClearAddrs(p peer.ID) {
 	if e, ok := mgr.cache.Peek(p.Pretty()); ok {
 		mgr.cache.Remove(p.Pretty())
 		keys, _, _ := keysAndAddrs(p, e.([]ma.Multiaddr))
-
 		deleteFn = func() error {
 			return mgr.dbDelete(keys)
 		}
