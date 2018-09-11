@@ -294,7 +294,7 @@ func (mgr *dsAddrBook) PeersWithAddrs() peer.IDSlice {
 		return peer.IDSlice{}
 	}
 
-	ids := make(peer.IDSlice, 1, len(idset))
+	ids := make(peer.IDSlice, 0, len(idset))
 	for id := range idset {
 		i, _ := peer.IDB58Decode(id)
 		ids = append(ids, i)
