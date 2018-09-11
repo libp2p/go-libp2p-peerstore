@@ -124,11 +124,7 @@ func (mgr *dsAddrBook) deleteAddrs(p peer.ID, addrs []ma.Multiaddr) error {
 		return err
 	}
 
-	// Evict all keys from cache.
-	for _, key := range keys {
-		mgr.cache.Remove(key)
-	}
-
+	mgr.cache.Remove(p.Pretty())
 	// Attempt transactional KV deletion.
 	for i := 0; i < mgr.writeRetries; i++ {
 		if err = mgr.dbDelete(keys); err == nil {
@@ -153,11 +149,7 @@ func (mgr *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Durati
 		return err
 	}
 
-	// Evict all keys from cache before the update.
-	for _, key := range keys {
-		mgr.cache.Remove(key)
-	}
-
+	mgr.cache.Remove(p.Pretty())
 	// Attempt transactional KV insertion.
 	var existed []bool
 	for i := 0; i < mgr.writeRetries; i++ {
@@ -173,12 +165,9 @@ func (mgr *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Durati
 	}
 
 	// Successful. Update cache and broadcast event.
-	for i, key := range keys {
-		addr := addrs[i]
-		mgr.cache.Add(key, addr.Bytes())
-
+	for i, _ := range keys {
 		if !existed[i] {
-			mgr.subsManager.BroadcastAddr(p, addr)
+			mgr.subsManager.BroadcastAddr(p, addrs[i])
 		}
 	}
 
@@ -263,10 +252,18 @@ func (mgr *dsAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.
 func (mgr *dsAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
 	var (
 		prefix  = ds.NewKey(p.Pretty())
-		q       = query.Query{Prefix: prefix.String(), KeysOnly: true}
+		q       = query.Query{Prefix: prefix.String(), KeysOnly: false}
 		results query.Results
 		err     error
 	)
+
+	// Check the cache.
+	if entry, ok := mgr.cache.Get(p.Pretty()); ok {
+		e := entry.([]ma.Multiaddr)
+		addrs := make([]ma.Multiaddr, len(e))
+		copy(addrs, e)
+		return addrs
+	}
 
 	txn := mgr.ds.NewTransaction(true)
 	defer txn.Discard()
@@ -275,26 +272,19 @@ func (mgr *dsAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
 		log.Error(err)
 		return nil
 	}
-
 	defer results.Close()
 
 	var addrs []ma.Multiaddr
 	for result := range results.Next() {
-		key := ds.RawKey(result.Key)
-		var addri interface{}
-		addri, ok := mgr.cache.Get(key)
-
-		if !ok {
-			if addri, err = txn.Get(key); err != nil {
-				log.Error(err)
-				continue
-			}
-		}
-
-		if addr, err := ma.NewMultiaddrBytes(addri.([]byte)); err != nil {
+		if addr, err := ma.NewMultiaddrBytes(result.Value); err == nil {
 			addrs = append(addrs, addr)
 		}
 	}
+
+	// Store a copy in the cache.
+	addrsCpy := make([]ma.Multiaddr, len(addrs))
+	copy(addrsCpy, addrs)
+	mgr.cache.Add(p.Pretty(), addrsCpy)
 
 	return addrs
 }
@@ -346,13 +336,13 @@ func (mgr *dsAddrBook) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Mult
 func (mgr *dsAddrBook) ClearAddrs(p peer.ID) {
 	var (
 		err    error
-		keys   []ds.Key
 		prefix = ds.NewKey(p.Pretty())
 	)
 
+	mgr.cache.Remove(p.Pretty())
 	// Attempt transactional KV deletion.
 	for i := 0; i < mgr.writeRetries; i++ {
-		if keys, err = mgr.dbClear(prefix); err == nil {
+		if _, err = mgr.dbClear(prefix); err == nil {
 			break
 		}
 		log.Errorf("failed to clear addresses for peer %s: %s\n", p.Pretty(), err)
@@ -365,11 +355,10 @@ func (mgr *dsAddrBook) ClearAddrs(p peer.ID) {
 
 	// Perform housekeeping.
 	mgr.ttlManager.clear(prefix)
-	for _, key := range keys {
-		mgr.cache.Remove(key)
-	}
 }
 
+// dbClear removes all entries whose keys are prefixed with the argument.
+// it returns a slice of the removed keys in case it's needed
 func (mgr *dsAddrBook) dbClear(prefix ds.Key) ([]ds.Key, error) {
 	q := query.Query{Prefix: prefix.String(), KeysOnly: true}
 
@@ -478,7 +467,7 @@ func (mgr *ttlManager) tick() {
 			log.Error("failed to delete TTL key: %v, cause: %v", key.String(), err)
 			break
 		}
-		mgr.cache.Remove(key)
+		mgr.cache.Remove(key.Parent().Name())
 		delete(mgr.entries, key)
 	}
 
