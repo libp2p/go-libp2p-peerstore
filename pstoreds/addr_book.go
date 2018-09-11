@@ -80,7 +80,6 @@ func keysAndAddrs(p peer.ID, addrs []ma.Multiaddr) ([]ds.Key, []ma.Multiaddr, er
 		if err != nil {
 			return nil, nil, err
 		}
-
 		keys[i] = parentKey.ChildString(hash.B58String())
 		clean[i] = addr
 		i++
@@ -179,28 +178,6 @@ func (mgr *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Durati
 		mgr.ttlManager.insertTTLs(keys, ttl)
 	}
 
-	return nil
-}
-
-// dbDelete performs a transactional delete of the provided keys.
-func (mgr *dsAddrBook) dbDelete(keys []ds.Key) error {
-	var err error
-
-	txn := mgr.ds.NewTransaction(false)
-	defer txn.Discard()
-
-	// Attempt to delete all keys.
-	for _, key := range keys {
-		if err = txn.Delete(key); err != nil {
-			log.Errorf("transaction failed and aborted while deleting key: %s, cause: %v", key.String(), err)
-			return err
-		}
-	}
-
-	if err = txn.Commit(); err != nil {
-		log.Errorf("failed to commit transaction when deleting keys, cause: %v", err)
-		return err
-	}
 	return nil
 }
 
@@ -335,14 +312,28 @@ func (mgr *dsAddrBook) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Mult
 // ClearAddrs will delete all known addresses for a peer ID.
 func (mgr *dsAddrBook) ClearAddrs(p peer.ID) {
 	var (
-		err    error
-		prefix = ds.NewKey(p.Pretty())
+		err      error
+		prefix   = ds.NewKey(p.Pretty())
+		deleteFn func() error
 	)
 
-	mgr.cache.Remove(p.Pretty())
+	if e, ok := mgr.cache.Peek(p.Pretty()); ok {
+		mgr.cache.Remove(p.Pretty())
+		keys, _, _ := keysAndAddrs(p, e.([]ma.Multiaddr))
+
+		deleteFn = func() error {
+			return mgr.dbDelete(keys)
+		}
+	} else {
+		deleteFn = func() error {
+			_, err := mgr.dbClearIterator(prefix)
+			return err
+		}
+	}
+
 	// Attempt transactional KV deletion.
 	for i := 0; i < mgr.writeRetries; i++ {
-		if _, err = mgr.dbClear(prefix); err == nil {
+		if err = deleteFn(); err == nil {
 			break
 		}
 		log.Errorf("failed to clear addresses for peer %s: %s\n", p.Pretty(), err)
@@ -350,16 +341,35 @@ func (mgr *dsAddrBook) ClearAddrs(p peer.ID) {
 
 	if err != nil {
 		log.Errorf("failed to clear addresses for peer %s after %d attempts\n", p.Pretty(), mgr.writeRetries)
-		// TODO: return error
 	}
 
 	// Perform housekeeping.
 	mgr.ttlManager.clear(prefix)
 }
 
-// dbClear removes all entries whose keys are prefixed with the argument.
+// dbDelete transactionally deletes the provided keys.
+func (mgr *dsAddrBook) dbDelete(keys []ds.Key) error {
+	txn := mgr.ds.NewTransaction(false)
+	defer txn.Discard()
+
+	for _, key := range keys {
+		if err := txn.Delete(key); err != nil {
+			log.Errorf("failed to delete key: %s, cause: %v", key.String(), err)
+			return err
+		}
+	}
+
+	if err := txn.Commit(); err != nil {
+		log.Errorf("failed to commit transaction when deleting keys, cause: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+// dbClearIterator removes all entries whose keys are prefixed with the argument.
 // it returns a slice of the removed keys in case it's needed
-func (mgr *dsAddrBook) dbClear(prefix ds.Key) ([]ds.Key, error) {
+func (mgr *dsAddrBook) dbClearIterator(prefix ds.Key) ([]ds.Key, error) {
 	q := query.Query{Prefix: prefix.String(), KeysOnly: true}
 
 	txn := mgr.ds.NewTransaction(false)

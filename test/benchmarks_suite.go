@@ -9,10 +9,12 @@ import (
 )
 
 var peerstoreBenchmarks = map[string]func(pstore.Peerstore, chan *peerpair) func(*testing.B){
-	"AddAddrs":              benchmarkAddAddrs,
-	"SetAddrs":              benchmarkSetAddrs,
-	"GetAddrs":              benchmarkGetAddrs,
-	"AddAndClearAddrs":      benchmarkAddAndClearAddrs,
+	"AddAddrs": benchmarkAddAddrs,
+	"SetAddrs": benchmarkSetAddrs,
+	"GetAddrs": benchmarkGetAddrs,
+	// The in-between get allows us to benchmark the read-through cache.
+	"AddGetAndClearAddrs": benchmarkAddGetAndClearAddrs,
+	// Calls PeersWithAddr on a peerstore with 1000 peers.
 	"Get1000PeersWithAddrs": benchmarkGet1000PeersWithAddrs,
 }
 
@@ -84,12 +86,13 @@ func benchmarkGetAddrs(ps pstore.Peerstore, addrs chan *peerpair) func(*testing.
 	}
 }
 
-func benchmarkAddAndClearAddrs(ps pstore.Peerstore, addrs chan *peerpair) func(*testing.B) {
+func benchmarkAddGetAndClearAddrs(ps pstore.Peerstore, addrs chan *peerpair) func(*testing.B) {
 	return func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			pp := <-addrs
 			ps.AddAddrs(pp.ID, pp.Addr, pstore.PermanentAddrTTL)
+			ps.Addrs(pp.ID)
 			ps.ClearAddrs(pp.ID)
 		}
 	}
