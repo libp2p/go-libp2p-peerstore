@@ -5,18 +5,10 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/libp2p/go-libp2p-peer"
+	peer "github.com/libp2p/go-libp2p-peer"
 	pt "github.com/libp2p/go-libp2p-peer/test"
 	ma "github.com/multiformats/go-multiaddr"
 )
-
-func peerId(ids string) peer.ID {
-	id, err := peer.IDB58Decode(ids)
-	if err != nil {
-		panic(err)
-	}
-	return id
-}
 
 func multiaddr(m string) ma.Multiaddr {
 	maddr, err := ma.NewMultiaddr(m)

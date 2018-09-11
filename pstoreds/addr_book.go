@@ -294,10 +294,11 @@ func (mgr *dsAddrBook) PeersWithAddrs() peer.IDSlice {
 		return peer.IDSlice{}
 	}
 
-	ids := make(peer.IDSlice, 0, len(idset))
+	ids, i := make(peer.IDSlice, len(idset)), 0
 	for id := range idset {
-		i, _ := peer.IDB58Decode(id)
-		ids = append(ids, i)
+		pid, _ := peer.IDB58Decode(id)
+		ids[i] = pid
+		i++
 	}
 	return ids
 }
@@ -326,7 +327,7 @@ func (mgr *dsAddrBook) ClearAddrs(p peer.ID) {
 		}
 	} else {
 		deleteFn = func() error {
-			_, err := mgr.dbClearIterator(prefix)
+			_, err := mgr.dbDeleteIter(prefix)
 			return err
 		}
 	}
@@ -367,9 +368,9 @@ func (mgr *dsAddrBook) dbDelete(keys []ds.Key) error {
 	return nil
 }
 
-// dbClearIterator removes all entries whose keys are prefixed with the argument.
+// dbDeleteIter removes all entries whose keys are prefixed with the argument.
 // it returns a slice of the removed keys in case it's needed
-func (mgr *dsAddrBook) dbClearIterator(prefix ds.Key) ([]ds.Key, error) {
+func (mgr *dsAddrBook) dbDeleteIter(prefix ds.Key) ([]ds.Key, error) {
 	q := query.Query{Prefix: prefix.String(), KeysOnly: true}
 
 	txn := mgr.ds.NewTransaction(false)
@@ -393,7 +394,7 @@ func (mgr *dsAddrBook) dbClearIterator(prefix ds.Key) ([]ds.Key, error) {
 	}
 
 	if err := results.Close(); err != nil {
-		log.Errorf("failed to close cursor: %s, cause: %v", err)
+		log.Errorf("failed to close cursor, cause: %v", err)
 		return nil, err
 	}
 
