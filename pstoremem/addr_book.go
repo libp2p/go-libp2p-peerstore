@@ -7,11 +7,11 @@ import (
 	"time"
 
 	logging "github.com/ipfs/go-log"
-	"github.com/libp2p/go-libp2p-peer"
+	peer "github.com/libp2p/go-libp2p-peer"
 	ma "github.com/multiformats/go-multiaddr"
 
 	pstore "github.com/libp2p/go-libp2p-peerstore"
-	"github.com/libp2p/go-libp2p-peerstore/addr"
+	addr "github.com/libp2p/go-libp2p-peerstore/addr"
 )
 
 var log = logging.Logger("peerstore")

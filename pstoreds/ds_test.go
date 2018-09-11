@@ -10,11 +10,11 @@ import (
 
 	bd "github.com/dgraph-io/badger"
 
-	"github.com/ipfs/go-datastore"
-	"github.com/ipfs/go-ds-badger"
+	ds "github.com/ipfs/go-datastore"
+	badger "github.com/ipfs/go-ds-badger"
 
-	"github.com/libp2p/go-libp2p-peerstore"
-	"github.com/libp2p/go-libp2p-peerstore/test"
+	pstore "github.com/libp2p/go-libp2p-peerstore"
+	pt "github.com/libp2p/go-libp2p-peerstore/test"
 )
 
 func BenchmarkBaselineBadgerDatastorePutEntry(b *testing.B) {
@@ -25,7 +25,7 @@ func BenchmarkBaselineBadgerDatastorePutEntry(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		txn := bds.NewTransaction(false)
 
-		key := datastore.RawKey(fmt.Sprintf("/key/%d", i))
+		key := ds.RawKey(fmt.Sprintf("/key/%d", i))
 		txn.Put(key, []byte(fmt.Sprintf("/value/%d", i)))
 
 		txn.Commit()
@@ -38,9 +38,9 @@ func BenchmarkBaselineBadgerDatastoreGetEntry(b *testing.B) {
 	defer closer()
 
 	txn := bds.NewTransaction(false)
-	keys := make([]datastore.Key, 1000)
+	keys := make([]ds.Key, 1000)
 	for i := 0; i < 1000; i++ {
-		key := datastore.RawKey(fmt.Sprintf("/key/%d", i))
+		key := ds.RawKey(fmt.Sprintf("/key/%d", i))
 		txn.Put(key, []byte(fmt.Sprintf("/value/%d", i)))
 		keys[i] = key
 	}
@@ -118,14 +118,14 @@ func BenchmarkBaselineBadgerDirectGetEntry(b *testing.B) {
 }
 
 func TestBadgerDsPeerstore(t *testing.T) {
-	test.TestPeerstore(t, peerstoreFactory(t, DefaultOpts()))
+	pt.TestPeerstore(t, peerstoreFactory(t, DefaultOpts()))
 }
 
 func TestBadgerDsAddrBook(t *testing.T) {
 	opts := DefaultOpts()
 	opts.TTLInterval = 100 * time.Microsecond
 
-	test.TestAddrBook(t, addressBookFactory(t, opts))
+	pt.TestAddrBook(t, addressBookFactory(t, opts))
 }
 
 func BenchmarkBadgerDsPeerstore(b *testing.B) {
@@ -135,11 +135,11 @@ func BenchmarkBadgerDsPeerstore(b *testing.B) {
 	cacheless := DefaultOpts()
 	cacheless.CacheSize = 0
 
-	test.BenchmarkPeerstore(b, peerstoreFactory(b, caching), "Caching")
-	test.BenchmarkPeerstore(b, peerstoreFactory(b, cacheless), "Cacheless")
+	pt.BenchmarkPeerstore(b, peerstoreFactory(b, caching), "Caching")
+	pt.BenchmarkPeerstore(b, peerstoreFactory(b, cacheless), "Cacheless")
 }
 
-func badgerStore(t testing.TB) (datastore.TxnDatastore, func()) {
+func badgerStore(t testing.TB) (ds.TxnDatastore, func()) {
 	dataPath, err := ioutil.TempDir(os.TempDir(), "badger")
 	if err != nil {
 		t.Fatal(err)
@@ -155,8 +155,8 @@ func badgerStore(t testing.TB) (datastore.TxnDatastore, func()) {
 	return ds, closer
 }
 
-func peerstoreFactory(tb testing.TB, opts PeerstoreOpts) test.PeerstoreFactory {
-	return func() (peerstore.Peerstore, func()) {
+func peerstoreFactory(tb testing.TB, opts PeerstoreOpts) pt.PeerstoreFactory {
+	return func() (pstore.Peerstore, func()) {
 		ds, closeFunc := badgerStore(tb)
 
 		ps, err := NewPeerstore(context.Background(), ds, opts)
@@ -168,8 +168,8 @@ func peerstoreFactory(tb testing.TB, opts PeerstoreOpts) test.PeerstoreFactory {
 	}
 }
 
-func addressBookFactory(tb testing.TB, opts PeerstoreOpts) test.AddrBookFactory {
-	return func() (peerstore.AddrBook, func()) {
+func addressBookFactory(tb testing.TB, opts PeerstoreOpts) pt.AddrBookFactory {
+	return func() (pstore.AddrBook, func()) {
 		ds, closeDB := badgerStore(tb)
 
 		mgr, err := NewAddrBook(context.Background(), ds, opts)

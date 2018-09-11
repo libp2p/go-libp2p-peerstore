@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/ipfs/go-datastore"
+	ds "github.com/ipfs/go-datastore"
 
 	pstore "github.com/libp2p/go-libp2p-peerstore"
-	"github.com/libp2p/go-libp2p-peerstore/pstoremem"
+	pstoremem "github.com/libp2p/go-libp2p-peerstore/pstoremem"
 )
 
 // Configuration object for the peerstore.
@@ -35,8 +35,8 @@ func DefaultOpts() PeerstoreOpts {
 }
 
 // NewPeerstore creates a peerstore backed by the provided persistent datastore.
-func NewPeerstore(ctx context.Context, ds datastore.TxnDatastore, opts PeerstoreOpts) (pstore.Peerstore, error) {
-	addrBook, err := NewAddrBook(ctx, ds, opts)
+func NewPeerstore(ctx context.Context, store ds.TxnDatastore, opts PeerstoreOpts) (pstore.Peerstore, error) {
+	addrBook, err := NewAddrBook(ctx, store, opts)
 	if err != nil {
 		return nil, err
 	}

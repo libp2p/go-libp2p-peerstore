@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	ic "github.com/libp2p/go-libp2p-crypto"
-	"github.com/libp2p/go-libp2p-peer"
+	peer "github.com/libp2p/go-libp2p-peer"
 
 	pstore "github.com/libp2p/go-libp2p-peerstore"
 )

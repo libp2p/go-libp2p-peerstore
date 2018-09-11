@@ -4,7 +4,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/libp2p/go-libp2p-peer"
+	peer "github.com/libp2p/go-libp2p-peer"
 	pt "github.com/libp2p/go-libp2p-peer/test"
 
 	pstore "github.com/libp2p/go-libp2p-peerstore"
