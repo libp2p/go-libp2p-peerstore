@@ -161,7 +161,7 @@ func testUpdateTTLs(m pstore.AddrBook) func(t *testing.T) {
 			testHas(t, addrs2, m.Addrs(ids[1]))
 
 			// After a wait, addrs[0] is gone.
-			time.Sleep(1200 * time.Millisecond)
+			time.Sleep(3000 * time.Millisecond)
 			testHas(t, addrs1[1:2], m.Addrs(ids[0]))
 			testHas(t, addrs2, m.Addrs(ids[1]))
 
@@ -172,7 +172,7 @@ func testUpdateTTLs(m pstore.AddrBook) func(t *testing.T) {
 			testHas(t, addrs1[1:2], m.Addrs(ids[0]))
 			testHas(t, addrs2, m.Addrs(ids[1]))
 
-			time.Sleep(1200 * time.Millisecond)
+			time.Sleep(3000 * time.Millisecond)
 
 			// First addrs is gone in both.
 			testHas(t, addrs1[1:], m.Addrs(ids[0]))
