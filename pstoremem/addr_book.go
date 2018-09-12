@@ -162,10 +162,8 @@ func (mab *memoryAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL t
 	}
 
 	exp := time.Now().Add(newTTL)
-	// TODO: RK - Shorthand.
 	for i := range addrs {
-		aexp := &addrs[i]
-		if oldTTL == aexp.TTL {
+		if aexp := &addrs[i]; oldTTL == aexp.TTL {
 			aexp.TTL = newTTL
 			aexp.Expires = exp
 		}
