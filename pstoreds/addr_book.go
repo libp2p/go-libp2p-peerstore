@@ -36,7 +36,7 @@ type dsAddrBook struct {
 // NewAddrBook initializes a new address book given a
 // Datastore instance, a context for managing the TTL manager,
 // and the interval at which the TTL manager should sweep the Datastore.
-func NewAddrBook(ctx context.Context, ds ds.TxnDatastore, opts PeerstoreOpts) (*dsAddrBook, error) {
+func NewAddrBook(ctx context.Context, ds ds.TxnDatastore, opts Options) (*dsAddrBook, error) {
 	var (
 		cache cache = &noopCache{}
 		err   error
@@ -163,7 +163,7 @@ func (mgr *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Durati
 		return err
 	}
 
-	// Successful. Update cache and broadcast event.
+	// Update was successful, so broadcast event only for new addresses.
 	for i, _ := range keys {
 		if !existed[i] {
 			mgr.subsManager.BroadcastAddr(p, addrs[i])
@@ -175,7 +175,7 @@ func (mgr *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Durati
 	if ttlReset {
 		mgr.ttlManager.setTTLs(keys, ttl)
 	} else {
-		mgr.ttlManager.insertTTLs(keys, ttl)
+		mgr.ttlManager.insertOrExtendTTLs(keys, ttl)
 	}
 
 	return nil
@@ -294,7 +294,8 @@ func (mgr *dsAddrBook) PeersWithAddrs() peer.IDSlice {
 		return peer.IDSlice{}
 	}
 
-	ids, i := make(peer.IDSlice, len(idset)), 0
+	ids := make(peer.IDSlice, len(idset))
+	i := 0
 	for id := range idset {
 		pid, _ := peer.IDB58Decode(id)
 		ids[i] = pid
@@ -495,7 +496,7 @@ func (mgr *ttlManager) deleteTTLs(keys []ds.Key) {
 	}
 }
 
-func (mgr *ttlManager) insertTTLs(keys []ds.Key, ttl time.Duration) {
+func (mgr *ttlManager) insertOrExtendTTLs(keys []ds.Key, ttl time.Duration) {
 	mgr.Lock()
 	defer mgr.Unlock()
 

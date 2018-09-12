@@ -170,7 +170,7 @@ func badgerStore(t testing.TB) (ds.TxnDatastore, func()) {
 	return ds, closer
 }
 
-func peerstoreFactory(tb testing.TB, opts PeerstoreOpts) pt.PeerstoreFactory {
+func peerstoreFactory(tb testing.TB, opts Options) pt.PeerstoreFactory {
 	return func() (pstore.Peerstore, func()) {
 		ds, closeFunc := badgerStore(tb)
 
@@ -183,7 +183,7 @@ func peerstoreFactory(tb testing.TB, opts PeerstoreOpts) pt.PeerstoreFactory {
 	}
 }
 
-func addressBookFactory(tb testing.TB, opts PeerstoreOpts) pt.AddrBookFactory {
+func addressBookFactory(tb testing.TB, opts Options) pt.AddrBookFactory {
 	return func() (pstore.AddrBook, func()) {
 		ds, closeDB := badgerStore(tb)
 
