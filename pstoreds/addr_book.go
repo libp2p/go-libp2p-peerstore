@@ -145,7 +145,7 @@ func (mgr *dsAddrBook) deleteAddrs(p peer.ID, addrs []ma.Multiaddr) error {
 		return err
 	}
 
-	mgr.cache.Remove(p.Pretty())
+	mgr.cache.Remove(p)
 	// Attempt transactional KV deletion.
 	for i := 0; i < mgr.writeRetries; i++ {
 		if err = mgr.dbDelete(keys); err == nil {
@@ -169,8 +169,7 @@ func (mgr *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Durati
 		return err
 	}
 
-	mgr.cache.Remove(p.Pretty())
-
+	mgr.cache.Remove(p)
 	// Attempt transactional KV insertion.
 	var existed []bool
 	for i := 0; i < mgr.writeRetries; i++ {
@@ -256,7 +255,7 @@ func (mgr *dsAddrBook) dbInsert(keys []ds.Key, addrs []ma.Multiaddr, ttl time.Du
 // UpdateAddrs will update any addresses for a given peer and TTL combination to
 // have a new TTL.
 func (mgr *dsAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.Duration) {
-	mgr.cache.Remove(p.Pretty())
+	mgr.cache.Remove(p)
 
 	var err error
 	for i := 0; i < mgr.writeRetries; i++ {
@@ -322,14 +321,14 @@ func (mgr *dsAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
 	)
 
 	// Check the cache and return the entry only if it hasn't expired; if expired, remove.
-	if e, ok := mgr.cache.Get(p.Pretty()); ok {
+	if e, ok := mgr.cache.Get(p); ok {
 		entry := e.(cacheEntry)
 		if entry.expiration.After(time.Now()) {
 			addrs := make([]ma.Multiaddr, len(entry.addrs))
 			copy(addrs, entry.addrs)
 			return addrs
 		} else {
-			mgr.cache.Remove(p.Pretty())
+			mgr.cache.Remove(p)
 		}
 	}
 
@@ -360,7 +359,7 @@ func (mgr *dsAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
 	addrsCpy := make([]ma.Multiaddr, len(addrs))
 	copy(addrsCpy, addrs)
 	entry := cacheEntry{addrs: addrsCpy, expiration: earliestExp}
-	mgr.cache.Add(p.Pretty(), entry)
+	mgr.cache.Add(p, entry)
 
 	return addrs
 }
@@ -417,8 +416,8 @@ func (mgr *dsAddrBook) ClearAddrs(p peer.ID) {
 		deleteFn func() error
 	)
 
-	if e, ok := mgr.cache.Peek(p.Pretty()); ok {
-		mgr.cache.Remove(p.Pretty())
+	if e, ok := mgr.cache.Peek(p); ok {
+		mgr.cache.Remove(p)
 		keys, _, _ := keysAndAddrs(p, e.(cacheEntry).addrs)
 		deleteFn = func() error {
 			return mgr.dbDelete(keys)
