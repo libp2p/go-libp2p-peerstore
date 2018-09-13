@@ -445,17 +445,19 @@ func (mgr *dsAddrBook) ClearAddrs(p peer.ID) {
 
 // dbDelete transactionally deletes the provided keys.
 func (mgr *dsAddrBook) dbDelete(keys []ds.Key) error {
+	var err error
+
 	txn := mgr.ds.NewTransaction(false)
 	defer txn.Discard()
 
 	for _, key := range keys {
-		if err := txn.Delete(key); err != nil {
+		if err = txn.Delete(key); err != nil {
 			log.Errorf("failed to delete key: %s, cause: %v", key.String(), err)
 			return err
 		}
 	}
 
-	if err := txn.Commit(); err != nil {
+	if err = txn.Commit(); err != nil {
 		log.Errorf("failed to commit transaction when deleting keys, cause: %v", err)
 		return err
 	}
@@ -477,9 +479,10 @@ func (mgr *dsAddrBook) dbDeleteIter(prefix ds.Key) ([]ds.Key, error) {
 		return nil, err
 	}
 
-	var keys []ds.Key
+	var keys = make([]ds.Key, 0, 4) // cap: 4 to reduce allocs
+	var key ds.Key
 	for result := range results.Next() {
-		key := ds.RawKey(result.Key)
+		key = ds.RawKey(result.Key)
 		keys = append(keys, key)
 
 		if err = txn.Delete(key); err != nil {
@@ -488,7 +491,7 @@ func (mgr *dsAddrBook) dbDeleteIter(prefix ds.Key) ([]ds.Key, error) {
 		}
 	}
 
-	if err := results.Close(); err != nil {
+	if err = results.Close(); err != nil {
 		log.Errorf("failed to close cursor, cause: %v", err)
 		return nil, err
 	}
