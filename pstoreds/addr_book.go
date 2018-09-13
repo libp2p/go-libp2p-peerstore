@@ -55,7 +55,7 @@ type cacheEntry struct {
 // NewAddrBook initializes a new address book given a
 // Datastore instance, a context for managing the TTL manager,
 // and the interval at which the TTL manager should sweep the Datastore.
-func NewAddrBook(ctx context.Context, store ds.TxnDatastore, opts PeerstoreOpts) (*dsAddrBook, error) {
+func NewAddrBook(ctx context.Context, store ds.TxnDatastore, opts Options) (*dsAddrBook, error) {
 	if _, ok := store.(ds.TTLDatastore); !ok {
 		return nil, ErrTTLDatastore
 	}
@@ -184,13 +184,12 @@ func (mgr *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Durati
 		return err
 	}
 
-	// Successful. Update cache and broadcast event.
+	// Update was successful, so broadcast event only for new addresses.
 	for i, _ := range keys {
 		if !existed[i] {
 			mgr.subsManager.BroadcastAddr(p, addrs[i])
 		}
 	}
-
 	return nil
 }
 
@@ -392,7 +391,8 @@ func (mgr *dsAddrBook) PeersWithAddrs() peer.IDSlice {
 		return peer.IDSlice{}
 	}
 
-	ids, i := make(peer.IDSlice, len(idset)), 0
+	ids := make(peer.IDSlice, len(idset))
+	i := 0
 	for id := range idset {
 		pid, _ := peer.IDB58Decode(id)
 		ids[i] = pid

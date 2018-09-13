@@ -154,25 +154,25 @@ func testUpdateTTLs(m pstore.AddrBook) func(t *testing.T) {
 			testHas(t, addrs2, m.Addrs(ids[1]))
 
 			// Will only affect addrs1[0].
-			m.UpdateAddrs(ids[0], time.Hour, time.Second)
+			m.UpdateAddrs(ids[0], time.Hour, 100*time.Microsecond)
 
 			// No immediate effect.
 			testHas(t, addrs1, m.Addrs(ids[0]))
 			testHas(t, addrs2, m.Addrs(ids[1]))
 
 			// After a wait, addrs[0] is gone.
-			time.Sleep(3000 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 			testHas(t, addrs1[1:2], m.Addrs(ids[0]))
 			testHas(t, addrs2, m.Addrs(ids[1]))
 
 			// Will only affect addrs2[0].
-			m.UpdateAddrs(ids[1], time.Hour, time.Second)
+			m.UpdateAddrs(ids[1], time.Hour, 100*time.Microsecond)
 
 			// No immediate effect.
 			testHas(t, addrs1[1:2], m.Addrs(ids[0]))
 			testHas(t, addrs2, m.Addrs(ids[1]))
 
-			time.Sleep(3000 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 
 			// First addrs is gone in both.
 			testHas(t, addrs1[1:], m.Addrs(ids[0]))
@@ -209,28 +209,28 @@ func testAddressesExpire(m pstore.AddrBook) func(t *testing.T) {
 		testHas(t, addrs1, m.Addrs(ids[0]))
 		testHas(t, addrs2, m.Addrs(ids[1]))
 
-		m.SetAddr(ids[0], addrs1[0], time.Millisecond)
-		<-time.After(time.Millisecond * 5)
+		m.SetAddr(ids[0], addrs1[0], 100*time.Microsecond)
+		<-time.After(100 * time.Millisecond)
 		testHas(t, addrs1[1:3], m.Addrs(ids[0]))
 		testHas(t, addrs2, m.Addrs(ids[1]))
 
-		m.SetAddr(ids[0], addrs1[2], time.Millisecond)
-		<-time.After(time.Millisecond * 5)
+		m.SetAddr(ids[0], addrs1[2], 100*time.Microsecond)
+		<-time.After(100 * time.Millisecond)
 		testHas(t, addrs1[1:2], m.Addrs(ids[0]))
 		testHas(t, addrs2, m.Addrs(ids[1]))
 
-		m.SetAddr(ids[1], addrs2[0], time.Millisecond)
-		<-time.After(time.Millisecond * 5)
+		m.SetAddr(ids[1], addrs2[0], 100*time.Microsecond)
+		<-time.After(100 * time.Millisecond)
 		testHas(t, addrs1[1:2], m.Addrs(ids[0]))
 		testHas(t, addrs2[1:], m.Addrs(ids[1]))
 
-		m.SetAddr(ids[1], addrs2[1], time.Millisecond)
-		<-time.After(time.Millisecond * 5)
+		m.SetAddr(ids[1], addrs2[1], 100*time.Microsecond)
+		<-time.After(100 * time.Millisecond)
 		testHas(t, addrs1[1:2], m.Addrs(ids[0]))
 		testHas(t, nil, m.Addrs(ids[1]))
 
-		m.SetAddr(ids[0], addrs1[1], time.Millisecond)
-		<-time.After(time.Millisecond * 5)
+		m.SetAddr(ids[0], addrs1[1], 100*time.Microsecond)
+		<-time.After(100 * time.Millisecond)
 		testHas(t, nil, m.Addrs(ids[0]))
 		testHas(t, nil, m.Addrs(ids[1]))
 	}
