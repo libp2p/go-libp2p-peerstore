@@ -424,8 +424,7 @@ func (mgr *dsAddrBook) ClearAddrs(p peer.ID) {
 		}
 	} else {
 		deleteFn = func() error {
-			_, err := mgr.dbDeleteIter(prefix)
-			return err
+			return mgr.dbDeleteIter(prefix)
 		}
 	}
 
@@ -466,7 +465,7 @@ func (mgr *dsAddrBook) dbDelete(keys []ds.Key) error {
 
 // dbDeleteIter removes all entries whose keys are prefixed with the argument.
 // it returns a slice of the removed keys in case it's needed
-func (mgr *dsAddrBook) dbDeleteIter(prefix ds.Key) ([]ds.Key, error) {
+func (mgr *dsAddrBook) dbDeleteIter(prefix ds.Key) error {
 	q := query.Query{Prefix: prefix.String(), KeysOnly: true}
 
 	txn := mgr.ds.NewTransaction(false)
@@ -475,7 +474,7 @@ func (mgr *dsAddrBook) dbDeleteIter(prefix ds.Key) ([]ds.Key, error) {
 	results, err := txn.Query(q)
 	if err != nil {
 		log.Errorf("failed to fetch all keys prefixed with: %s, cause: %v", prefix.String(), err)
-		return nil, err
+		return err
 	}
 
 	var keys = make([]ds.Key, 0, 4) // cap: 4 to reduce allocs
@@ -486,19 +485,19 @@ func (mgr *dsAddrBook) dbDeleteIter(prefix ds.Key) ([]ds.Key, error) {
 
 		if err = txn.Delete(key); err != nil {
 			log.Errorf("failed to delete key: %s, cause: %v", key.String(), err)
-			return nil, err
+			return err
 		}
 	}
 
 	if err = results.Close(); err != nil {
 		log.Errorf("failed to close cursor, cause: %v", err)
-		return nil, err
+		return err
 	}
 
 	if err = txn.Commit(); err != nil {
 		log.Errorf("failed to commit transaction when deleting keys, cause: %v", err)
-		return nil, err
+		return err
 	}
 
-	return keys, nil
+	return nil
 }
