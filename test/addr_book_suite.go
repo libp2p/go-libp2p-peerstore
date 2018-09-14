@@ -93,6 +93,20 @@ func testAddAddress(ab pstore.AddrBook) func(*testing.T) {
 
 			testHas(t, addrs, ab.Addrs(id))
 		})
+
+		t.Run("adding an existing address with a later expiration extends its ttl", func(t *testing.T) {
+			id := generatePeerIds(1)[0]
+			addrs := generateAddrs(3)
+
+			ab.AddAddrs(id, addrs, time.Second)
+
+			// same address as before but with a higher TTL
+			ab.AddAddrs(id, addrs[2:], time.Hour)
+
+			// after the initial TTL has expired, check that only the third address is present.
+			time.Sleep(1200 * time.Millisecond)
+			testHas(t, addrs[2:], ab.Addrs(id))
+		})
 	}
 }
 

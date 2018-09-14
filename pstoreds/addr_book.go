@@ -223,7 +223,7 @@ func (mgr *dsAddrBook) dbInsert(keys []ds.Key, addrs []ma.Multiaddr, ttl time.Du
 				err = ttltxn.SetTTL(key, ttl)
 			case ttlExtend:
 				var curr time.Time
-				if curr, err = ttltxn.GetExpiration(key); err != nil && exp.After(curr) {
+				if curr, err = ttltxn.GetExpiration(key); err == nil && exp.After(curr) {
 					err = ttltxn.SetTTL(key, ttl)
 				}
 			}
