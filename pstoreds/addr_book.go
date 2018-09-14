@@ -17,36 +17,43 @@ import (
 	pstoremem "github.com/libp2p/go-libp2p-peerstore/pstoremem"
 )
 
-var log = logging.Logger("peerstore/ds")
-
-// Number of times to retry transactional writes
-var dsWriteRetries = 5
+var (
+	log = logging.Logger("peerstore/ds")
+)
 
 var _ pstore.AddrBook = (*dsAddrBook)(nil)
 
 // dsAddrBook is an address book backed by a Datastore with both an
 // in-memory TTL manager and an in-memory address stream manager.
 type dsAddrBook struct {
-	cache       *lru.ARCCache
-	ds          ds.Batching
-	ttlManager  *ttlmanager
-	subsManager *pstoremem.AddrSubManager
+	cache        cache
+	ds           ds.TxnDatastore
+	ttlManager   *ttlManager
+	subsManager  *pstoremem.AddrSubManager
+	writeRetries int
 }
 
 // NewAddrBook initializes a new address book given a
 // Datastore instance, a context for managing the TTL manager,
 // and the interval at which the TTL manager should sweep the Datastore.
-func NewAddrBook(ctx context.Context, ds ds.Batching, ttlInterval time.Duration) (*dsAddrBook, error) {
-	cache, err := lru.NewARC(1024)
-	if err != nil {
-		return nil, err
+func NewAddrBook(ctx context.Context, ds ds.TxnDatastore, opts Options) (*dsAddrBook, error) {
+	var (
+		cache cache = &noopCache{}
+		err   error
+	)
+
+	if opts.CacheSize > 0 {
+		if cache, err = lru.NewARC(int(opts.CacheSize)); err != nil {
+			return nil, err
+		}
 	}
 
 	mgr := &dsAddrBook{
-		cache:       cache,
-		ds:          ds,
-		ttlManager:  newTTLManager(ctx, ds, cache, ttlInterval),
-		subsManager: pstoremem.NewAddrSubManager(),
+		cache:        cache,
+		ds:           ds,
+		ttlManager:   newTTLManager(ctx, ds, &cache, opts.TTLInterval),
+		subsManager:  pstoremem.NewAddrSubManager(),
+		writeRetries: int(opts.WriteRetries),
 	}
 	return mgr, nil
 }
@@ -56,17 +63,29 @@ func (mgr *dsAddrBook) Stop() {
 	mgr.ttlManager.cancel()
 }
 
-func peerAddressKey(p *peer.ID, addr *ma.Multiaddr) (ds.Key, error) {
-	hash, err := mh.Sum((*addr).Bytes(), mh.MURMUR3, -1)
-	if err != nil {
-		return ds.Key{}, nil
-	}
-	return ds.NewKey(peer.IDB58Encode(*p)).ChildString(hash.B58String()), nil
-}
+func keysAndAddrs(p peer.ID, addrs []ma.Multiaddr) ([]ds.Key, []ma.Multiaddr, error) {
+	var (
+		keys      = make([]ds.Key, len(addrs))
+		clean     = make([]ma.Multiaddr, len(addrs))
+		parentKey = ds.NewKey(peer.IDB58Encode(p))
+		i         = 0
+	)
 
-func peerIDFromKey(key ds.Key) (peer.ID, error) {
-	idstring := key.Parent().Name()
-	return peer.IDB58Decode(idstring)
+	for _, addr := range addrs {
+		if addr == nil {
+			continue
+		}
+
+		hash, err := mh.Sum((addr).Bytes(), mh.MURMUR3, -1)
+		if err != nil {
+			return nil, nil, err
+		}
+		keys[i] = parentKey.ChildString(hash.B58String())
+		clean[i] = addr
+		i++
+	}
+
+	return keys[:i], clean[:i], nil
 }
 
 // AddAddr will add a new address if it's not already in the AddrBook.
@@ -79,141 +98,208 @@ func (mgr *dsAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Durati
 	if ttl <= 0 {
 		return
 	}
-
-	mgr.setAddrs(p, addrs, ttl, true)
+	mgr.setAddrs(p, addrs, ttl, false)
 }
 
 // SetAddr will add or update the TTL of an address in the AddrBook.
 func (mgr *dsAddrBook) SetAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) {
-	mgr.SetAddrs(p, []ma.Multiaddr{addr}, ttl)
+	addrs := []ma.Multiaddr{addr}
+	mgr.SetAddrs(p, addrs, ttl)
 }
 
 // SetAddrs will add or update the TTLs of addresses in the AddrBook.
 func (mgr *dsAddrBook) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
-	mgr.setAddrs(p, addrs, ttl, false)
-}
-
-func (mgr *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration, add bool) {
-	for i := 0; i < dsWriteRetries; i++ {
-		// keys to add to the TTL manager
-		var keys []ds.Key
-		batch, err := mgr.ds.Batch()
-		if err != nil {
-			log.Error(err)
-			return
-		}
-
-		for _, addr := range addrs {
-			if addr == nil {
-				continue
-			}
-
-			key, err := peerAddressKey(&p, &addr)
-			if err != nil {
-				log.Error(err)
-				continue
-			}
-			keys = append(keys, key)
-
-			if ttl <= 0 {
-				if err := batch.Delete(key); err != nil {
-					log.Error(err)
-				} else {
-					mgr.cache.Remove(key)
-				}
-				continue
-			}
-
-			has := mgr.cache.Contains(key)
-			if !has {
-				has, err = mgr.ds.Has(key)
-			}
-			if err != nil || !has {
-				mgr.subsManager.BroadcastAddr(p, addr)
-			}
-
-			// Allows us to support AddAddr and SetAddr in one function
-			if !has {
-				if err := batch.Put(key, addr.Bytes()); err != nil {
-					log.Error(err)
-				} else {
-					mgr.cache.Add(key, addr.Bytes())
-				}
-			}
-		}
-		if err := batch.Commit(); err != nil {
-			log.Errorf("failed to write addresses for peer %s: %s\n", p.Pretty(), err)
-			continue
-		}
-		mgr.ttlManager.setTTLs(keys, ttl, add)
+	if ttl <= 0 {
+		mgr.deleteAddrs(p, addrs)
 		return
 	}
-	log.Errorf("failed to avoid write conflict for peer %s after %d retries\n", p.Pretty(), dsWriteRetries)
+	mgr.setAddrs(p, addrs, ttl, true)
+}
+
+func (mgr *dsAddrBook) deleteAddrs(p peer.ID, addrs []ma.Multiaddr) error {
+	// Keys and cleaned up addresses.
+	keys, addrs, err := keysAndAddrs(p, addrs)
+	if err != nil {
+		return err
+	}
+
+	mgr.cache.Remove(p.Pretty())
+	// Attempt transactional KV deletion.
+	for i := 0; i < mgr.writeRetries; i++ {
+		if err = mgr.dbDelete(keys); err == nil {
+			break
+		}
+		log.Errorf("failed to delete addresses for peer %s: %s\n", p.Pretty(), err)
+	}
+
+	if err != nil {
+		log.Errorf("failed to avoid write conflict for peer %s after %d retries: %v\n", p.Pretty(), mgr.writeRetries, err)
+		return err
+	}
+
+	mgr.ttlManager.deleteTTLs(keys)
+	return nil
+}
+
+func (mgr *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration, ttlReset bool) error {
+	// Keys and cleaned up addresses.
+	keys, addrs, err := keysAndAddrs(p, addrs)
+	if err != nil {
+		return err
+	}
+
+	mgr.cache.Remove(p.Pretty())
+	// Attempt transactional KV insertion.
+	var existed []bool
+	for i := 0; i < mgr.writeRetries; i++ {
+		if existed, err = mgr.dbInsert(keys, addrs); err == nil {
+			break
+		}
+		log.Errorf("failed to write addresses for peer %s: %s\n", p.Pretty(), err)
+	}
+
+	if err != nil {
+		log.Errorf("failed to avoid write conflict for peer %s after %d retries: %v\n", p.Pretty(), mgr.writeRetries, err)
+		return err
+	}
+
+	// Update was successful, so broadcast event only for new addresses.
+	for i, _ := range keys {
+		if !existed[i] {
+			mgr.subsManager.BroadcastAddr(p, addrs[i])
+		}
+	}
+
+	// Force update TTLs only if TTL reset was requested; otherwise
+	// insert the appropriate TTL entries if they don't already exist.
+	if ttlReset {
+		mgr.ttlManager.setTTLs(keys, ttl)
+	} else {
+		mgr.ttlManager.insertOrExtendTTLs(keys, ttl)
+	}
+
+	return nil
+}
+
+// dbInsert performs a transactional insert of the provided keys and values.
+func (mgr *dsAddrBook) dbInsert(keys []ds.Key, addrs []ma.Multiaddr) ([]bool, error) {
+	var (
+		err     error
+		existed = make([]bool, len(keys))
+	)
+
+	txn := mgr.ds.NewTransaction(false)
+	defer txn.Discard()
+
+	for i, key := range keys {
+		// Check if the key existed previously.
+		if existed[i], err = txn.Has(key); err != nil {
+			log.Errorf("transaction failed and aborted while checking key existence: %s, cause: %v", key.String(), err)
+			return nil, err
+		}
+
+		// The key embeds a hash of the value, so if it existed, we can safely skip the insert.
+		if existed[i] {
+			continue
+		}
+
+		// Attempt to add the key.
+		if err = txn.Put(key, addrs[i].Bytes()); err != nil {
+			log.Errorf("transaction failed and aborted while setting key: %s, cause: %v", key.String(), err)
+			return nil, err
+		}
+	}
+
+	if err = txn.Commit(); err != nil {
+		log.Errorf("failed to commit transaction when setting keys, cause: %v", err)
+		return nil, err
+	}
+
+	return existed, nil
 }
 
 // UpdateAddrs will update any addresses for a given peer and TTL combination to
 // have a new TTL.
 func (mgr *dsAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.Duration) {
 	prefix := ds.NewKey(p.Pretty())
-	mgr.ttlManager.updateTTLs(prefix, oldTTL, newTTL)
+	mgr.ttlManager.adjustTTLs(prefix, oldTTL, newTTL)
 }
 
-// Addrs Returns all of the non-expired addresses for a given peer.
+// Addrs returns all of the non-expired addresses for a given peer.
 func (mgr *dsAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
-	prefix := ds.NewKey(p.Pretty())
-	q := query.Query{Prefix: prefix.String(), KeysOnly: true}
-	results, err := mgr.ds.Query(q)
-	if err != nil {
+	var (
+		prefix  = ds.NewKey(p.Pretty())
+		q       = query.Query{Prefix: prefix.String(), KeysOnly: false}
+		results query.Results
+		err     error
+	)
+
+	// Check the cache.
+	if entry, ok := mgr.cache.Get(p.Pretty()); ok {
+		e := entry.([]ma.Multiaddr)
+		addrs := make([]ma.Multiaddr, len(e))
+		copy(addrs, e)
+		return addrs
+	}
+
+	txn := mgr.ds.NewTransaction(true)
+	defer txn.Discard()
+
+	if results, err = txn.Query(q); err != nil {
 		log.Error(err)
 		return nil
 	}
+	defer results.Close()
 
 	var addrs []ma.Multiaddr
 	for result := range results.Next() {
-		key := ds.RawKey(result.Key)
-		var addri interface{}
-		addri, ok := mgr.cache.Get(key)
-		if !ok {
-			addri, err = mgr.ds.Get(key)
-			if err != nil {
-				log.Error(err)
-				continue
-			}
+		if addr, err := ma.NewMultiaddrBytes(result.Value); err == nil {
+			addrs = append(addrs, addr)
 		}
-		addrbytes := addri.([]byte)
-		addr, err := ma.NewMultiaddrBytes(addrbytes)
-		if err != nil {
-			log.Error(err)
-			continue
-		}
-		addrs = append(addrs, addr)
 	}
+
+	// Store a copy in the cache.
+	addrsCpy := make([]ma.Multiaddr, len(addrs))
+	copy(addrsCpy, addrs)
+	mgr.cache.Add(p.Pretty(), addrsCpy)
 
 	return addrs
 }
 
 // Peers returns all of the peer IDs for which the AddrBook has addresses.
 func (mgr *dsAddrBook) PeersWithAddrs() peer.IDSlice {
-	q := query.Query{KeysOnly: true}
-	results, err := mgr.ds.Query(q)
-	if err != nil {
+	var (
+		q       = query.Query{KeysOnly: true}
+		results query.Results
+		err     error
+	)
+
+	txn := mgr.ds.NewTransaction(true)
+	defer txn.Discard()
+
+	if results, err = txn.Query(q); err != nil {
 		log.Error(err)
 		return peer.IDSlice{}
 	}
 
-	idset := make(map[peer.ID]struct{})
+	defer results.Close()
+
+	idset := make(map[string]struct{})
 	for result := range results.Next() {
 		key := ds.RawKey(result.Key)
-		id, err := peerIDFromKey(key)
-		if err != nil {
-			continue
-		}
-		idset[id] = struct{}{}
+		idset[key.Parent().Name()] = struct{}{}
 	}
 
-	ids := make(peer.IDSlice, 0, len(idset))
+	if len(idset) == 0 {
+		return peer.IDSlice{}
+	}
+
+	ids := make(peer.IDSlice, len(idset))
+	i := 0
 	for id := range idset {
-		ids = append(ids, id)
+		pid, _ := peer.IDB58Decode(id)
+		ids[i] = pid
+		i++
 	}
 	return ids
 }
@@ -227,70 +313,128 @@ func (mgr *dsAddrBook) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Mult
 
 // ClearAddrs will delete all known addresses for a peer ID.
 func (mgr *dsAddrBook) ClearAddrs(p peer.ID) {
-	prefix := ds.NewKey(p.Pretty())
-	for i := 0; i < dsWriteRetries; i++ {
-		q := query.Query{Prefix: prefix.String(), KeysOnly: true}
-		results, err := mgr.ds.Query(q)
-		if err != nil {
-			log.Error(err)
-			return
-		}
-		batch, err := mgr.ds.Batch()
-		if err != nil {
-			log.Error(err)
-			return
-		}
+	var (
+		err      error
+		prefix   = ds.NewKey(p.Pretty())
+		deleteFn func() error
+	)
 
-		for result := range results.Next() {
-			key := ds.NewKey(result.Key)
-			err := batch.Delete(key)
-			if err != nil {
-				// From inspectin badger, errors here signify a problem with
-				// the transaction as a whole, so we can log and abort.
-				log.Error(err)
-				return
-			}
-			mgr.cache.Remove(key)
+	if e, ok := mgr.cache.Peek(p.Pretty()); ok {
+		mgr.cache.Remove(p.Pretty())
+		keys, _, _ := keysAndAddrs(p, e.([]ma.Multiaddr))
+		deleteFn = func() error {
+			return mgr.dbDelete(keys)
 		}
-		if err = batch.Commit(); err != nil {
-			log.Errorf("failed to clear addresses for peer %s: %s\n", p.Pretty(), err)
-			continue
+	} else {
+		deleteFn = func() error {
+			_, err := mgr.dbDeleteIter(prefix)
+			return err
 		}
-		mgr.ttlManager.clear(ds.NewKey(p.Pretty()))
-		return
 	}
-	log.Errorf("failed to clear addresses for peer %s after %d attempts\n", p.Pretty(), dsWriteRetries)
+
+	// Attempt transactional KV deletion.
+	for i := 0; i < mgr.writeRetries; i++ {
+		if err = deleteFn(); err == nil {
+			break
+		}
+		log.Errorf("failed to clear addresses for peer %s: %s\n", p.Pretty(), err)
+	}
+
+	if err != nil {
+		log.Errorf("failed to clear addresses for peer %s after %d attempts\n", p.Pretty(), mgr.writeRetries)
+	}
+
+	// Perform housekeeping.
+	mgr.ttlManager.clear(prefix)
 }
 
-type ttlentry struct {
+// dbDelete transactionally deletes the provided keys.
+func (mgr *dsAddrBook) dbDelete(keys []ds.Key) error {
+	txn := mgr.ds.NewTransaction(false)
+	defer txn.Discard()
+
+	for _, key := range keys {
+		if err := txn.Delete(key); err != nil {
+			log.Errorf("failed to delete key: %s, cause: %v", key.String(), err)
+			return err
+		}
+	}
+
+	if err := txn.Commit(); err != nil {
+		log.Errorf("failed to commit transaction when deleting keys, cause: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+// dbDeleteIter removes all entries whose keys are prefixed with the argument.
+// it returns a slice of the removed keys in case it's needed
+func (mgr *dsAddrBook) dbDeleteIter(prefix ds.Key) ([]ds.Key, error) {
+	q := query.Query{Prefix: prefix.String(), KeysOnly: true}
+
+	txn := mgr.ds.NewTransaction(false)
+	defer txn.Discard()
+
+	results, err := txn.Query(q)
+	if err != nil {
+		log.Errorf("failed to fetch all keys prefixed with: %s, cause: %v", prefix.String(), err)
+		return nil, err
+	}
+
+	var keys []ds.Key
+	for result := range results.Next() {
+		key := ds.RawKey(result.Key)
+		keys = append(keys, key)
+
+		if err = txn.Delete(key); err != nil {
+			log.Errorf("failed to delete key: %s, cause: %v", key.String(), err)
+			return nil, err
+		}
+	}
+
+	if err := results.Close(); err != nil {
+		log.Errorf("failed to close cursor, cause: %v", err)
+		return nil, err
+	}
+
+	if err = txn.Commit(); err != nil {
+		log.Errorf("failed to commit transaction when deleting keys, cause: %v", err)
+		return nil, err
+	}
+
+	return keys, nil
+}
+
+type ttlEntry struct {
 	TTL       time.Duration
 	ExpiresAt time.Time
 }
 
-type ttlmanager struct {
+type ttlManager struct {
 	sync.RWMutex
-	entries map[ds.Key]*ttlentry
+	entries map[ds.Key]*ttlEntry
 
 	ctx    context.Context
 	cancel context.CancelFunc
 	ticker *time.Ticker
-	ds     ds.Batching
-	cache  *lru.ARCCache
+	ds     ds.TxnDatastore
+	cache  cache
 }
 
-func newTTLManager(parent context.Context, d ds.Datastore, c *lru.ARCCache, tick time.Duration) *ttlmanager {
+func newTTLManager(parent context.Context, d ds.Datastore, c *cache, tick time.Duration) *ttlManager {
 	ctx, cancel := context.WithCancel(parent)
-	batching, ok := d.(ds.Batching)
+	txnDs, ok := d.(ds.TxnDatastore)
 	if !ok {
-		panic("must construct ttlmanager with batching datastore")
+		panic("must construct ttlManager with transactional datastore")
 	}
-	mgr := &ttlmanager{
-		entries: make(map[ds.Key]*ttlentry),
+	mgr := &ttlManager{
+		entries: make(map[ds.Key]*ttlEntry),
 		ctx:     ctx,
 		cancel:  cancel,
 		ticker:  time.NewTicker(tick),
-		ds:      batching,
-		cache:   c,
+		ds:      txnDs,
+		cache:   *c,
 	}
 
 	go func() {
@@ -309,57 +453,72 @@ func newTTLManager(parent context.Context, d ds.Datastore, c *lru.ARCCache, tick
 }
 
 // To be called by TTL manager's coroutine only.
-func (mgr *ttlmanager) tick() {
+func (mgr *ttlManager) tick() {
 	mgr.Lock()
 	defer mgr.Unlock()
 
 	now := time.Now()
-	batch, err := mgr.ds.Batch()
-	if err != nil {
-		log.Error(err)
+	var toDel []ds.Key
+	for key, entry := range mgr.entries {
+		if entry.ExpiresAt.After(now) {
+			continue
+		}
+		toDel = append(toDel, key)
+	}
+
+	if len(toDel) == 0 {
 		return
 	}
-	for key, entry := range mgr.entries {
-		if entry.ExpiresAt.Before(now) {
-			if err := batch.Delete(key); err != nil {
-				log.Error(err)
-			} else {
-				mgr.cache.Remove(key)
-			}
-			delete(mgr.entries, key)
+
+	txn := mgr.ds.NewTransaction(false)
+	defer txn.Discard()
+
+	for _, key := range toDel {
+		if err := txn.Delete(key); err != nil {
+			log.Error("failed to delete TTL key: %v, cause: %v", key.String(), err)
+			break
 		}
+		mgr.cache.Remove(key.Parent().Name())
+		delete(mgr.entries, key)
 	}
-	err = batch.Commit()
-	if err != nil {
-		log.Error(err)
+
+	if err := txn.Commit(); err != nil {
+		log.Error("failed to commit TTL deletion, cause: %v", err)
 	}
 }
 
-func (mgr *ttlmanager) setTTLs(keys []ds.Key, ttl time.Duration, add bool) {
+func (mgr *ttlManager) deleteTTLs(keys []ds.Key) {
+	mgr.Lock()
+	defer mgr.Unlock()
+
+	for _, key := range keys {
+		delete(mgr.entries, key)
+	}
+}
+
+func (mgr *ttlManager) insertOrExtendTTLs(keys []ds.Key, ttl time.Duration) {
 	mgr.Lock()
 	defer mgr.Unlock()
 
 	expiration := time.Now().Add(ttl)
 	for _, key := range keys {
-		update := true
-		if add {
-			if entry, ok := mgr.entries[key]; ok {
-				if entry.ExpiresAt.After(expiration) {
-					update = false
-				}
-			}
-		}
-		if update {
-			if ttl <= 0 {
-				delete(mgr.entries, key)
-			} else {
-				mgr.entries[key] = &ttlentry{TTL: ttl, ExpiresAt: expiration}
-			}
+		if entry, ok := mgr.entries[key]; !ok || (ok && entry.ExpiresAt.Before(expiration)) {
+			mgr.entries[key] = &ttlEntry{TTL: ttl, ExpiresAt: expiration}
 		}
 	}
 }
 
-func (mgr *ttlmanager) updateTTLs(prefix ds.Key, oldTTL, newTTL time.Duration) {
+func (mgr *ttlManager) setTTLs(keys []ds.Key, ttl time.Duration) {
+	mgr.Lock()
+	defer mgr.Unlock()
+
+	expiration := time.Now().Add(ttl)
+	for _, key := range keys {
+		mgr.entries[key] = &ttlEntry{TTL: ttl, ExpiresAt: expiration}
+	}
+}
+
+func (mgr *ttlManager) adjustTTLs(prefix ds.Key, oldTTL, newTTL time.Duration) {
 	mgr.Lock()
 	defer mgr.Unlock()
 
@@ -374,7 +533,7 @@ func (mgr *ttlmanager) updateTTLs(prefix ds.Key, oldTTL, newTTL time.Duration) {
 	}
 }
 
-func (mgr *ttlmanager) clear(prefix ds.Key) {
+func (mgr *ttlManager) clear(prefix ds.Key) {
 	mgr.Lock()
 	defer mgr.Unlock()
 

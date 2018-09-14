@@ -18,6 +18,8 @@ var addressBookSuite = map[string]func(book pstore.AddrBook) func(*testing.T){
 	"UpdateTTLs":           testUpdateTTLs,
 	"NilAddrsDontBreak":    testNilAddrsDontBreak,
 	"AddressesExpire":      testAddressesExpire,
+	"ClearWithIter":        testClearWithIterator,
+	"PeersWithAddresses":   testPeersWithAddrs,
 }
 
 type AddrBookFactory func() (pstore.AddrBook, func())
@@ -152,25 +154,25 @@ func testUpdateTTLs(m pstore.AddrBook) func(t *testing.T) {
 			testHas(t, addrs2, m.Addrs(ids[1]))
 
 			// Will only affect addrs1[0].
-			m.UpdateAddrs(ids[0], time.Hour, time.Second)
+			m.UpdateAddrs(ids[0], time.Hour, 100*time.Microsecond)
 
 			// No immediate effect.
 			testHas(t, addrs1, m.Addrs(ids[0]))
 			testHas(t, addrs2, m.Addrs(ids[1]))
 
 			// After a wait, addrs[0] is gone.
-			time.Sleep(1200 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 			testHas(t, addrs1[1:2], m.Addrs(ids[0]))
 			testHas(t, addrs2, m.Addrs(ids[1]))
 
 			// Will only affect addrs2[0].
-			m.UpdateAddrs(ids[1], time.Hour, time.Second)
+			m.UpdateAddrs(ids[1], time.Hour, 100*time.Microsecond)
 
 			// No immediate effect.
 			testHas(t, addrs1[1:2], m.Addrs(ids[0]))
 			testHas(t, addrs2, m.Addrs(ids[1]))
 
-			time.Sleep(1200 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 
 			// First addrs is gone in both.
 			testHas(t, addrs1[1:], m.Addrs(ids[0]))
@@ -207,30 +209,83 @@ func testAddressesExpire(m pstore.AddrBook) func(t *testing.T) {
 		testHas(t, addrs1, m.Addrs(ids[0]))
 		testHas(t, addrs2, m.Addrs(ids[1]))
 
-		m.SetAddr(ids[0], addrs1[0], time.Millisecond)
-		<-time.After(time.Millisecond * 5)
+		m.SetAddr(ids[0], addrs1[0], 100*time.Microsecond)
+		<-time.After(100 * time.Millisecond)
 		testHas(t, addrs1[1:3], m.Addrs(ids[0]))
 		testHas(t, addrs2, m.Addrs(ids[1]))
 
-		m.SetAddr(ids[0], addrs1[2], time.Millisecond)
-		<-time.After(time.Millisecond * 5)
+		m.SetAddr(ids[0], addrs1[2], 100*time.Microsecond)
+		<-time.After(100 * time.Millisecond)
 		testHas(t, addrs1[1:2], m.Addrs(ids[0]))
 		testHas(t, addrs2, m.Addrs(ids[1]))
 
-		m.SetAddr(ids[1], addrs2[0], time.Millisecond)
-		<-time.After(time.Millisecond * 5)
+		m.SetAddr(ids[1], addrs2[0], 100*time.Microsecond)
+		<-time.After(100 * time.Millisecond)
 		testHas(t, addrs1[1:2], m.Addrs(ids[0]))
 		testHas(t, addrs2[1:], m.Addrs(ids[1]))
 
-		m.SetAddr(ids[1], addrs2[1], time.Millisecond)
-		<-time.After(time.Millisecond * 5)
+		m.SetAddr(ids[1], addrs2[1], 100*time.Microsecond)
+		<-time.After(100 * time.Millisecond)
 		testHas(t, addrs1[1:2], m.Addrs(ids[0]))
 		testHas(t, nil, m.Addrs(ids[1]))
 
-		m.SetAddr(ids[0], addrs1[1], time.Millisecond)
-		<-time.After(time.Millisecond * 5)
+		m.SetAddr(ids[0], addrs1[1], 100*time.Microsecond)
+		<-time.After(100 * time.Millisecond)
 		testHas(t, nil, m.Addrs(ids[0]))
 		testHas(t, nil, m.Addrs(ids[1]))
+	}
+}
+
+func testClearWithIterator(m pstore.AddrBook) func(t *testing.T) {
+	return func(t *testing.T) {
+		ids := generatePeerIds(2)
+		addrs := generateAddrs(100)
+
+		// Add the peers with 50 addresses each.
+		m.AddAddrs(ids[0], addrs[:50], pstore.PermanentAddrTTL)
+		m.AddAddrs(ids[1], addrs[50:], pstore.PermanentAddrTTL)
+
+		if all := append(m.Addrs(ids[0]), m.Addrs(ids[1])...); len(all) != 100 {
+			t.Fatal("expected pstore to contain both peers with all their maddrs")
+		}
+
+		// Since we don't fetch these peers, they won't be present in cache.
+
+		m.ClearAddrs(ids[0])
+		if all := append(m.Addrs(ids[0]), m.Addrs(ids[1])...); len(all) != 50 {
+			t.Fatal("expected pstore to contain only addrs of peer 2")
+		}
+
+		m.ClearAddrs(ids[1])
+		if all := append(m.Addrs(ids[0]), m.Addrs(ids[1])...); len(all) != 0 {
+			t.Fatal("expected pstore to contain no addresses")
+		}
+	}
+}
+
+func testPeersWithAddrs(m pstore.AddrBook) func(t *testing.T) {
+	return func(t *testing.T) {
+		// cannot run in parallel as the store is modified.
+		// go runs sequentially in the specified order
+		// see https://blog.golang.org/subtests
+
+		t.Run("empty addrbook", func(t *testing.T) {
+			if peers := m.PeersWithAddrs(); len(peers) != 0 {
+				t.Fatal("expected to find no peers")
+			}
+		})
+
+		t.Run("non-empty addrbook", func(t *testing.T) {
+			ids := generatePeerIds(2)
+			addrs := generateAddrs(10)
+
+			m.AddAddrs(ids[0], addrs[:5], pstore.PermanentAddrTTL)
+			m.AddAddrs(ids[1], addrs[5:], pstore.PermanentAddrTTL)
+
+			if peers := m.PeersWithAddrs(); len(peers) != 2 {
+				t.Fatal("expected to find 2 peers")
+			}
+		})
 	}
 }
 

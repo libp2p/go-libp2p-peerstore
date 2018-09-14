@@ -28,5 +28,5 @@ func TestInMemoryKeyBook(t *testing.T) {
 func BenchmarkInMemoryPeerstore(b *testing.B) {
 	pt.BenchmarkPeerstore(b, func() (pstore.Peerstore, func()) {
 		return NewPeerstore(), nil
-	})
+	}, "InMem")
 }

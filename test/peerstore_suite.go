@@ -15,7 +15,7 @@ import (
 	pstore "github.com/libp2p/go-libp2p-peerstore"
 )
 
-var peerstoreSuite = map[string]func(book pstore.Peerstore) func(*testing.T){
+var peerstoreSuite = map[string]func(pstore.Peerstore) func(*testing.T){
 	"AddrStream":               testAddrStream,
 	"GetStreamBeforePeerAdded": testGetStreamBeforePeerAdded,
 	"AddStreamDuplicates":      testAddrStreamDuplicates,
@@ -37,16 +37,6 @@ func TestPeerstore(t *testing.T, factory PeerstoreFactory) {
 		if closeFunc != nil {
 			closeFunc()
 		}
-	}
-}
-
-func BenchmarkPeerstore(b *testing.B, factory PeerstoreFactory) {
-	ps, closeFunc := factory()
-
-	b.Run("Peerstore", benchmarkPeerstore(ps))
-
-	if closeFunc != nil {
-		closeFunc()
 	}
 }
 
@@ -286,22 +276,6 @@ func testBasicPeerstore(ps pstore.Peerstore) func(t *testing.T) {
 		if !pinfo.Addrs[0].Equal(addrs[0]) {
 			t.Fatal("stored wrong address")
 		}
-	}
-}
-
-func benchmarkPeerstore(ps pstore.Peerstore) func(*testing.B) {
-	return func(b *testing.B) {
-		addrs := make(chan *peerpair, 100)
-
-		ctx, cancel := context.WithCancel(context.Background())
-		go addressProducer(ctx, b, addrs)
-
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			pp := <-addrs
-			ps.AddAddr(pp.ID, pp.Addr, pstore.PermanentAddrTTL)
-		}
-		cancel()
 	}
 }
 
