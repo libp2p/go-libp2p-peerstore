@@ -80,11 +80,6 @@ func NewAddrBook(ctx context.Context, store ds.TxnDatastore, opts Options) (*dsA
 	return mgr, nil
 }
 
-// Stop will signal the TTL manager to stop and block until it returns.
-func (mgr *dsAddrBook) Stop() {
-	// noop
-}
-
 func keysAndAddrs(p peer.ID, addrs []ma.Multiaddr) ([]ds.Key, []ma.Multiaddr, error) {
 	var (
 		keys      = make([]ds.Key, len(addrs))
