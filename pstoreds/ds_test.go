@@ -172,9 +172,9 @@ func badgerStore(t testing.TB) (ds.TxnDatastore, func()) {
 
 func peerstoreFactory(tb testing.TB, opts Options) pt.PeerstoreFactory {
 	return func() (pstore.Peerstore, func()) {
-		ds, closeFunc := badgerStore(tb)
+		store, closeFunc := badgerStore(tb)
 
-		ps, err := NewPeerstore(context.Background(), ds, opts)
+		ps, err := NewPeerstore(context.Background(), store, opts)
 		if err != nil {
 			tb.Fatal(err)
 		}
@@ -185,17 +185,13 @@ func peerstoreFactory(tb testing.TB, opts Options) pt.PeerstoreFactory {
 
 func addressBookFactory(tb testing.TB, opts Options) pt.AddrBookFactory {
 	return func() (pstore.AddrBook, func()) {
-		ds, closeDB := badgerStore(tb)
+		store, closeFunc := badgerStore(tb)
 
-		mgr, err := NewAddrBook(context.Background(), ds, opts)
+		ab, err := NewAddrBook(context.Background(), store, opts)
 		if err != nil {
 			tb.Fatal(err)
 		}
 
-		closeFunc := func() {
-			mgr.Stop()
-			closeDB()
-		}
-		return mgr, closeFunc
+		return ab, closeFunc
 	}
 }

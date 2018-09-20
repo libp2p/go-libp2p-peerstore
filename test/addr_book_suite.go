@@ -93,6 +93,20 @@ func testAddAddress(ab pstore.AddrBook) func(*testing.T) {
 
 			testHas(t, addrs, ab.Addrs(id))
 		})
+
+		t.Run("adding an existing address with a later expiration extends its ttl", func(t *testing.T) {
+			id := generatePeerIds(1)[0]
+			addrs := generateAddrs(3)
+
+			ab.AddAddrs(id, addrs, time.Second)
+
+			// same address as before but with a higher TTL
+			ab.AddAddrs(id, addrs[2:], time.Hour)
+
+			// after the initial TTL has expired, check that only the third address is present.
+			time.Sleep(1200 * time.Millisecond)
+			testHas(t, addrs[2:], ab.Addrs(id))
+		})
 	}
 }
 
@@ -154,25 +168,27 @@ func testUpdateTTLs(m pstore.AddrBook) func(t *testing.T) {
 			testHas(t, addrs2, m.Addrs(ids[1]))
 
 			// Will only affect addrs1[0].
-			m.UpdateAddrs(ids[0], time.Hour, 100*time.Microsecond)
+			// Badger does not support subsecond TTLs.
+			// https://github.com/dgraph-io/badger/issues/339
+			m.UpdateAddrs(ids[0], time.Hour, 1*time.Second)
 
 			// No immediate effect.
 			testHas(t, addrs1, m.Addrs(ids[0]))
 			testHas(t, addrs2, m.Addrs(ids[1]))
 
 			// After a wait, addrs[0] is gone.
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(1500 * time.Millisecond)
 			testHas(t, addrs1[1:2], m.Addrs(ids[0]))
 			testHas(t, addrs2, m.Addrs(ids[1]))
 
 			// Will only affect addrs2[0].
-			m.UpdateAddrs(ids[1], time.Hour, 100*time.Microsecond)
+			m.UpdateAddrs(ids[1], time.Hour, 1*time.Second)
 
 			// No immediate effect.
 			testHas(t, addrs1[1:2], m.Addrs(ids[0]))
 			testHas(t, addrs2, m.Addrs(ids[1]))
 
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(1500 * time.Millisecond)
 
 			// First addrs is gone in both.
 			testHas(t, addrs1[1:], m.Addrs(ids[0]))
