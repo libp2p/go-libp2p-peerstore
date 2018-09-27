@@ -23,7 +23,7 @@ func BenchmarkBaselineBadgerDatastorePutEntry(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		txn := bds.NewTransaction(false)
+		txn, _ := bds.NewTransaction(false)
 
 		key := ds.RawKey(fmt.Sprintf("/key/%d", i))
 		txn.Put(key, []byte(fmt.Sprintf("/value/%d", i)))
@@ -37,7 +37,7 @@ func BenchmarkBaselineBadgerDatastoreGetEntry(b *testing.B) {
 	bds, closer := badgerStore(b)
 	defer closer()
 
-	txn := bds.NewTransaction(false)
+	txn, _ := bds.NewTransaction(false)
 	keys := make([]ds.Key, 1000)
 	for i := 0; i < 1000; i++ {
 		key := ds.RawKey(fmt.Sprintf("/key/%d", i))
@@ -50,7 +50,7 @@ func BenchmarkBaselineBadgerDatastoreGetEntry(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		txn := bds.NewTransaction(true)
+		txn, _ := bds.NewTransaction(true)
 		if _, err := txn.Get(keys[i%1000]); err != nil {
 			b.Fatal(err)
 		}

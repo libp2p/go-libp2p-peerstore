@@ -57,14 +57,14 @@
     },
     {
       "author": "magik6k",
-      "hash": "QmaUU1Hu8pbR2NiTJ1NHVBcNTQR499AJVMkkAoRqhdxbgz",
+      "hash": "Qmd1Zxnuj9puWCPS7DV1YVw1RM478NqyZmf1X5nsgjp6fQ",
       "name": "go-ds-badger",
-      "version": "1.8.0"
+      "version": "1.9.0"
     },
     {
-      "hash": "QmUyz7JTJzgegC6tiJrfby3mPhzcdswVtG4x58TQ6pq8jV",
+      "hash": "QmbQshXLNcCPRUGZv4sBGxnZNAHREA6MKeomkwihNXPZWP",
       "name": "go-datastore",
-      "version": "3.2.0"
+      "version": "3.3.0"
     },
     {
       "hash": "QmQjMHF8ptRgx4E57UFMiT4YM6kqaJeYxZ1MCDX23aw4rK",
@@ -77,6 +77,6 @@
   "license": "MIT",
   "name": "go-libp2p-peerstore",
   "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
-  "version": "2.0.1"
+  "version": "2.0.2"
 }
 
