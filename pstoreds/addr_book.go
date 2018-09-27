@@ -213,7 +213,10 @@ func (mgr *dsAddrBook) dbInsert(keys []ds.Key, addrs []ma.Multiaddr, ttl time.Du
 		exp     = time.Now().Add(ttl)
 	)
 
-	txn := mgr.ds.NewTransaction(false)
+	txn, err := mgr.ds.NewTransaction(false)
+	if err != nil {
+		return nil, err
+	}
 	defer txn.Discard()
 
 	ttltxn := txn.(ds.TTLDatastore)
@@ -290,7 +293,10 @@ func (mgr *dsAddrBook) dbUpdateTTL(p peer.ID, oldTTL time.Duration, newTTL time.
 		err     error
 	)
 
-	txn := mgr.ds.NewTransaction(false)
+	txn, err := mgr.ds.NewTransaction(false)
+	if err != nil {
+		return err
+	}
 	defer txn.Discard()
 
 	if results, err = txn.Query(q); err != nil {
@@ -342,7 +348,10 @@ func (mgr *dsAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
 		}
 	}
 
-	txn := mgr.ds.NewTransaction(true)
+	txn, err := mgr.ds.NewTransaction(true)
+	if err != nil {
+		return nil
+	}
 	defer txn.Discard()
 
 	if results, err = txn.Query(q); err != nil {
@@ -382,7 +391,11 @@ func (mgr *dsAddrBook) PeersWithAddrs() peer.IDSlice {
 		err     error
 	)
 
-	txn := mgr.ds.NewTransaction(true)
+	txn, err := mgr.ds.NewTransaction(true)
+	if err != nil {
+		log.Error(err)
+		return peer.IDSlice{}
+	}
 	defer txn.Discard()
 
 	if results, err = txn.Query(q); err != nil {
@@ -456,7 +469,10 @@ func (mgr *dsAddrBook) ClearAddrs(p peer.ID) {
 func (mgr *dsAddrBook) dbDelete(keys []ds.Key) error {
 	var err error
 
-	txn := mgr.ds.NewTransaction(false)
+	txn, err := mgr.ds.NewTransaction(false)
+	if err != nil {
+		return err
+	}
 	defer txn.Discard()
 
 	for _, key := range keys {
@@ -479,7 +495,10 @@ func (mgr *dsAddrBook) dbDelete(keys []ds.Key) error {
 func (mgr *dsAddrBook) dbDeleteIter(prefix ds.Key) error {
 	q := query.Query{Prefix: prefix.String(), KeysOnly: true}
 
-	txn := mgr.ds.NewTransaction(false)
+	txn, err := mgr.ds.NewTransaction(false)
+	if err != nil {
+		return err
+	}
 	defer txn.Discard()
 
 	results, err := txn.Query(q)
