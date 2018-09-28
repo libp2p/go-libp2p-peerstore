@@ -67,13 +67,13 @@ func uniquePeerIds(ds ds.TxnDatastore, prefix ds.Key, extractor func(result quer
 
 	txn, err := ds.NewTransaction(true)
 	if err != nil {
-		return peer.IDSlice{}, err
+		return nil, err
 	}
 	defer txn.Discard()
 
 	if results, err = txn.Query(q); err != nil {
 		log.Error(err)
-		return peer.IDSlice{}, err
+		return nil, err
 	}
 
 	defer results.Close()
@@ -82,8 +82,6 @@ func uniquePeerIds(ds ds.TxnDatastore, prefix ds.Key, extractor func(result quer
 	for result := range results.Next() {
 		k := extractor(result)
 		idset[k] = struct{}{}
-		//key := ds.RawKey(result.Key)
-		//idset[key.Parent().Name()] = struct{}{}
 	}
 
 	if len(idset) == 0 {
