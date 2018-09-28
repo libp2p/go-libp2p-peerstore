@@ -5,9 +5,9 @@ import (
 	"time"
 
 	ds "github.com/ipfs/go-datastore"
-	"github.com/ipfs/go-datastore/query"
-	"github.com/libp2p/go-libp2p-peer"
+	query "github.com/ipfs/go-datastore/query"
 
+	peer "github.com/libp2p/go-libp2p-peer"
 	pstore "github.com/libp2p/go-libp2p-peerstore"
 )
 
