@@ -143,6 +143,10 @@ func TestBadgerDsAddrBook(t *testing.T) {
 	})
 }
 
+func TestBadgerDsKeyBook(t *testing.T) {
+	pt.TestKeyBook(t, keyBookFactory(t, DefaultOpts()))
+}
+
 func BenchmarkBadgerDsPeerstore(b *testing.B) {
 	caching := DefaultOpts()
 	caching.CacheSize = 1024
@@ -159,15 +163,15 @@ func badgerStore(t testing.TB) (ds.TxnDatastore, func()) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ds, err := badger.NewDatastore(dataPath, nil)
+	store, err := badger.NewDatastore(dataPath, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	closer := func() {
-		ds.Close()
+		store.Close()
 		os.RemoveAll(dataPath)
 	}
-	return ds, closer
+	return store, closer
 }
 
 func peerstoreFactory(tb testing.TB, opts Options) pt.PeerstoreFactory {
@@ -193,5 +197,13 @@ func addressBookFactory(tb testing.TB, opts Options) pt.AddrBookFactory {
 		}
 
 		return ab, closeFunc
+	}
+}
+
+func keyBookFactory(tb testing.TB, opts Options) pt.KeyBookFactory {
+	return func() (pstore.KeyBook, func()) {
+		store, closeFunc := badgerStore(tb)
+		kb, _ := NewKeyBook(context.Background(), store, opts)
+		return kb, closeFunc
 	}
 }

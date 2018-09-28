@@ -5,9 +5,10 @@ import (
 	"time"
 
 	ds "github.com/ipfs/go-datastore"
+	"github.com/ipfs/go-datastore/query"
+	"github.com/libp2p/go-libp2p-peer"
 
 	pstore "github.com/libp2p/go-libp2p-peerstore"
-	pstoremem "github.com/libp2p/go-libp2p-peerstore/pstoremem"
 )
 
 // Configuration object for the peerstore.
@@ -42,6 +43,59 @@ func NewPeerstore(ctx context.Context, store ds.TxnDatastore, opts Options) (pst
 		return nil, err
 	}
 
-	ps := pstore.NewPeerstore(pstoremem.NewKeyBook(), addrBook, pstoremem.NewPeerMetadata())
+	keyBook, err := NewKeyBook(ctx, store, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	peerMetadata, err := NewPeerMetadata(ctx, store, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	ps := pstore.NewPeerstore(keyBook, addrBook, peerMetadata)
 	return ps, nil
+}
+
+// uniquePeerIds extracts and returns unique peer IDs from database keys.
+func uniquePeerIds(ds ds.TxnDatastore, prefix ds.Key, extractor func(result query.Result) string) (peer.IDSlice, error) {
+	var (
+		q       = query.Query{Prefix: prefix.String(), KeysOnly: true}
+		results query.Results
+		err     error
+	)
+
+	txn, err := ds.NewTransaction(true)
+	if err != nil {
+		return peer.IDSlice{}, err
+	}
+	defer txn.Discard()
+
+	if results, err = txn.Query(q); err != nil {
+		log.Error(err)
+		return peer.IDSlice{}, err
+	}
+
+	defer results.Close()
+
+	idset := make(map[string]struct{})
+	for result := range results.Next() {
+		k := extractor(result)
+		idset[k] = struct{}{}
+		//key := ds.RawKey(result.Key)
+		//idset[key.Parent().Name()] = struct{}{}
+	}
+
+	if len(idset) == 0 {
+		return peer.IDSlice{}, nil
+	}
+
+	ids := make(peer.IDSlice, len(idset))
+	i := 0
+	for id := range idset {
+		pid, _ := peer.IDB58Decode(id)
+		ids[i] = pid
+		i++
+	}
+	return ids, nil
 }

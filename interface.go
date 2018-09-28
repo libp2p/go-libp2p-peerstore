@@ -68,6 +68,13 @@ type Peerstore interface {
 	Peers() peer.IDSlice
 }
 
+// PeerMetadata can handle values of any type. Serializing values is
+// up to the implementation. Dynamic type introspection may not be
+// supported, in which case explicitly enlisting types in the
+// serializer may be required.
+//
+// Refer to the docs of the underlying implementation for more
+// information.
 type PeerMetadata interface {
 	// Get/Put is a simple registry for other peer-related key/value pairs.
 	// if we find something we use often, it should become its own set of
