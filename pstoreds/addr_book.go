@@ -7,13 +7,15 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
+
 	ds "github.com/ipfs/go-datastore"
 	query "github.com/ipfs/go-datastore/query"
 	logging "github.com/ipfs/go-log"
-	peer "github.com/libp2p/go-libp2p-peer"
+
 	ma "github.com/multiformats/go-multiaddr"
 	mh "github.com/multiformats/go-multihash"
 
+	peer "github.com/libp2p/go-libp2p-peer"
 	pstore "github.com/libp2p/go-libp2p-peerstore"
 	pstoremem "github.com/libp2p/go-libp2p-peerstore/pstoremem"
 )
@@ -27,6 +29,10 @@ var (
 
 	ErrTTLDatastore = errors.New("datastore must provide TTL support")
 )
+
+// Peer addresses are stored under the following db key pattern:
+// /peers/addr/<b58 of peer id>/<hash of maddr>
+var abBase = ds.NewKey("/peers/addrs")
 
 var _ pstore.AddrBook = (*dsAddrBook)(nil)
 
@@ -101,7 +107,7 @@ func keysAndAddrs(p peer.ID, addrs []ma.Multiaddr) ([]ds.Key, []ma.Multiaddr, er
 	var (
 		keys      = make([]ds.Key, len(addrs))
 		clean     = make([]ma.Multiaddr, len(addrs))
-		parentKey = ds.NewKey(peer.IDB58Encode(p))
+		parentKey = abBase.ChildString(peer.IDB58Encode(p))
 		i         = 0
 	)
 
@@ -287,7 +293,7 @@ func (mgr *dsAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.
 
 func (mgr *dsAddrBook) dbUpdateTTL(p peer.ID, oldTTL time.Duration, newTTL time.Duration) error {
 	var (
-		prefix  = ds.NewKey(p.Pretty())
+		prefix  = abBase.ChildString(peer.IDB58Encode(p))
 		q       = query.Query{Prefix: prefix.String(), KeysOnly: false}
 		results query.Results
 		err     error
@@ -330,7 +336,7 @@ func (mgr *dsAddrBook) dbUpdateTTL(p peer.ID, oldTTL time.Duration, newTTL time.
 // Addrs returns all of the non-expired addresses for a given peer.
 func (mgr *dsAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
 	var (
-		prefix  = ds.NewKey(p.Pretty())
+		prefix  = abBase.ChildString(peer.IDB58Encode(p))
 		q       = query.Query{Prefix: prefix.String(), KeysOnly: false, ReturnExpirations: true}
 		results query.Results
 		err     error
@@ -385,42 +391,11 @@ func (mgr *dsAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
 
 // Peers returns all of the peer IDs for which the AddrBook has addresses.
 func (mgr *dsAddrBook) PeersWithAddrs() peer.IDSlice {
-	var (
-		q       = query.Query{KeysOnly: true}
-		results query.Results
-		err     error
-	)
-
-	txn, err := mgr.ds.NewTransaction(true)
+	ids, err := uniquePeerIds(mgr.ds, abBase, func(result query.Result) string {
+		return ds.RawKey(result.Key).Parent().Name()
+	})
 	if err != nil {
-		log.Error(err)
-		return peer.IDSlice{}
-	}
-	defer txn.Discard()
-
-	if results, err = txn.Query(q); err != nil {
-		log.Error(err)
-		return peer.IDSlice{}
-	}
-
-	defer results.Close()
-
-	idset := make(map[string]struct{})
-	for result := range results.Next() {
-		key := ds.RawKey(result.Key)
-		idset[key.Parent().Name()] = struct{}{}
-	}
-
-	if len(idset) == 0 {
-		return peer.IDSlice{}
-	}
-
-	ids := make(peer.IDSlice, len(idset))
-	i := 0
-	for id := range idset {
-		pid, _ := peer.IDB58Decode(id)
-		ids[i] = pid
-		i++
+		log.Errorf("error while retrieving peers with addresses: %v", err)
 	}
 	return ids
 }
@@ -436,7 +411,7 @@ func (mgr *dsAddrBook) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Mult
 func (mgr *dsAddrBook) ClearAddrs(p peer.ID) {
 	var (
 		err      error
-		prefix   = ds.NewKey(p.Pretty())
+		prefix   = abBase.ChildString(peer.IDB58Encode(p))
 		deleteFn func() error
 	)
 

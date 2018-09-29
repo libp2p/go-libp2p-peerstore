@@ -10,10 +10,11 @@ import (
 type memoryPeerMetadata struct {
 	// store other data, like versions
 	//ds ds.ThreadSafeDatastore
-	// TODO: use a datastore for this
 	ds     map[string]interface{}
 	dslock sync.Mutex
 }
+
+var _ pstore.PeerMetadata = (*memoryPeerMetadata)(nil)
 
 func NewPeerMetadata() pstore.PeerMetadata {
 	return &memoryPeerMetadata{
