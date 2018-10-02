@@ -26,21 +26,19 @@ func (e *expiringAddr) ExpiredBy(t time.Time) bool {
 	return t.After(e.Expires)
 }
 
-type addrSlice []expiringAddr
-
 var _ pstore.AddrBook = (*memoryAddrBook)(nil)
 
 // memoryAddrBook manages addresses.
 type memoryAddrBook struct {
 	addrmu sync.Mutex
-	addrs  map[peer.ID]addrSlice
+	addrs  map[peer.ID]map[string]expiringAddr
 
 	subManager *AddrSubManager
 }
 
 func NewAddrBook() pstore.AddrBook {
 	return &memoryAddrBook{
-		addrs:      make(map[peer.ID]addrSlice),
+		addrs:      make(map[peer.ID]map[string]expiringAddr),
 		subManager: NewAddrSubManager(),
 	}
 }
@@ -76,20 +74,17 @@ func (mab *memoryAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 		return
 	}
 
-	oldAddrs := mab.addrs[p]
-	amap := make(map[string]expiringAddr, len(oldAddrs))
-	for _, ea := range oldAddrs {
-		amap[string(ea.Addr.Bytes())] = ea
+	amap := mab.addrs[p]
+	if amap == nil {
+		amap = make(map[string]expiringAddr, len(addrs))
+		mab.addrs[p] = amap
 	}
-
-	// only expand ttls
 	exp := time.Now().Add(ttl)
 	for _, addr := range addrs {
 		if addr == nil {
 			log.Warningf("was passed nil multiaddr for %s", p)
 			continue
 		}
-
 		addrstr := string(addr.Bytes())
 		a, found := amap[addrstr]
 		if !found || exp.After(a.Expires) {
@@ -98,11 +93,6 @@ func (mab *memoryAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 			mab.subManager.BroadcastAddr(p, addr)
 		}
 	}
-	newAddrs := make([]expiringAddr, 0, len(amap))
-	for _, ea := range amap {
-		newAddrs = append(newAddrs, ea)
-	}
-	mab.addrs[p] = newAddrs
 }
 
 // SetAddr calls mgr.SetAddrs(p, addr, ttl)
@@ -116,10 +106,10 @@ func (mab *memoryAddrBook) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 	mab.addrmu.Lock()
 	defer mab.addrmu.Unlock()
 
-	oldAddrs := mab.addrs[p]
-	amap := make(map[string]expiringAddr, len(oldAddrs))
-	for _, ea := range oldAddrs {
-		amap[string(ea.Addr.Bytes())] = ea
+	amap := mab.addrs[p]
+	if amap == nil {
+		amap = make(map[string]expiringAddr, len(addrs))
+		mab.addrs[p] = amap
 	}
 
 	exp := time.Now().Add(ttl)
@@ -129,21 +119,16 @@ func (mab *memoryAddrBook) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 			continue
 		}
 		// re-set all of them for new ttl.
-		addrs := string(addr.Bytes())
+		addrstr := string(addr.Bytes())
 
 		if ttl > 0 {
-			amap[addrs] = expiringAddr{Addr: addr, Expires: exp, TTL: ttl}
+			amap[addrstr] = expiringAddr{Addr: addr, Expires: exp, TTL: ttl}
 
 			mab.subManager.BroadcastAddr(p, addr)
 		} else {
-			delete(amap, addrs)
+			delete(amap, addrstr)
 		}
 	}
-	newAddrs := make([]expiringAddr, 0, len(amap))
-	for _, ea := range amap {
-		newAddrs = append(newAddrs, ea)
-	}
-	mab.addrs[p] = newAddrs
 }
 
 // UpdateAddrs updates the addresses associated with the given peer that have
@@ -156,16 +141,17 @@ func (mab *memoryAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL t
 		return
 	}
 
-	addrs, found := mab.addrs[p]
+	amap, found := mab.addrs[p]
 	if !found {
 		return
 	}
 
 	exp := time.Now().Add(newTTL)
-	for i := range addrs {
-		if aexp := &addrs[i]; oldTTL == aexp.TTL {
-			aexp.TTL = newTTL
-			aexp.Expires = exp
+	for k, addr := range amap {
+		if oldTTL == addr.TTL {
+			addr.TTL = newTTL
+			addr.Expires = exp
+			amap[k] = addr
 		}
 	}
 }
@@ -180,27 +166,21 @@ func (mab *memoryAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
 		return nil
 	}
 
-	maddrs, found := mab.addrs[p]
+	amap, found := mab.addrs[p]
 	if !found {
 		return nil
 	}
 
 	now := time.Now()
-	good := make([]ma.Multiaddr, 0, len(maddrs))
-	cleaned := make([]expiringAddr, 0, len(maddrs))
-	for _, m := range maddrs {
+	good := make([]ma.Multiaddr, 0, len(amap))
+	for k, m := range amap {
 		if !m.ExpiredBy(now) {
-			cleaned = append(cleaned, m)
 			good = append(good, m.Addr)
+		} else {
+			delete(amap, k)
 		}
 	}
 
-	// clean up the expired ones.
-	if len(cleaned) == 0 {
-		delete(mab.addrs, p)
-	} else {
-		mab.addrs[p] = cleaned
-	}
 	return good
 }
 
