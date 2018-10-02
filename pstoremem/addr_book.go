@@ -33,6 +33,8 @@ type memoryAddrBook struct {
 	addrmu sync.Mutex
 	addrs  map[peer.ID]map[string]expiringAddr
 
+	nextGC time.Time
+
 	subManager *AddrSubManager
 }
 
@@ -43,12 +45,27 @@ func NewAddrBook() pstore.AddrBook {
 	}
 }
 
+func (mab *memoryAddrBook) gc() {
+	now := time.Now()
+	if !now.After(mab.nextGC) {
+		return
+	}
+	for p, amap := range mab.addrs {
+		for k, addr := range amap {
+			if addr.ExpiredBy(now) {
+				delete(amap, k)
+			}
+		}
+		if len(amap) == 0 {
+			delete(mab.addrs, p)
+		}
+	}
+	mab.nextGC = time.Now().Add(pstore.AddressTTL)
+}
+
 func (mab *memoryAddrBook) PeersWithAddrs() peer.IDSlice {
 	mab.addrmu.Lock()
 	defer mab.addrmu.Unlock()
-	if mab.addrs == nil {
-		return nil
-	}
 
 	pids := make(peer.IDSlice, 0, len(mab.addrs))
 	for pid := range mab.addrs {
@@ -93,6 +110,7 @@ func (mab *memoryAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 			mab.subManager.BroadcastAddr(p, addr)
 		}
 	}
+	mab.gc()
 }
 
 // SetAddr calls mgr.SetAddrs(p, addr, ttl)
@@ -129,6 +147,7 @@ func (mab *memoryAddrBook) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 			delete(amap, addrstr)
 		}
 	}
+	mab.gc()
 }
 
 // UpdateAddrs updates the addresses associated with the given peer that have
@@ -136,10 +155,6 @@ func (mab *memoryAddrBook) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 func (mab *memoryAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.Duration) {
 	mab.addrmu.Lock()
 	defer mab.addrmu.Unlock()
-
-	if mab.addrs == nil {
-		return
-	}
 
 	amap, found := mab.addrs[p]
 	if !found {
@@ -154,17 +169,13 @@ func (mab *memoryAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL t
 			amap[k] = addr
 		}
 	}
+	mab.gc()
 }
 
 // Addresses returns all known (and valid) addresses for a given
 func (mab *memoryAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
 	mab.addrmu.Lock()
 	defer mab.addrmu.Unlock()
-
-	// not initialized? nothing to give.
-	if mab.addrs == nil {
-		return nil
-	}
 
 	amap, found := mab.addrs[p]
 	if !found {
