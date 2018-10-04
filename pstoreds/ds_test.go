@@ -2,170 +2,92 @@ package pstoreds
 
 import (
 	"context"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
 	"time"
 
-	bd "github.com/dgraph-io/badger"
-
 	ds "github.com/ipfs/go-datastore"
 	badger "github.com/ipfs/go-ds-badger"
+	leveldb "github.com/ipfs/go-ds-leveldb"
 
 	pstore "github.com/libp2p/go-libp2p-peerstore"
 	pt "github.com/libp2p/go-libp2p-peerstore/test"
 )
 
-func BenchmarkBaselineBadgerDatastorePutEntry(b *testing.B) {
-	bds, closer := badgerStore(b)
-	defer closer()
+type datastoreFactory func(tb testing.TB) (ds.TxnDatastore, func())
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		txn, _ := bds.NewTransaction(false)
+var dstores = map[string]datastoreFactory{
+	"Badger": badgerStore,
+	// TODO: Enable once go-ds-leveldb supports TTL via a shim.
+	// "Leveldb": leveldbStore,
+}
 
-		key := ds.RawKey(fmt.Sprintf("/key/%d", i))
-		txn.Put(key, []byte(fmt.Sprintf("/value/%d", i)))
-
-		txn.Commit()
-		txn.Discard()
+func TestDsPeerstore(t *testing.T) {
+	for name, dsFactory := range dstores {
+		t.Run(name, func(t *testing.T) {
+			pt.TestPeerstore(t, peerstoreFactory(t, dsFactory, DefaultOpts()))
+		})
 	}
 }
 
-func BenchmarkBaselineBadgerDatastoreGetEntry(b *testing.B) {
-	bds, closer := badgerStore(b)
-	defer closer()
+func TestDsAddrBook(t *testing.T) {
+	for name, dsFactory := range dstores {
+		t.Run(name, func(t *testing.T) {
+			t.Run("Cacheful", func(t *testing.T) {
+				t.Parallel()
 
-	txn, _ := bds.NewTransaction(false)
-	keys := make([]ds.Key, 1000)
-	for i := 0; i < 1000; i++ {
-		key := ds.RawKey(fmt.Sprintf("/key/%d", i))
-		txn.Put(key, []byte(fmt.Sprintf("/value/%d", i)))
-		keys[i] = key
-	}
-	if err := txn.Commit(); err != nil {
-		b.Fatal(err)
-	}
+				opts := DefaultOpts()
+				opts.TTLInterval = 100 * time.Microsecond
+				opts.CacheSize = 1024
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		txn, _ := bds.NewTransaction(true)
-		if _, err := txn.Get(keys[i%1000]); err != nil {
-			b.Fatal(err)
-		}
-		txn.Discard()
-	}
-}
+				pt.TestAddrBook(t, addressBookFactory(t, dsFactory, opts))
+			})
 
-func BenchmarkBaselineBadgerDirectPutEntry(b *testing.B) {
-	opts := bd.DefaultOptions
+			t.Run("Cacheless", func(t *testing.T) {
+				t.Parallel()
 
-	dataPath, err := ioutil.TempDir(os.TempDir(), "badger")
-	if err != nil {
-		b.Fatal(err)
-	}
+				opts := DefaultOpts()
+				opts.TTLInterval = 100 * time.Microsecond
+				opts.CacheSize = 0
 
-	opts.Dir = dataPath
-	opts.ValueDir = dataPath
-	opts.SyncWrites = false
-
-	db, err := bd.Open(opts)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	defer db.Close()
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		txn := db.NewTransaction(true)
-		txn.Set([]byte(fmt.Sprintf("/key/%d", i)), []byte(fmt.Sprintf("/value/%d", i)))
-		txn.Commit(nil)
+				pt.TestAddrBook(t, addressBookFactory(t, dsFactory, opts))
+			})
+		})
 	}
 }
 
-func BenchmarkBaselineBadgerDirectGetEntry(b *testing.B) {
-	opts := bd.DefaultOptions
-
-	dataPath, err := ioutil.TempDir(os.TempDir(), "badger")
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	opts.Dir = dataPath
-	opts.ValueDir = dataPath
-
-	db, err := bd.Open(opts)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	defer db.Close()
-
-	txn := db.NewTransaction(true)
-	for i := 0; i < 1000; i++ {
-		txn.Set([]byte(fmt.Sprintf("/key/%d", i)), []byte(fmt.Sprintf("/value/%d", i)))
-	}
-	txn.Commit(nil)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		txn := db.NewTransaction(false)
-		txn.Get([]byte(fmt.Sprintf("/key/%d", i%1000)))
-		txn.Discard()
+func TestDsKeyBook(t *testing.T) {
+	for name, dsFactory := range dstores {
+		t.Run(name, func(t *testing.T) {
+			pt.TestKeyBook(t, keyBookFactory(t, dsFactory, DefaultOpts()))
+		})
 	}
 }
 
-func TestBadgerDsPeerstore(t *testing.T) {
-	pt.TestPeerstore(t, peerstoreFactory(t, DefaultOpts()))
-}
-
-func TestBadgerDsAddrBook(t *testing.T) {
-	t.Run("Cacheful", func(t *testing.T) {
-		t.Parallel()
-
-		opts := DefaultOpts()
-		opts.TTLInterval = 100 * time.Microsecond
-		opts.CacheSize = 1024
-
-		pt.TestAddrBook(t, addressBookFactory(t, opts))
-	})
-
-	t.Run("Cacheless", func(t *testing.T) {
-		t.Parallel()
-
-		opts := DefaultOpts()
-		opts.TTLInterval = 100 * time.Microsecond
-		opts.CacheSize = 0
-
-		pt.TestAddrBook(t, addressBookFactory(t, opts))
-	})
-}
-
-func TestBadgerDsKeyBook(t *testing.T) {
-	pt.TestKeyBook(t, keyBookFactory(t, DefaultOpts()))
-}
-
-func BenchmarkBadgerDsPeerstore(b *testing.B) {
+func BenchmarkDsPeerstore(b *testing.B) {
 	caching := DefaultOpts()
 	caching.CacheSize = 1024
 
 	cacheless := DefaultOpts()
 	cacheless.CacheSize = 0
 
-	pt.BenchmarkPeerstore(b, peerstoreFactory(b, caching), "Caching")
-	pt.BenchmarkPeerstore(b, peerstoreFactory(b, cacheless), "Cacheless")
+	for name, dsFactory := range dstores {
+		b.Run(name, func(b *testing.B) {
+			pt.BenchmarkPeerstore(b, peerstoreFactory(b, dsFactory, caching), "Caching")
+			pt.BenchmarkPeerstore(b, peerstoreFactory(b, dsFactory, cacheless), "Cacheless")
+		})
+	}
 }
 
-func badgerStore(t testing.TB) (ds.TxnDatastore, func()) {
+func badgerStore(tb testing.TB) (ds.TxnDatastore, func()) {
 	dataPath, err := ioutil.TempDir(os.TempDir(), "badger")
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	store, err := badger.NewDatastore(dataPath, nil)
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	closer := func() {
 		store.Close()
@@ -174,9 +96,25 @@ func badgerStore(t testing.TB) (ds.TxnDatastore, func()) {
 	return store, closer
 }
 
-func peerstoreFactory(tb testing.TB, opts Options) pt.PeerstoreFactory {
+func leveldbStore(tb testing.TB) (ds.TxnDatastore, func()) {
+	dataPath, err := ioutil.TempDir(os.TempDir(), "leveldb")
+	if err != nil {
+		tb.Fatal(err)
+	}
+	store, err := leveldb.NewDatastore(dataPath, nil)
+	if err != nil {
+		tb.Fatal(err)
+	}
+	closer := func() {
+		store.Close()
+		os.RemoveAll(dataPath)
+	}
+	return store, closer
+}
+
+func peerstoreFactory(tb testing.TB, storeFactory datastoreFactory, opts Options) pt.PeerstoreFactory {
 	return func() (pstore.Peerstore, func()) {
-		store, closeFunc := badgerStore(tb)
+		store, closeFunc := storeFactory(tb)
 
 		ps, err := NewPeerstore(context.Background(), store, opts)
 		if err != nil {
@@ -187,9 +125,9 @@ func peerstoreFactory(tb testing.TB, opts Options) pt.PeerstoreFactory {
 	}
 }
 
-func addressBookFactory(tb testing.TB, opts Options) pt.AddrBookFactory {
+func addressBookFactory(tb testing.TB, storeFactory datastoreFactory, opts Options) pt.AddrBookFactory {
 	return func() (pstore.AddrBook, func()) {
-		store, closeFunc := badgerStore(tb)
+		store, closeFunc := storeFactory(tb)
 
 		ab, err := NewAddrBook(context.Background(), store, opts)
 		if err != nil {
@@ -200,10 +138,15 @@ func addressBookFactory(tb testing.TB, opts Options) pt.AddrBookFactory {
 	}
 }
 
-func keyBookFactory(tb testing.TB, opts Options) pt.KeyBookFactory {
+func keyBookFactory(tb testing.TB, storeFactory datastoreFactory, opts Options) pt.KeyBookFactory {
 	return func() (pstore.KeyBook, func()) {
-		store, closeFunc := badgerStore(tb)
-		kb, _ := NewKeyBook(context.Background(), store, opts)
+		store, closeFunc := storeFactory(tb)
+
+		kb, err := NewKeyBook(context.Background(), store, opts)
+		if err != nil {
+			tb.Fatal(err)
+		}
+
 		return kb, closeFunc
 	}
 }
