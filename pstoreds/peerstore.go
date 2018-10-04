@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	base32 "github.com/whyrusleeping/base32"
+
 	ds "github.com/ipfs/go-datastore"
 	query "github.com/ipfs/go-datastore/query"
 
@@ -91,8 +93,8 @@ func uniquePeerIds(ds ds.TxnDatastore, prefix ds.Key, extractor func(result quer
 	ids := make(peer.IDSlice, len(idset))
 	i := 0
 	for id := range idset {
-		pid, _ := peer.IDB58Decode(id)
-		ids[i] = pid
+		pid, _ := base32.RawStdEncoding.DecodeString(id)
+		ids[i], _ = peer.IDFromBytes(pid)
 		i++
 	}
 	return ids, nil

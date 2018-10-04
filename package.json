@@ -76,6 +76,12 @@
       "hash": "QmUQy76yspPa3fRyY3GzXFTg9n8JVwFru6ue3KFRt4MeTw",
       "name": "go-buffer-pool",
       "version": "0.1.1"
+    },
+    {
+      "author": "whyrusleeping",
+      "hash": "QmfVj3x4D6Jkq9SEoi5n2NmoUomLwoeiwnYz2KQa15wRw6",
+      "name": "base32",
+      "version": "0.0.2"
     }
   ],
   "gxVersion": "0.4.0",
