@@ -85,9 +85,9 @@
     },
     {
       "author": "whyrusleeping",
-      "hash": "QmcxDvw8NnJsfdEcfrypwHkLeVxZY2rT8iiWsUuBnw93gb",
+      "hash": "QmccqjKZUTqp4ikWNyAbjBuP5HEdqSqRuAr9mcEhYab54a",
       "name": "go-ds-leveldb",
-      "version": "1.2.0"
+      "version": "1.2.1"
     }
   ],
   "gxVersion": "0.4.0",
