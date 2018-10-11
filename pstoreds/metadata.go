@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/gob"
 
+	base32 "github.com/whyrusleeping/base32"
+
 	ds "github.com/ipfs/go-datastore"
 
 	pool "github.com/libp2p/go-buffer-pool"
@@ -13,7 +15,7 @@ import (
 )
 
 // Metadata is stored under the following db key pattern:
-// /peers/metadata/<b58 peer id>/<key>
+// /peers/metadata/<b32 peer id no padding>/<key>
 var pmBase = ds.NewKey("/peers/metadata")
 
 type dsPeerMetadata struct {
@@ -39,7 +41,7 @@ func NewPeerMetadata(_ context.Context, store ds.Datastore, _ Options) (pstore.P
 }
 
 func (pm *dsPeerMetadata) Get(p peer.ID, key string) (interface{}, error) {
-	k := pmBase.ChildString(peer.IDB58Encode(p)).ChildString(key)
+	k := pmBase.ChildString(base32.RawStdEncoding.EncodeToString([]byte(p))).ChildString(key)
 	value, err := pm.ds.Get(k)
 	if err != nil {
 		if err == ds.ErrNotFound {
@@ -56,7 +58,7 @@ func (pm *dsPeerMetadata) Get(p peer.ID, key string) (interface{}, error) {
 }
 
 func (pm *dsPeerMetadata) Put(p peer.ID, key string, val interface{}) error {
-	k := pmBase.ChildString(peer.IDB58Encode(p)).ChildString(key)
+	k := pmBase.ChildString(base32.RawStdEncoding.EncodeToString([]byte(p))).ChildString(key)
 	var buf pool.Buffer
 	if err := gob.NewEncoder(&buf).Encode(&val); err != nil {
 		return err

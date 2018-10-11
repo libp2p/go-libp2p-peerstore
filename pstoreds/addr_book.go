@@ -7,6 +7,7 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
+	base32 "github.com/whyrusleeping/base32"
 
 	ds "github.com/ipfs/go-datastore"
 	query "github.com/ipfs/go-datastore/query"
@@ -31,7 +32,7 @@ var (
 )
 
 // Peer addresses are stored under the following db key pattern:
-// /peers/addr/<b58 of peer id>/<hash of maddr>
+// /peers/addr/<b32 peer id no padding>/<hash of maddr>
 var abBase = ds.NewKey("/peers/addrs")
 
 var _ pstore.AddrBook = (*dsAddrBook)(nil)
@@ -107,7 +108,7 @@ func keysAndAddrs(p peer.ID, addrs []ma.Multiaddr) ([]ds.Key, []ma.Multiaddr, er
 	var (
 		keys      = make([]ds.Key, len(addrs))
 		clean     = make([]ma.Multiaddr, len(addrs))
-		parentKey = abBase.ChildString(peer.IDB58Encode(p))
+		parentKey = abBase.ChildString(base32.RawStdEncoding.EncodeToString([]byte(p)))
 		i         = 0
 	)
 
@@ -120,7 +121,7 @@ func keysAndAddrs(p peer.ID, addrs []ma.Multiaddr) ([]ds.Key, []ma.Multiaddr, er
 		if err != nil {
 			return nil, nil, err
 		}
-		keys[i] = parentKey.ChildString(hash.B58String())
+		keys[i] = parentKey.ChildString(base32.RawStdEncoding.EncodeToString(hash))
 		clean[i] = addr
 		i++
 	}
@@ -293,7 +294,7 @@ func (mgr *dsAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.
 
 func (mgr *dsAddrBook) dbUpdateTTL(p peer.ID, oldTTL time.Duration, newTTL time.Duration) error {
 	var (
-		prefix  = abBase.ChildString(peer.IDB58Encode(p))
+		prefix  = abBase.ChildString(base32.RawStdEncoding.EncodeToString([]byte(p)))
 		q       = query.Query{Prefix: prefix.String(), KeysOnly: false}
 		results query.Results
 		err     error
@@ -336,7 +337,7 @@ func (mgr *dsAddrBook) dbUpdateTTL(p peer.ID, oldTTL time.Duration, newTTL time.
 // Addrs returns all of the non-expired addresses for a given peer.
 func (mgr *dsAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
 	var (
-		prefix  = abBase.ChildString(peer.IDB58Encode(p))
+		prefix  = abBase.ChildString(base32.RawStdEncoding.EncodeToString([]byte(p)))
 		q       = query.Query{Prefix: prefix.String(), KeysOnly: false, ReturnExpirations: true}
 		results query.Results
 		err     error
@@ -411,7 +412,7 @@ func (mgr *dsAddrBook) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Mult
 func (mgr *dsAddrBook) ClearAddrs(p peer.ID) {
 	var (
 		err      error
-		prefix   = abBase.ChildString(peer.IDB58Encode(p))
+		prefix   = abBase.ChildString(base32.RawStdEncoding.EncodeToString([]byte(p)))
 		deleteFn func() error
 	)
 
