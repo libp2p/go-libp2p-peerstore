@@ -50,6 +50,10 @@ func testKeybookPrivKey(kb pstore.KeyBook) func(t *testing.T) {
 			t.Error(err)
 		}
 
+		if res := kb.PrivKey(id); res != nil {
+			t.Error("retrieving private key should have failed")
+		}
+
 		err = kb.AddPrivKey(id, priv)
 		if err != nil {
 			t.Error(err)
@@ -79,6 +83,10 @@ func testKeyBookPubKey(kb pstore.KeyBook) func(t *testing.T) {
 		id, err := peer.IDFromPublicKey(pub)
 		if err != nil {
 			t.Error(err)
+		}
+
+		if res := kb.PubKey(id); res != nil {
+			t.Error("retrieving public key should have failed")
 		}
 
 		err = kb.AddPubKey(id, pub)
