@@ -45,9 +45,9 @@
     },
     {
       "author": "whyrusleeping",
-      "hash": "QmbNepETomvmXfz1X5pHNFD2QuPqnqi47dTd94QJWSorQ3",
+      "hash": "QmTRhk7cgjUf2gfQ3p2M9KPECNZEW9XUrmHcFCgog4cPgB",
       "name": "go-libp2p-peer",
-      "version": "2.3.8"
+      "version": "2.4.0"
     },
     {
       "author": "multiformats",

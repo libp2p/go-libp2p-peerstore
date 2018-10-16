@@ -43,7 +43,11 @@ func (kb *dsKeyBook) PubKey(p peer.ID) ic.PubKey {
 		}
 	} else if err == ds.ErrNotFound {
 		pk, err = p.ExtractPublicKey()
-		if err != nil {
+		switch err {
+		case nil:
+		case peer.ErrNoPublicKey:
+			return nil
+		default:
 			log.Errorf("error when extracting pubkey from peer ID for peer %s: %s\n", p.Pretty(), err)
 			return nil
 		}
