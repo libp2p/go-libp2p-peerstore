@@ -30,3 +30,9 @@ func BenchmarkInMemoryPeerstore(b *testing.B) {
 		return NewPeerstore(), nil
 	}, "InMem")
 }
+
+func BenchmarkInMemoryKeyBook(b *testing.B) {
+	pt.BenchmarkKeyBook(b, func() (pstore.KeyBook, func()) {
+		return NewKeyBook(), nil
+	})
+}

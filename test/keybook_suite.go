@@ -161,3 +161,144 @@ func testInlinedPubKeyAddedOnRetrieve(kb pstore.KeyBook) func(t *testing.T) {
 		}
 	}
 }
+
+var keybookBenchmarkSuite = map[string]func(kb pstore.KeyBook) func(*testing.B){
+	"PubKey":        benchmarkPubKey,
+	"AddPubKey":     benchmarkAddPubKey,
+	"PrivKey":       benchmarkPrivKey,
+	"AddPrivKey":    benchmarkAddPrivKey,
+	"PeersWithKeys": benchmarkPeersWithKeys,
+}
+
+func BenchmarkKeyBook(b *testing.B, factory KeyBookFactory) {
+	ordernames := make([]string, 0, len(keybookBenchmarkSuite))
+	for name := range keybookBenchmarkSuite {
+		ordernames = append(ordernames, name)
+	}
+	sort.Strings(ordernames)
+	for _, name := range ordernames {
+		bench := keybookBenchmarkSuite[name]
+		kb, closeFunc := factory()
+
+		b.Run(name, bench(kb))
+
+		if closeFunc != nil {
+			closeFunc()
+		}
+	}
+}
+
+func benchmarkPubKey(kb pstore.KeyBook) func(*testing.B) {
+	return func(b *testing.B) {
+		_, pub, err := pt.RandTestKeyPair(512)
+		if err != nil {
+			b.Error(err)
+		}
+
+		id, err := peer.IDFromPublicKey(pub)
+		if err != nil {
+			b.Error(err)
+		}
+
+		err = kb.AddPubKey(id, pub)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			kb.PubKey(id)
+		}
+	}
+}
+
+func benchmarkAddPubKey(kb pstore.KeyBook) func(*testing.B) {
+	return func(b *testing.B) {
+		_, pub, err := pt.RandTestKeyPair(512)
+		if err != nil {
+			b.Error(err)
+		}
+
+		id, err := peer.IDFromPublicKey(pub)
+		if err != nil {
+			b.Error(err)
+		}
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			kb.AddPubKey(id, pub)
+		}
+	}
+}
+
+func benchmarkPrivKey(kb pstore.KeyBook) func(*testing.B) {
+	return func(b *testing.B) {
+		priv, _, err := pt.RandTestKeyPair(512)
+		if err != nil {
+			b.Error(err)
+		}
+
+		id, err := peer.IDFromPrivateKey(priv)
+		if err != nil {
+			b.Error(err)
+		}
+
+		err = kb.AddPrivKey(id, priv)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			kb.PrivKey(id)
+		}
+	}
+}
+
+func benchmarkAddPrivKey(kb pstore.KeyBook) func(*testing.B) {
+	return func(b *testing.B) {
+		priv, _, err := pt.RandTestKeyPair(512)
+		if err != nil {
+			b.Error(err)
+		}
+
+		id, err := peer.IDFromPrivateKey(priv)
+		if err != nil {
+			b.Error(err)
+		}
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			kb.AddPrivKey(id, priv)
+		}
+	}
+}
+
+func benchmarkPeersWithKeys(kb pstore.KeyBook) func(*testing.B) {
+	return func(b *testing.B) {
+		for i := 0; i < 10; i++ {
+			priv, pub, err := pt.RandTestKeyPair(512)
+			if err != nil {
+				b.Error(err)
+			}
+
+			id, err := peer.IDFromPublicKey(pub)
+			if err != nil {
+				b.Error(err)
+			}
+
+			err = kb.AddPubKey(id, pub)
+			if err != nil {
+				b.Fatal(err)
+			}
+			err = kb.AddPrivKey(id, priv)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			kb.PeersWithKeys()
+		}
+	}
+}

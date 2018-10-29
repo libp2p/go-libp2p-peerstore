@@ -63,6 +63,14 @@ func TestDsKeyBook(t *testing.T) {
 	}
 }
 
+func BenchmarkDsKeyBook(b *testing.B) {
+	for name, dsFactory := range dstores {
+		b.Run(name, func(b *testing.B) {
+			pt.BenchmarkKeyBook(b, keyBookFactory(b, dsFactory, DefaultOpts()))
+		})
+	}
+}
+
 func BenchmarkDsPeerstore(b *testing.B) {
 	caching := DefaultOpts()
 	caching.CacheSize = 1024
