@@ -33,26 +33,24 @@ func TestDsPeerstore(t *testing.T) {
 
 func TestDsAddrBook(t *testing.T) {
 	for name, dsFactory := range dstores {
-		t.Run(name, func(t *testing.T) {
-			t.Run("Cacheful", func(t *testing.T) {
-				t.Parallel()
+		t.Run(name+" Cacheful", func(t *testing.T) {
+			t.Parallel()
 
-				opts := DefaultOpts()
-				opts.TTLInterval = 100 * time.Microsecond
-				opts.CacheSize = 1024
+			opts := DefaultOpts()
+			opts.TTLInterval = 100 * time.Microsecond
+			opts.CacheSize = 1024
 
-				pt.TestAddrBook(t, addressBookFactory(t, dsFactory, opts))
-			})
+			pt.TestAddrBook(t, addressBookFactory(t, dsFactory, opts))
+		})
 
-			t.Run("Cacheless", func(t *testing.T) {
-				t.Parallel()
+		t.Run(name+" Cacheless", func(t *testing.T) {
+			t.Parallel()
 
-				opts := DefaultOpts()
-				opts.TTLInterval = 100 * time.Microsecond
-				opts.CacheSize = 0
+			opts := DefaultOpts()
+			opts.TTLInterval = 100 * time.Microsecond
+			opts.CacheSize = 0
 
-				pt.TestAddrBook(t, addressBookFactory(t, dsFactory, opts))
-			})
+			pt.TestAddrBook(t, addressBookFactory(t, dsFactory, opts))
 		})
 	}
 }
@@ -75,6 +73,8 @@ func BenchmarkDsPeerstore(b *testing.B) {
 	for name, dsFactory := range dstores {
 		b.Run(name, func(b *testing.B) {
 			pt.BenchmarkPeerstore(b, peerstoreFactory(b, dsFactory, caching), "Caching")
+		})
+		b.Run(name, func(b *testing.B) {
 			pt.BenchmarkPeerstore(b, peerstoreFactory(b, dsFactory, cacheless), "Cacheless")
 		})
 	}
