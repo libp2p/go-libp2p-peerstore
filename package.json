@@ -15,9 +15,9 @@
     },
     {
       "author": "whyrusleeping",
-      "hash": "QmT4U94DnD8FRfqr21obWY32HLM5VExccPKMjQHofeYqr9",
+      "hash": "QmRKLtwMw131aK7ugC3G7ybpumMz78YrJe5dzneyindvG1",
       "name": "go-multiaddr",
-      "version": "1.3.5"
+      "version": "1.3.6"
     },
     {
       "author": "whyrusleeping",
@@ -27,33 +27,33 @@
     },
     {
       "author": "whyrusleeping",
-      "hash": "QmPvyPwuCgJ7pDmrKDxRtsScJgBaM5h4EpRL2qQJsmXf4n",
+      "hash": "QmaZ1F8vQdJaQqA8hjAzH8a7Qnqqb2n2ZYeUbKMjMcxAZe",
       "name": "go-libp2p-crypto",
-      "version": "2.0.1"
+      "version": "2.0.2"
     },
     {
       "author": "jbenet",
-      "hash": "Qmaabb1tJZ2CX5cp6MuuiGgns71NYoxdgQP6Xdid1dVceC",
+      "hash": "QmQVUtnrNGtCRkCMpXgpApfzQjc8FDaDVxHqWH8cnZQeh5",
       "name": "go-multiaddr-net",
-      "version": "1.6.5"
+      "version": "1.6.6"
     },
     {
       "author": "whyrusleeping",
-      "hash": "QmcASJiigZMaU3dKghcQo6FtcbqwfZ7UFp5W4fp62f8KJE",
+      "hash": "QmXZVrmSiWPyuET6BMbGK3PjzVnQBrcnYc4GkHKhK2KXLp",
       "name": "mafmt",
-      "version": "1.2.8"
+      "version": "1.2.9"
     },
     {
       "author": "whyrusleeping",
-      "hash": "QmTRhk7cgjUf2gfQ3p2M9KPECNZEW9XUrmHcFCgog4cPgB",
+      "hash": "QmUz7HmU4ws577TMEVNoTjNghVvq2jXnxnVhbkNXKPKpgK",
       "name": "go-libp2p-peer",
-      "version": "2.4.0"
+      "version": "2.4.1"
     },
     {
       "author": "multiformats",
-      "hash": "QmPnFwZ2JXKnXgMw8CdBPxn7FWh6LLdjUjxV1fKHuJnkr8",
+      "hash": "QmerPMzPk1mJVowm8KgmoknWa4yCYvvugMPsgWmDNUvDLW",
       "name": "go-multihash",
-      "version": "1.0.8"
+      "version": "1.0.9"
     },
     {
       "author": "magik6k",
@@ -95,6 +95,6 @@
   "license": "MIT",
   "name": "go-libp2p-peerstore",
   "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
-  "version": "2.0.6"
+  "version": "2.0.7"
 }
 
