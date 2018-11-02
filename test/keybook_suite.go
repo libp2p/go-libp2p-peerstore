@@ -4,6 +4,7 @@ import (
 	"sort"
 	"testing"
 
+	ic "github.com/libp2p/go-libp2p-crypto"
 	peer "github.com/libp2p/go-libp2p-peer"
 	pt "github.com/libp2p/go-libp2p-peer/test"
 
@@ -144,7 +145,7 @@ func testInlinedPubKeyAddedOnRetrieve(kb pstore.KeyBook) func(t *testing.T) {
 		}
 
 		// Key small enough for inlining.
-		_, pub, err := pt.RandTestKeyPair(32)
+		_, pub, err := ic.GenerateKeyPair(ic.Ed25519, 256)
 		if err != nil {
 			t.Error(err)
 		}
