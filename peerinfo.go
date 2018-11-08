@@ -70,14 +70,14 @@ func InfoToP2pAddrs(pi *PeerInfo) ([]ma.Multiaddr, error) {
 	return addrs, nil
 }
 
-func (pi *PeerInfo) Loggable() map[string]interface{} {
+func (pi PeerInfo) Loggable() map[string]interface{} {
 	return map[string]interface{}{
 		"peerID": pi.ID.Pretty(),
 		"addrs":  pi.Addrs,
 	}
 }
 
-func (pi *PeerInfo) MarshalJSON() ([]byte, error) {
+func (pi PeerInfo) MarshalJSON() ([]byte, error) {
 	out := make(map[string]interface{})
 	out["ID"] = pi.ID.Pretty()
 	var addrs []string
@@ -88,7 +88,7 @@ func (pi *PeerInfo) MarshalJSON() ([]byte, error) {
 	return json.Marshal(out)
 }
 
-func (pi *PeerInfo) UnmarshalJSON(b []byte) error {
+func (pi PeerInfo) UnmarshalJSON(b []byte) error {
 	var data map[string]interface{}
 	err := json.Unmarshal(b, &data)
 	if err != nil {
