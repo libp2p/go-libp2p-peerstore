@@ -18,9 +18,8 @@ type Options struct {
 	// The size of the in-memory cache. A value of 0 or lower disables the cache.
 	CacheSize uint
 
-	// Sweep interval to expire entries, only used when TTL is *not* natively managed
-	// by the underlying datastore.
-	TTLInterval time.Duration
+	// Sweep interval to purge expired addresses from the datastore.
+	GCInterval time.Duration
 
 	// Number of times to retry transactional writes.
 	WriteRetries uint
@@ -33,7 +32,7 @@ type Options struct {
 func DefaultOpts() Options {
 	return Options{
 		CacheSize:    1024,
-		TTLInterval:  time.Second,
+		GCInterval:   5 * time.Minute,
 		WriteRetries: 5,
 	}
 }

@@ -38,7 +38,7 @@ func TestDsAddrBook(t *testing.T) {
 				t.Parallel()
 
 				opts := DefaultOpts()
-				opts.TTLInterval = 100 * time.Microsecond
+				opts.GCInterval = 100 * time.Microsecond
 				opts.CacheSize = 1024
 
 				pt.TestAddrBook(t, addressBookFactory(t, dsFactory, opts))
@@ -48,7 +48,7 @@ func TestDsAddrBook(t *testing.T) {
 				t.Parallel()
 
 				opts := DefaultOpts()
-				opts.TTLInterval = 100 * time.Microsecond
+				opts.GCInterval = 100 * time.Microsecond
 				opts.CacheSize = 0
 
 				pt.TestAddrBook(t, addressBookFactory(t, dsFactory, opts))
@@ -134,7 +134,10 @@ func addressBookFactory(tb testing.TB, storeFactory datastoreFactory, opts Optio
 			tb.Fatal(err)
 		}
 
-		return ab, closeFunc
+		return ab, func() {
+			ab.Close()
+			closeFunc()
+		}
 	}
 }
 

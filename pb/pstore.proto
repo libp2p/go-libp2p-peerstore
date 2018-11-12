@@ -1,0 +1,32 @@
+syntax = "proto3";
+package pstore.pb;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+
+option (gogoproto.marshaler_all) = true;
+option (gogoproto.unmarshaler_all) = true;
+option (gogoproto.benchgen_all) = true;
+option (gogoproto.populate_all) = true;
+
+// AddrBookRecord represents a record for a peer in the address book.
+message AddrBookRecord {
+	// The peer ID.
+	bytes id = 1;
+
+	// The timestamp where purging needs to happen.
+	google.protobuf.Timestamp nextVisit = 2 [(gogoproto.stdtime) = true];
+
+	// The multiaddresses.
+	map<string, AddrEntry> addrs = 3;
+
+	// AddrEntry represents a single multiaddress.
+	message AddrEntry {
+		// The point in time when this address expires.
+		google.protobuf.Timestamp expiry = 2 [(gogoproto.stdtime) = true];
+
+		// The original TTL of this address.
+		google.protobuf.Duration ttl = 3 [(gogoproto.stdduration) = true];
+	}
+}
