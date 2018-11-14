@@ -3,6 +3,7 @@ package test
 import (
 	"context"
 	"fmt"
+	"sort"
 	"testing"
 
 	pstore "github.com/libp2p/go-libp2p-peerstore"
@@ -38,7 +39,15 @@ func BenchmarkPeerstore(b *testing.B, factory PeerstoreFactory, variant string) 
 		go addressProducer(ctx, b, p.ch, p.n)
 	}
 
-	for name, bench := range peerstoreBenchmarks {
+	// So tests are always run in the same order.
+	ordernames := make([]string, 0, len(peerstoreBenchmarks))
+	for name := range peerstoreBenchmarks {
+		ordernames = append(ordernames, name)
+	}
+	sort.Strings(ordernames)
+
+	for _, name := range ordernames {
+		bench := peerstoreBenchmarks[name]
 		for _, p := range params {
 			// Create a new peerstore.
 			ps, closeFunc := factory()
