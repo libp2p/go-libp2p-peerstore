@@ -3,6 +3,7 @@ package pstoreds
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -39,24 +40,30 @@ var (
 type addrsRecord struct {
 	sync.RWMutex
 	*pb.AddrBookRecord
-
-	delete bool
+	dirty bool
 }
 
-// FlushInTxn flushes the record to the datastore by calling ds.Put, unless the record is
-// marked for deletion, in which case the deletion is executed.
+// FlushInTxn writes the record to the datastore by calling ds.Put, unless the record is
+// marked for deletion, in which case the deletion is executed via ds.Delete.
 func (r *addrsRecord) FlushInTxn(txn ds.Txn) (err error) {
-	key := addrBookBase.ChildString(b32.RawStdEncoding.EncodeToString([]byte(r.Id)))
-	if r.delete {
+	key := addrBookBase.ChildString(b32.RawStdEncoding.EncodeToString([]byte(r.Id.ID)))
+	if len(r.Addrs) == 0 {
 		return txn.Delete(key)
 	}
 	data := pool.Get(r.Size())
 	defer pool.Put(data)
+
+	// i is the number of bytes that were effectively written.
 	i, err := r.MarshalTo(data)
 	if err != nil {
 		return err
 	}
-	return txn.Put(key, data[:i])
+	if err := txn.Put(key, data[:i]); err != nil {
+		return err
+	}
+	// write succeeded; record is no longer dirty.
+	r.dirty = false
+	return nil
 }
 
 // Flush creates a ds.Txn, and calls FlushInTxn with it.
@@ -73,58 +80,56 @@ func (r *addrsRecord) Flush(ds ds.TxnDatastore) (err error) {
 	return txn.Commit()
 }
 
-// Refresh is called on in-memory entries to perform housekeeping. Refresh does the following:
-// * removes all expired addresses.
-// * recalculates the date in which the record needs to be revisited (earliest expiration of survivors).
-// * marks the record for deletion if no addresses are left.
+// Refresh is called on records to perform housekeeping. The return value signals if the record was changed
+// as a result of the refresh.
 //
-// A `true` value of `force` tells us to proceed with housekeeping even if the `NextVisit` date has not arrived.
+// Refresh does the following:
+// * sorts the addresses by expiration (soonest expiring first).
+// * removes the addresses that have expired.
 //
-// Refresh is called in several occasions:
-// * with force=false, when accessing and loading an entry, or when performing GC.
-// * with force=true, after an entry has been modified (e.g. addresses have been added or removed,
+// It short-circuits optimistically when we know there's nothing to do.
+//
+// Refresh is called from several points:
+// * when accessing and loading an entry.
+// * when performing periodic GC.
+// * after an entry has been modified (e.g. addresses have been added or removed,
 //   TTLs updated, etc.)
-func (r *addrsRecord) Refresh(force bool) (chgd bool) {
-	if len(r.Addrs) == 0 {
-		r.delete = true
-		r.NextVisit = nil
-		return true
-	}
-
-	now := time.Now()
-	if !force && r.NextVisit != nil && !r.NextVisit.IsZero() && now.Before(*r.NextVisit) {
-		// no expired entries to purge, and no forced housekeeping.
+//
+// If the return value is true, the caller can perform a flush immediately, or can schedule an async
+// flush, depending on the context.
+func (r *addrsRecord) Refresh() (chgd bool) {
+	now := time.Now().Unix()
+	if !r.dirty && len(r.Addrs) > 0 && r.Addrs[0].Expiry > now {
+		// record is not dirty, and we have no expired entries to purge.
 		return false
 	}
 
-	// nv stores the next visit for surviving addresses following the purge
-	var nv time.Time
-	for addr, entry := range r.Addrs {
-		if entry.Expiry == nil {
-			continue
-		}
-		if nv.IsZero() {
-			nv = *entry.Expiry
-		}
-		if now.After(*entry.Expiry) {
-			// this entry is expired; remove it.
-			delete(r.Addrs, addr)
-			chgd = true
-		} else if nv.After(*entry.Expiry) {
-			// keep track of the earliest expiry across survivors.
-			nv = *entry.Expiry
-		}
-	}
-
 	if len(r.Addrs) == 0 {
-		r.delete = true
-		r.NextVisit = nil
+		// this is a ghost record; let's signal it has to be written.
+		// Flush() will take care of doing the deletion.
 		return true
 	}
 
-	chgd = chgd || r.NextVisit == nil || nv != *r.NextVisit
-	r.NextVisit = &nv
-	return chgd
+	if r.dirty && len(r.Addrs) > 1 {
+		// the record has been modified, so it may need resorting.
+		// we keep addresses sorted by expiration, where 0 is the soonest expiring.
+		sort.Slice(r.Addrs, func(i, j int) bool {
+			return r.Addrs[i].Expiry < r.Addrs[j].Expiry
+		})
+	}
+
+	// since addresses are sorted by expiration, we find the first survivor and split the
+	// slice on its index.
+	pivot := -1
+	for i, addr := range r.Addrs {
+		if addr.Expiry > now {
+			break
+		}
+		pivot = i
+	}
+
+	r.Addrs = r.Addrs[pivot+1:]
+	return r.dirty || pivot >= 0
 }
 
 // dsAddrBook is an address book backed by a Datastore with a GC-like procedure
@@ -145,8 +150,7 @@ type dsAddrBook struct {
 
 var _ pstore.AddrBook = (*dsAddrBook)(nil)
 
-// NewAddrBook initializes a new address book given a
-// Datastore instance, a context for managing the TTL manager,
+// NewAddrBook initializes a new address book given a Datastore instance, a context for managing the TTL manager,
 // and the interval at which the TTL manager should sweep the Datastore.
 func NewAddrBook(ctx context.Context, store ds.TxnDatastore, opts Options) (ab *dsAddrBook, err error) {
 	var cache cache = new(noopCache)
@@ -168,6 +172,7 @@ func NewAddrBook(ctx context.Context, store ds.TxnDatastore, opts Options) (ab *
 		closedCh:    make(chan struct{}),
 	}
 
+	// kick off periodic GC.
 	go mgr.background()
 
 	return mgr, nil
@@ -178,20 +183,26 @@ func (ab *dsAddrBook) Close() {
 	<-ab.closedCh
 }
 
-func (ab *dsAddrBook) tryFlush(pr *addrsRecord) {
+func (ab *dsAddrBook) asyncFlush(pr *addrsRecord) {
 	select {
 	case ab.flushJobCh <- pr:
 	default:
-		id, _ := peer.IDFromBytes(pr.Id)
-		log.Warningf("flush queue is full; could not flush peer %v", id)
+		log.Warningf("flush queue is full; could not flush peer %v", pr.Id.ID.Pretty())
 	}
 }
 
+// loadRecord is a read-through fetch. It fetches a record from cache, falling back to the
+// datastore upon a miss, and returning an newly initialized record if the peer doesn't exist.
+//
+// loadRecord calls Refresh() on the record before returning it. If the record changes
+// as a result and `update=true`, an async flush is scheduled.
+//
+// If `cache=true`, the record is inserted in the cache when loaded from the datastore.
 func (ab *dsAddrBook) loadRecord(id peer.ID, cache bool, update bool) (pr *addrsRecord, err error) {
 	if e, ok := ab.cache.Get(id); ok {
 		pr = e.(*addrsRecord)
-		if pr.Refresh(false) && update {
-			ab.tryFlush(pr)
+		if pr.Refresh() && update {
+			ab.asyncFlush(pr)
 		}
 		return pr, nil
 	}
@@ -205,46 +216,38 @@ func (ab *dsAddrBook) loadRecord(id peer.ID, cache bool, update bool) (pr *addrs
 	key := addrBookBase.ChildString(b32.RawStdEncoding.EncodeToString([]byte(id)))
 	data, err := txn.Get(key)
 
+	if err != nil && err != ds.ErrNotFound {
+		return nil, err
+	}
+
 	if err == nil {
 		pr = &addrsRecord{AddrBookRecord: &pb.AddrBookRecord{}}
 		if err = pr.Unmarshal(data); err != nil {
 			return nil, err
 		}
-		if pr.Refresh(false) {
-			ab.tryFlush(pr)
+		if pr.Refresh() && update {
+			ab.asyncFlush(pr)
 		}
-		if cache {
-			ab.cache.Add(id, pr)
-		}
-		return pr, nil
+	} else {
+		pr = &addrsRecord{AddrBookRecord: &pb.AddrBookRecord{Id: &pb.ProtoPeerID{ID: id}}}
 	}
 
-	if err == ds.ErrNotFound {
-		pr = &addrsRecord{AddrBookRecord: &pb.AddrBookRecord{
-			Id:    []byte(id),
-			Addrs: make(map[string]*pb.AddrBookRecord_AddrEntry),
-		}}
-		if cache {
-			ab.cache.Add(id, pr)
-		}
-		return pr, nil
+	if cache {
+		ab.cache.Add(id, pr)
 	}
-
-	log.Error(err)
-	return nil, err
+	return pr, nil
 }
 
-// background is the peerstore process that takes care of:
-// * purging expired addresses and peers with no addresses from the datastore at regular intervals.
-// * asynchronously flushing cached entries with expired addresses to the datastore.
+// background runs the housekeeping process that takes care of:
+//
+// * purging expired addresses from the datastore at regular intervals.
+// * persisting asynchronous flushes to the datastore.
 func (ab *dsAddrBook) background() {
 	timer := time.NewTicker(ab.gcInterval)
-
 	for {
 		select {
 		case fj := <-ab.flushJobCh:
-			id, _ := peer.IDFromBytes(fj.Id)
-			if cached, ok := ab.cache.Peek(id); ok {
+			if cached, ok := ab.cache.Peek(fj.Id.ID); ok {
 				// Only continue flushing if the record we have in memory is the same as for which the flush
 				// job was requested. If it's not in memory, it has been evicted and we don't know if we hold
 				// the latest state or not. Similarly, if it's cached but the pointer is different, it means
@@ -267,35 +270,44 @@ func (ab *dsAddrBook) background() {
 	}
 }
 
+var purgeQuery = query.Query{Prefix: addrBookBase.String()}
+
+// purgeCycle runs a GC cycle
 func (ab *dsAddrBook) purgeCycle() {
 	var id peer.ID
 	record := &addrsRecord{AddrBookRecord: &pb.AddrBookRecord{}}
-	q := query.Query{Prefix: addrBookBase.String()}
-
 	txn, err := ab.ds.NewTransaction(false)
 	if err != nil {
 		log.Warningf("failed while purging entries: %v\n", err)
 		return
 	}
-
 	defer txn.Discard()
 
-	results, err := txn.Query(q)
+	results, err := txn.Query(purgeQuery)
 	if err != nil {
 		log.Warningf("failed while purging entries: %v\n", err)
 		return
 	}
-
 	defer results.Close()
 
 	for result := range results.Next() {
-		id, _ = peer.IDFromBytes(record.Id)
-
-		// if the record is in cache, let's refresh that one and flush it if necessary.
+		k, err := b32.RawStdEncoding.DecodeString(ds.RawKey(result.Key).Name())
+		if err != nil {
+			// TODO: drop the record? this will keep failing forever.
+			log.Warningf("failed while purging record: %v, err: %v\n", result.Key, err)
+			continue
+		}
+		id, err = peer.IDFromBytes(k)
+		if err != nil {
+			// TODO: drop the record? this will keep failing forever.
+			log.Warningf("failed to get extract peer ID from bytes (hex): %x, err: %v\n", k, err)
+			continue
+		}
+		// if the record is in cache, we refresh it and flush it if necessary.
 		if e, ok := ab.cache.Peek(id); ok {
 			cached := e.(*addrsRecord)
 			cached.Lock()
-			if cached.Refresh(false) {
+			if cached.Refresh() {
 				cached.FlushInTxn(txn)
 			}
 			cached.Unlock()
@@ -303,11 +315,11 @@ func (ab *dsAddrBook) purgeCycle() {
 		}
 
 		if err := record.Unmarshal(result.Value); err != nil {
-			log.Warningf("failed while purging entries: %v\n", err)
+			// TODO: drop the record? this will keep failing forever.
+			log.Warningf("failed while deserializing entry with key: %v, err: %v\n", result.Key, err)
 			continue
 		}
-
-		if record.Refresh(false) {
+		if record.Refresh() {
 			record.FlushInTxn(txn)
 		}
 		record.Reset()
@@ -358,17 +370,16 @@ func (ab *dsAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.D
 	pr.Lock()
 	defer pr.Unlock()
 
-	chgd, newExp := false, time.Now().Add(newTTL)
+	newExp := time.Now().Add(newTTL).Unix()
 	for _, entry := range pr.Addrs {
-		if entry.Ttl == nil || *entry.Ttl != oldTTL {
+		if entry.Ttl != int64(oldTTL) {
 			continue
 		}
-		entry.Ttl, entry.Expiry = &newTTL, &newExp
-		chgd = true
+		entry.Ttl, entry.Expiry = int64(newTTL), newExp
+		pr.dirty = true
 	}
 
-	if chgd {
-		pr.Refresh(true)
+	if pr.Refresh() {
 		pr.Flush(ab.ds)
 	}
 }
@@ -385,10 +396,8 @@ func (ab *dsAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
 	defer pr.RUnlock()
 
 	addrs := make([]ma.Multiaddr, 0, len(pr.Addrs))
-	for k, _ := range pr.Addrs {
-		if a, err := ma.NewMultiaddr(k); err == nil {
-			addrs = append(addrs, a)
-		}
+	for _, a := range pr.Addrs {
+		addrs = append(addrs, a.Addr)
 	}
 	return addrs
 }
@@ -434,32 +443,54 @@ func (ab *dsAddrBook) ClearAddrs(p peer.ID) {
 func (ab *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration, mode ttlWriteMode) (err error) {
 	pr, err := ab.loadRecord(p, true, false)
 	if err != nil {
-		return fmt.Errorf("failed to load peerstore entry for peer %v while deleting addrs, err: %v", p, err)
+		return fmt.Errorf("failed to load peerstore entry for peer %v while setting addrs, err: %v", p, err)
 	}
 
 	pr.Lock()
 	defer pr.Unlock()
 
-	now := time.Now()
-	broadcast := make([]bool, len(addrs))
-	newExp := now.Add(ttl)
-	for i, addr := range addrs {
-		e, ok := pr.Addrs[addr.String()]
-		if ok && mode == ttlExtend && e.Expiry.After(newExp) {
+	newExp := time.Now().Add(ttl).Unix()
+	existed := make([]bool, len(addrs)) // keeps track of which addrs we found
+
+Outer:
+	for i, incoming := range addrs {
+		for _, have := range pr.Addrs {
+			if incoming.Equal(have.Addr) {
+				existed[i] = true
+				if mode == ttlExtend && have.Expiry > newExp {
+					// if we're only extending TTLs but the addr already has a longer one, we skip it.
+					continue Outer
+				}
+				have.Expiry = newExp
+				// we found the address, and addresses cannot be duplicate,
+				// so let's move on to the next.
+				continue Outer
+			}
+		}
+	}
+
+	// add addresses we didn't hold.
+	var added []*pb.AddrBookRecord_AddrEntry
+	for i, e := range existed {
+		if e {
 			continue
 		}
-		pr.Addrs[addr.String()] = &pb.AddrBookRecord_AddrEntry{Expiry: &newExp, Ttl: &ttl}
-		broadcast[i] = !ok
-	}
-
-	// Update was successful, so broadcast event only for new addresses.
-	for i, v := range broadcast {
-		if v {
-			ab.subsManager.BroadcastAddr(p, addrs[i])
+		addr := addrs[i]
+		entry := &pb.AddrBookRecord_AddrEntry{
+			Addr:   &pb.ProtoAddr{Multiaddr: addr},
+			Ttl:    int64(ttl),
+			Expiry: newExp,
 		}
+		added = append(added, entry)
+		// TODO: should we only broadcast if we updated the store successfully?
+		// we have no way of rolling back the state of the in-memory record, although we
+		// could at the expense of allocs. But is it worthwhile?
+		ab.subsManager.BroadcastAddr(p, addr)
 	}
 
-	pr.Refresh(true)
+	pr.Addrs = append(pr.Addrs, added...)
+	pr.dirty = true
+	pr.Refresh()
 	return pr.Flush(ab.ds)
 }
 
@@ -476,11 +507,23 @@ func (ab *dsAddrBook) deleteAddrs(p peer.ID, addrs []ma.Multiaddr) (err error) {
 	pr.Lock()
 	defer pr.Unlock()
 
-	for _, addr := range addrs {
-		delete(pr.Addrs, addr.String())
+	// deletes addresses in place, and avoiding copies until we encounter the first deletion.
+	survived := 0
+	for i, addr := range pr.Addrs {
+		for _, del := range addrs {
+			if addr.Addr.Equal(del) {
+				continue
+			}
+			if i != survived {
+				pr.Addrs[survived] = pr.Addrs[i]
+			}
+			survived++
+		}
 	}
+	pr.Addrs = pr.Addrs[:survived]
 
-	pr.Refresh(true)
+	pr.dirty = true
+	pr.Refresh()
 	return pr.Flush(ab.ds)
 }
 

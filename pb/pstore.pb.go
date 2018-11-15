@@ -7,12 +7,6 @@ import proto "github.com/gogo/protobuf/proto"
 import fmt "fmt"
 import math "math"
 import _ "github.com/gogo/protobuf/gogoproto"
-import _ "github.com/golang/protobuf/ptypes/duration"
-import _ "github.com/golang/protobuf/ptypes/timestamp"
-
-import time "time"
-
-import github_com_gogo_protobuf_types "github.com/gogo/protobuf/types"
 
 import io "io"
 
@@ -20,7 +14,6 @@ import io "io"
 var _ = proto.Marshal
 var _ = fmt.Errorf
 var _ = math.Inf
-var _ = time.Kitchen
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the proto package it is being compiled against.
@@ -31,21 +24,19 @@ const _ = proto.GoGoProtoPackageIsVersion2 // please upgrade the proto package
 // AddrBookRecord represents a record for a peer in the address book.
 type AddrBookRecord struct {
 	// The peer ID.
-	Id []byte `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	// The timestamp where purging needs to happen.
-	NextVisit *time.Time `protobuf:"bytes,2,opt,name=nextVisit,stdtime" json:"nextVisit,omitempty"`
-	// The multiaddresses.
-	Addrs                map[string]*AddrBookRecord_AddrEntry `protobuf:"bytes,3,rep,name=addrs" json:"addrs,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value"`
-	XXX_NoUnkeyedLiteral struct{}                             `json:"-"`
-	XXX_unrecognized     []byte                               `json:"-"`
-	XXX_sizecache        int32                                `json:"-"`
+	Id *ProtoPeerID `protobuf:"bytes,1,opt,name=id,proto3,customtype=ProtoPeerID" json:"id,omitempty"`
+	// The multiaddresses. This is a sorted list where element 0 expires the soonest.
+	Addrs                []*AddrBookRecord_AddrEntry `protobuf:"bytes,2,rep,name=addrs" json:"addrs,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}                    `json:"-"`
+	XXX_unrecognized     []byte                      `json:"-"`
+	XXX_sizecache        int32                       `json:"-"`
 }
 
 func (m *AddrBookRecord) Reset()         { *m = AddrBookRecord{} }
 func (m *AddrBookRecord) String() string { return proto.CompactTextString(m) }
 func (*AddrBookRecord) ProtoMessage()    {}
 func (*AddrBookRecord) Descriptor() ([]byte, []int) {
-	return fileDescriptor_pstore_842456c80d89ffef, []int{0}
+	return fileDescriptor_pstore_fcc3073dbc5464a9, []int{0}
 }
 func (m *AddrBookRecord) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -74,21 +65,7 @@ func (m *AddrBookRecord) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_AddrBookRecord proto.InternalMessageInfo
 
-func (m *AddrBookRecord) GetId() []byte {
-	if m != nil {
-		return m.Id
-	}
-	return nil
-}
-
-func (m *AddrBookRecord) GetNextVisit() *time.Time {
-	if m != nil {
-		return m.NextVisit
-	}
-	return nil
-}
-
-func (m *AddrBookRecord) GetAddrs() map[string]*AddrBookRecord_AddrEntry {
+func (m *AddrBookRecord) GetAddrs() []*AddrBookRecord_AddrEntry {
 	if m != nil {
 		return m.Addrs
 	}
@@ -97,20 +74,21 @@ func (m *AddrBookRecord) GetAddrs() map[string]*AddrBookRecord_AddrEntry {
 
 // AddrEntry represents a single multiaddress.
 type AddrBookRecord_AddrEntry struct {
+	Addr *ProtoAddr `protobuf:"bytes,1,opt,name=addr,proto3,customtype=ProtoAddr" json:"addr,omitempty"`
 	// The point in time when this address expires.
-	Expiry *time.Time `protobuf:"bytes,2,opt,name=expiry,stdtime" json:"expiry,omitempty"`
+	Expiry int64 `protobuf:"varint,2,opt,name=expiry,proto3" json:"expiry,omitempty"`
 	// The original TTL of this address.
-	Ttl                  *time.Duration `protobuf:"bytes,3,opt,name=ttl,stdduration" json:"ttl,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
-	XXX_unrecognized     []byte         `json:"-"`
-	XXX_sizecache        int32          `json:"-"`
+	Ttl                  int64    `protobuf:"varint,3,opt,name=ttl,proto3" json:"ttl,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
 func (m *AddrBookRecord_AddrEntry) Reset()         { *m = AddrBookRecord_AddrEntry{} }
 func (m *AddrBookRecord_AddrEntry) String() string { return proto.CompactTextString(m) }
 func (*AddrBookRecord_AddrEntry) ProtoMessage()    {}
 func (*AddrBookRecord_AddrEntry) Descriptor() ([]byte, []int) {
-	return fileDescriptor_pstore_842456c80d89ffef, []int{0, 1}
+	return fileDescriptor_pstore_fcc3073dbc5464a9, []int{0, 0}
 }
 func (m *AddrBookRecord_AddrEntry) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -139,23 +117,22 @@ func (m *AddrBookRecord_AddrEntry) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_AddrBookRecord_AddrEntry proto.InternalMessageInfo
 
-func (m *AddrBookRecord_AddrEntry) GetExpiry() *time.Time {
+func (m *AddrBookRecord_AddrEntry) GetExpiry() int64 {
 	if m != nil {
 		return m.Expiry
 	}
-	return nil
+	return 0
 }
 
-func (m *AddrBookRecord_AddrEntry) GetTtl() *time.Duration {
+func (m *AddrBookRecord_AddrEntry) GetTtl() int64 {
 	if m != nil {
 		return m.Ttl
 	}
-	return nil
+	return 0
 }
 
 func init() {
 	proto.RegisterType((*AddrBookRecord)(nil), "pstore.pb.AddrBookRecord")
-	proto.RegisterMapType((map[string]*AddrBookRecord_AddrEntry)(nil), "pstore.pb.AddrBookRecord.AddrsEntry")
 	proto.RegisterType((*AddrBookRecord_AddrEntry)(nil), "pstore.pb.AddrBookRecord.AddrEntry")
 }
 func (m *AddrBookRecord) Marshal() (dAtA []byte, err error) {
@@ -173,48 +150,26 @@ func (m *AddrBookRecord) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if len(m.Id) > 0 {
+	if m.Id != nil {
 		dAtA[i] = 0xa
 		i++
-		i = encodeVarintPstore(dAtA, i, uint64(len(m.Id)))
-		i += copy(dAtA[i:], m.Id)
-	}
-	if m.NextVisit != nil {
-		dAtA[i] = 0x12
-		i++
-		i = encodeVarintPstore(dAtA, i, uint64(github_com_gogo_protobuf_types.SizeOfStdTime(*m.NextVisit)))
-		n1, err := github_com_gogo_protobuf_types.StdTimeMarshalTo(*m.NextVisit, dAtA[i:])
+		i = encodeVarintPstore(dAtA, i, uint64(m.Id.Size()))
+		n1, err := m.Id.MarshalTo(dAtA[i:])
 		if err != nil {
 			return 0, err
 		}
 		i += n1
 	}
 	if len(m.Addrs) > 0 {
-		for k, _ := range m.Addrs {
-			dAtA[i] = 0x1a
+		for _, msg := range m.Addrs {
+			dAtA[i] = 0x12
 			i++
-			v := m.Addrs[k]
-			msgSize := 0
-			if v != nil {
-				msgSize = v.Size()
-				msgSize += 1 + sovPstore(uint64(msgSize))
+			i = encodeVarintPstore(dAtA, i, uint64(msg.Size()))
+			n, err := msg.MarshalTo(dAtA[i:])
+			if err != nil {
+				return 0, err
 			}
-			mapSize := 1 + len(k) + sovPstore(uint64(len(k))) + msgSize
-			i = encodeVarintPstore(dAtA, i, uint64(mapSize))
-			dAtA[i] = 0xa
-			i++
-			i = encodeVarintPstore(dAtA, i, uint64(len(k)))
-			i += copy(dAtA[i:], k)
-			if v != nil {
-				dAtA[i] = 0x12
-				i++
-				i = encodeVarintPstore(dAtA, i, uint64(v.Size()))
-				n2, err := v.MarshalTo(dAtA[i:])
-				if err != nil {
-					return 0, err
-				}
-				i += n2
-			}
+			i += n
 		}
 	}
 	if m.XXX_unrecognized != nil {
@@ -238,25 +193,25 @@ func (m *AddrBookRecord_AddrEntry) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.Expiry != nil {
-		dAtA[i] = 0x12
+	if m.Addr != nil {
+		dAtA[i] = 0xa
 		i++
-		i = encodeVarintPstore(dAtA, i, uint64(github_com_gogo_protobuf_types.SizeOfStdTime(*m.Expiry)))
-		n3, err := github_com_gogo_protobuf_types.StdTimeMarshalTo(*m.Expiry, dAtA[i:])
+		i = encodeVarintPstore(dAtA, i, uint64(m.Addr.Size()))
+		n2, err := m.Addr.MarshalTo(dAtA[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n3
+		i += n2
 	}
-	if m.Ttl != nil {
-		dAtA[i] = 0x1a
+	if m.Expiry != 0 {
+		dAtA[i] = 0x10
 		i++
-		i = encodeVarintPstore(dAtA, i, uint64(github_com_gogo_protobuf_types.SizeOfStdDuration(*m.Ttl)))
-		n4, err := github_com_gogo_protobuf_types.StdDurationMarshalTo(*m.Ttl, dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n4
+		i = encodeVarintPstore(dAtA, i, uint64(m.Expiry))
+	}
+	if m.Ttl != 0 {
+		dAtA[i] = 0x18
+		i++
+		i = encodeVarintPstore(dAtA, i, uint64(m.Ttl))
 	}
 	if m.XXX_unrecognized != nil {
 		i += copy(dAtA[i:], m.XXX_unrecognized)
@@ -275,34 +230,30 @@ func encodeVarintPstore(dAtA []byte, offset int, v uint64) int {
 }
 func NewPopulatedAddrBookRecord(r randyPstore, easy bool) *AddrBookRecord {
 	this := &AddrBookRecord{}
-	v1 := r.Intn(100)
-	this.Id = make([]byte, v1)
-	for i := 0; i < v1; i++ {
-		this.Id[i] = byte(r.Intn(256))
-	}
+	this.Id = NewPopulatedProtoPeerID(r)
 	if r.Intn(10) != 0 {
-		this.NextVisit = github_com_gogo_protobuf_types.NewPopulatedStdTime(r, easy)
-	}
-	if r.Intn(10) != 0 {
-		v2 := r.Intn(10)
-		this.Addrs = make(map[string]*AddrBookRecord_AddrEntry)
-		for i := 0; i < v2; i++ {
-			this.Addrs[randStringPstore(r)] = NewPopulatedAddrBookRecord_AddrEntry(r, easy)
+		v1 := r.Intn(5)
+		this.Addrs = make([]*AddrBookRecord_AddrEntry, v1)
+		for i := 0; i < v1; i++ {
+			this.Addrs[i] = NewPopulatedAddrBookRecord_AddrEntry(r, easy)
 		}
 	}
 	if !easy && r.Intn(10) != 0 {
-		this.XXX_unrecognized = randUnrecognizedPstore(r, 4)
+		this.XXX_unrecognized = randUnrecognizedPstore(r, 3)
 	}
 	return this
 }
 
 func NewPopulatedAddrBookRecord_AddrEntry(r randyPstore, easy bool) *AddrBookRecord_AddrEntry {
 	this := &AddrBookRecord_AddrEntry{}
-	if r.Intn(10) != 0 {
-		this.Expiry = github_com_gogo_protobuf_types.NewPopulatedStdTime(r, easy)
+	this.Addr = NewPopulatedProtoAddr(r)
+	this.Expiry = int64(r.Int63())
+	if r.Intn(2) == 0 {
+		this.Expiry *= -1
 	}
-	if r.Intn(10) != 0 {
-		this.Ttl = github_com_gogo_protobuf_types.NewPopulatedStdDuration(r, easy)
+	this.Ttl = int64(r.Int63())
+	if r.Intn(2) == 0 {
+		this.Ttl *= -1
 	}
 	if !easy && r.Intn(10) != 0 {
 		this.XXX_unrecognized = randUnrecognizedPstore(r, 4)
@@ -329,9 +280,9 @@ func randUTF8RunePstore(r randyPstore) rune {
 	return rune(ru + 61)
 }
 func randStringPstore(r randyPstore) string {
-	v3 := r.Intn(100)
-	tmps := make([]rune, v3)
-	for i := 0; i < v3; i++ {
+	v2 := r.Intn(100)
+	tmps := make([]rune, v2)
+	for i := 0; i < v2; i++ {
 		tmps[i] = randUTF8RunePstore(r)
 	}
 	return string(tmps)
@@ -353,11 +304,11 @@ func randFieldPstore(dAtA []byte, r randyPstore, fieldNumber int, wire int) []by
 	switch wire {
 	case 0:
 		dAtA = encodeVarintPopulatePstore(dAtA, uint64(key))
-		v4 := r.Int63()
+		v3 := r.Int63()
 		if r.Intn(2) == 0 {
-			v4 *= -1
+			v3 *= -1
 		}
-		dAtA = encodeVarintPopulatePstore(dAtA, uint64(v4))
+		dAtA = encodeVarintPopulatePstore(dAtA, uint64(v3))
 	case 1:
 		dAtA = encodeVarintPopulatePstore(dAtA, uint64(key))
 		dAtA = append(dAtA, byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256)))
@@ -388,25 +339,14 @@ func (m *AddrBookRecord) Size() (n int) {
 	}
 	var l int
 	_ = l
-	l = len(m.Id)
-	if l > 0 {
-		n += 1 + l + sovPstore(uint64(l))
-	}
-	if m.NextVisit != nil {
-		l = github_com_gogo_protobuf_types.SizeOfStdTime(*m.NextVisit)
+	if m.Id != nil {
+		l = m.Id.Size()
 		n += 1 + l + sovPstore(uint64(l))
 	}
 	if len(m.Addrs) > 0 {
-		for k, v := range m.Addrs {
-			_ = k
-			_ = v
-			l = 0
-			if v != nil {
-				l = v.Size()
-				l += 1 + sovPstore(uint64(l))
-			}
-			mapEntrySize := 1 + len(k) + sovPstore(uint64(len(k))) + l
-			n += mapEntrySize + 1 + sovPstore(uint64(mapEntrySize))
+		for _, e := range m.Addrs {
+			l = e.Size()
+			n += 1 + l + sovPstore(uint64(l))
 		}
 	}
 	if m.XXX_unrecognized != nil {
@@ -421,13 +361,15 @@ func (m *AddrBookRecord_AddrEntry) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Expiry != nil {
-		l = github_com_gogo_protobuf_types.SizeOfStdTime(*m.Expiry)
+	if m.Addr != nil {
+		l = m.Addr.Size()
 		n += 1 + l + sovPstore(uint64(l))
 	}
-	if m.Ttl != nil {
-		l = github_com_gogo_protobuf_types.SizeOfStdDuration(*m.Ttl)
-		n += 1 + l + sovPstore(uint64(l))
+	if m.Expiry != 0 {
+		n += 1 + sovPstore(uint64(m.Expiry))
+	}
+	if m.Ttl != 0 {
+		n += 1 + sovPstore(uint64(m.Ttl))
 	}
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
@@ -503,45 +445,13 @@ func (m *AddrBookRecord) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Id = append(m.Id[:0], dAtA[iNdEx:postIndex]...)
-			if m.Id == nil {
-				m.Id = []byte{}
-			}
-			iNdEx = postIndex
-		case 2:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field NextVisit", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowPstore
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLengthPstore
-			}
-			postIndex := iNdEx + msglen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if m.NextVisit == nil {
-				m.NextVisit = new(time.Time)
-			}
-			if err := github_com_gogo_protobuf_types.StdTimeUnmarshal(m.NextVisit, dAtA[iNdEx:postIndex]); err != nil {
+			var v ProtoPeerID
+			m.Id = &v
+			if err := m.Id.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
-		case 3:
+		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Addrs", wireType)
 			}
@@ -567,102 +477,10 @@ func (m *AddrBookRecord) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.Addrs == nil {
-				m.Addrs = make(map[string]*AddrBookRecord_AddrEntry)
+			m.Addrs = append(m.Addrs, &AddrBookRecord_AddrEntry{})
+			if err := m.Addrs[len(m.Addrs)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
-			var mapkey string
-			var mapvalue *AddrBookRecord_AddrEntry
-			for iNdEx < postIndex {
-				entryPreIndex := iNdEx
-				var wire uint64
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflowPstore
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					wire |= (uint64(b) & 0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				fieldNum := int32(wire >> 3)
-				if fieldNum == 1 {
-					var stringLenmapkey uint64
-					for shift := uint(0); ; shift += 7 {
-						if shift >= 64 {
-							return ErrIntOverflowPstore
-						}
-						if iNdEx >= l {
-							return io.ErrUnexpectedEOF
-						}
-						b := dAtA[iNdEx]
-						iNdEx++
-						stringLenmapkey |= (uint64(b) & 0x7F) << shift
-						if b < 0x80 {
-							break
-						}
-					}
-					intStringLenmapkey := int(stringLenmapkey)
-					if intStringLenmapkey < 0 {
-						return ErrInvalidLengthPstore
-					}
-					postStringIndexmapkey := iNdEx + intStringLenmapkey
-					if postStringIndexmapkey > l {
-						return io.ErrUnexpectedEOF
-					}
-					mapkey = string(dAtA[iNdEx:postStringIndexmapkey])
-					iNdEx = postStringIndexmapkey
-				} else if fieldNum == 2 {
-					var mapmsglen int
-					for shift := uint(0); ; shift += 7 {
-						if shift >= 64 {
-							return ErrIntOverflowPstore
-						}
-						if iNdEx >= l {
-							return io.ErrUnexpectedEOF
-						}
-						b := dAtA[iNdEx]
-						iNdEx++
-						mapmsglen |= (int(b) & 0x7F) << shift
-						if b < 0x80 {
-							break
-						}
-					}
-					if mapmsglen < 0 {
-						return ErrInvalidLengthPstore
-					}
-					postmsgIndex := iNdEx + mapmsglen
-					if mapmsglen < 0 {
-						return ErrInvalidLengthPstore
-					}
-					if postmsgIndex > l {
-						return io.ErrUnexpectedEOF
-					}
-					mapvalue = &AddrBookRecord_AddrEntry{}
-					if err := mapvalue.Unmarshal(dAtA[iNdEx:postmsgIndex]); err != nil {
-						return err
-					}
-					iNdEx = postmsgIndex
-				} else {
-					iNdEx = entryPreIndex
-					skippy, err := skipPstore(dAtA[iNdEx:])
-					if err != nil {
-						return err
-					}
-					if skippy < 0 {
-						return ErrInvalidLengthPstore
-					}
-					if (iNdEx + skippy) > postIndex {
-						return io.ErrUnexpectedEOF
-					}
-					iNdEx += skippy
-				}
-			}
-			m.Addrs[mapkey] = mapvalue
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -715,11 +533,43 @@ func (m *AddrBookRecord_AddrEntry) Unmarshal(dAtA []byte) error {
 			return fmt.Errorf("proto: AddrEntry: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
-		case 2:
+		case 1:
 			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Addr", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPstore
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthPstore
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			var v ProtoAddr
+			m.Addr = &v
+			if err := m.Addr.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Expiry", wireType)
 			}
-			var msglen int
+			m.Expiry = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowPstore
@@ -729,30 +579,16 @@ func (m *AddrBookRecord_AddrEntry) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				m.Expiry |= (int64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			if msglen < 0 {
-				return ErrInvalidLengthPstore
-			}
-			postIndex := iNdEx + msglen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if m.Expiry == nil {
-				m.Expiry = new(time.Time)
-			}
-			if err := github_com_gogo_protobuf_types.StdTimeUnmarshal(m.Expiry, dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
 		case 3:
-			if wireType != 2 {
+			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Ttl", wireType)
 			}
-			var msglen int
+			m.Ttl = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowPstore
@@ -762,25 +598,11 @@ func (m *AddrBookRecord_AddrEntry) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				m.Ttl |= (int64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			if msglen < 0 {
-				return ErrInvalidLengthPstore
-			}
-			postIndex := iNdEx + msglen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if m.Ttl == nil {
-				m.Ttl = new(time.Duration)
-			}
-			if err := github_com_gogo_protobuf_types.StdDurationUnmarshal(m.Ttl, dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipPstore(dAtA[iNdEx:])
@@ -908,29 +730,24 @@ var (
 	ErrIntOverflowPstore   = fmt.Errorf("proto: integer overflow")
 )
 
-func init() { proto.RegisterFile("pstore.proto", fileDescriptor_pstore_842456c80d89ffef) }
+func init() { proto.RegisterFile("pstore.proto", fileDescriptor_pstore_fcc3073dbc5464a9) }
 
-var fileDescriptor_pstore_842456c80d89ffef = []byte{
-	// 330 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x91, 0xbf, 0x4e, 0xc3, 0x30,
-	0x10, 0xc6, 0xe5, 0xa4, 0xad, 0x14, 0xb7, 0xaa, 0x90, 0xc5, 0x10, 0x32, 0xb8, 0x15, 0x30, 0x74,
-	0xc1, 0x15, 0x65, 0x29, 0x1d, 0x90, 0x88, 0xe0, 0x05, 0x22, 0xc4, 0xc6, 0x90, 0xd4, 0x26, 0x58,
-	0xfd, 0x73, 0x91, 0xe3, 0xa0, 0xf6, 0x2d, 0x18, 0x79, 0x1c, 0x46, 0x46, 0xde, 0x00, 0xc8, 0x3b,
-	0x20, 0x31, 0xa2, 0x38, 0x69, 0x23, 0x40, 0x42, 0x6c, 0xf7, 0xdd, 0x7d, 0xbf, 0xf3, 0x77, 0x32,
-	0xee, 0x24, 0xa9, 0x06, 0x25, 0x58, 0xa2, 0x40, 0x03, 0x71, 0x36, 0x2a, 0xf2, 0x7a, 0x31, 0x40,
-	0x3c, 0x17, 0x43, 0x33, 0x88, 0xb2, 0xdb, 0xa1, 0x96, 0x0b, 0x91, 0xea, 0x70, 0x91, 0x94, 0x5e,
-	0x8f, 0xfe, 0x34, 0xf0, 0x4c, 0x85, 0x5a, 0xc2, 0xb2, 0x9a, 0x1f, 0xc5, 0x52, 0xdf, 0x65, 0x11,
-	0x9b, 0xc2, 0x62, 0x18, 0x43, 0x0c, 0xb5, 0xb1, 0x50, 0x46, 0x98, 0xaa, 0xb4, 0xef, 0x7f, 0x58,
-	0xb8, 0x7b, 0xce, 0xb9, 0xf2, 0x01, 0x66, 0x81, 0x98, 0x82, 0xe2, 0xa4, 0x8b, 0x2d, 0xc9, 0x5d,
-	0xd4, 0x47, 0x83, 0x4e, 0x60, 0x49, 0x4e, 0xce, 0xb0, 0xb3, 0x14, 0x2b, 0x7d, 0x2d, 0x53, 0xa9,
-	0x5d, 0xab, 0x8f, 0x06, 0xed, 0x91, 0xc7, 0xca, 0x14, 0x6c, 0xb3, 0x9c, 0x5d, 0x6d, 0x62, 0xfa,
-	0x8d, 0x87, 0xd7, 0x1e, 0x0a, 0x6a, 0x84, 0x4c, 0x70, 0x33, 0xe4, 0x5c, 0xa5, 0xae, 0xdd, 0xb7,
-	0x07, 0xed, 0xd1, 0x21, 0xdb, 0x5e, 0xcb, 0xbe, 0xbf, 0x6c, 0x64, 0x7a, 0xb9, 0xd4, 0x6a, 0x1d,
-	0x94, 0x88, 0x77, 0x83, 0x71, 0xdd, 0x24, 0x3b, 0xd8, 0x9e, 0x89, 0xb5, 0x89, 0xe6, 0x04, 0x45,
-	0x49, 0x4e, 0x71, 0xf3, 0x3e, 0x9c, 0x67, 0xa2, 0xca, 0x75, 0xf0, 0xf7, 0xee, 0x6a, 0xb5, 0x21,
-	0x26, 0xd6, 0x18, 0x79, 0x2b, 0xec, 0x6c, 0xfb, 0x64, 0x8c, 0x5b, 0x62, 0x95, 0x48, 0xb5, 0xfe,
-	0xf7, 0x91, 0x95, 0x9f, 0x1c, 0x63, 0x5b, 0xeb, 0xb9, 0x6b, 0x1b, 0x6c, 0xef, 0x17, 0x76, 0x51,
-	0xfd, 0x90, 0xdf, 0x78, 0x2c, 0xa8, 0xc2, 0xeb, 0xef, 0x7e, 0xbe, 0x53, 0xf4, 0x94, 0x53, 0xf4,
-	0x9c, 0x53, 0xf4, 0x92, 0x53, 0xf4, 0x96, 0x53, 0x14, 0xb5, 0x0c, 0x73, 0xf2, 0x15, 0x00, 0x00,
-	0xff, 0xff, 0x0c, 0x8d, 0xe8, 0x16, 0x1f, 0x02, 0x00, 0x00,
+var fileDescriptor_pstore_fcc3073dbc5464a9 = []byte{
+	// 243 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x29, 0x28, 0x2e, 0xc9,
+	0x2f, 0x4a, 0xd5, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0xe2, 0x84, 0xf1, 0x92, 0xa4, 0x74, 0xd3,
+	0x33, 0x4b, 0x32, 0x4a, 0x93, 0xf4, 0x92, 0xf3, 0x73, 0xf5, 0xd3, 0xf3, 0xd3, 0xf3, 0xf5, 0xc1,
+	0x2a, 0x92, 0x4a, 0xd3, 0xc0, 0x3c, 0x30, 0x07, 0xcc, 0x82, 0xe8, 0x54, 0x3a, 0xc6, 0xc8, 0xc5,
+	0xe7, 0x98, 0x92, 0x52, 0xe4, 0x94, 0x9f, 0x9f, 0x1d, 0x94, 0x9a, 0x9c, 0x5f, 0x94, 0x22, 0x24,
+	0xcf, 0xc5, 0x94, 0x99, 0x22, 0xc1, 0xa8, 0xc0, 0xa8, 0xc1, 0xe3, 0xc4, 0x7f, 0xeb, 0x9e, 0x3c,
+	0x77, 0x00, 0x48, 0x65, 0x40, 0x6a, 0x6a, 0x91, 0xa7, 0x4b, 0x10, 0x53, 0x66, 0x8a, 0x90, 0x25,
+	0x17, 0x6b, 0x62, 0x4a, 0x4a, 0x51, 0xb1, 0x04, 0x93, 0x02, 0xb3, 0x06, 0xb7, 0x91, 0xb2, 0x1e,
+	0xdc, 0x76, 0x3d, 0x54, 0xa3, 0xc0, 0x5c, 0xd7, 0xbc, 0x92, 0xa2, 0xca, 0x20, 0x88, 0x0e, 0xa9,
+	0x08, 0x2e, 0x4e, 0xb8, 0x98, 0x90, 0x22, 0x17, 0x0b, 0x48, 0x14, 0x6a, 0x15, 0xef, 0xad, 0x7b,
+	0xf2, 0x9c, 0x60, 0xab, 0x40, 0x2a, 0x82, 0xc0, 0x52, 0x42, 0x62, 0x5c, 0x6c, 0xa9, 0x15, 0x05,
+	0x99, 0x45, 0x95, 0x12, 0x4c, 0x0a, 0x8c, 0x1a, 0xcc, 0x41, 0x50, 0x9e, 0x90, 0x00, 0x17, 0x73,
+	0x49, 0x49, 0x8e, 0x04, 0x33, 0x58, 0x10, 0xc4, 0x74, 0x12, 0xf9, 0xf1, 0x50, 0x8e, 0xf1, 0xc0,
+	0x23, 0x39, 0xc6, 0x13, 0x8f, 0xe4, 0x18, 0x2f, 0x3c, 0x92, 0x63, 0x7c, 0xf0, 0x48, 0x8e, 0x31,
+	0x89, 0x0d, 0xec, 0x4b, 0x63, 0x40, 0x00, 0x00, 0x00, 0xff, 0xff, 0x2b, 0x91, 0xbf, 0xc2, 0x2f,
+	0x01, 0x00, 0x00,
 }
