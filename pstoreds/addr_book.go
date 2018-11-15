@@ -17,8 +17,8 @@ import (
 	pb "github.com/libp2p/go-libp2p-peerstore/pb"
 	pstoremem "github.com/libp2p/go-libp2p-peerstore/pstoremem"
 
-	lru "github.com/hashicorp/golang-lru"
 	ma "github.com/multiformats/go-multiaddr"
+	lru "github.com/raulk/golang-lru"
 	b32 "github.com/whyrusleeping/base32"
 )
 
@@ -34,6 +34,14 @@ var (
 	// Peer addresses are stored under the following db key pattern:
 	// /peers/addr/<b32 peer id no padding>/<hash of maddr>
 	addrBookBase = ds.NewKey("/peers/addrs")
+	arPool       = &sync.Pool{
+		New: func() interface{} {
+			return &addrsRecord{
+				AddrBookRecord: &pb.AddrBookRecord{},
+				dirty:          false,
+			}
+		},
+	}
 )
 
 // addrsRecord decorates the AddrBookRecord with locks and metadata.
@@ -41,6 +49,11 @@ type addrsRecord struct {
 	sync.RWMutex
 	*pb.AddrBookRecord
 	dirty bool
+}
+
+func (r *addrsRecord) Reset() {
+	r.AddrBookRecord.Reset()
+	r.dirty = false
 }
 
 // FlushInTxn writes the record to the datastore by calling ds.Put, unless the record is
@@ -155,7 +168,11 @@ var _ pstore.AddrBook = (*dsAddrBook)(nil)
 func NewAddrBook(ctx context.Context, store ds.TxnDatastore, opts Options) (ab *dsAddrBook, err error) {
 	var cache cache = new(noopCache)
 	if opts.CacheSize > 0 {
-		if cache, err = lru.NewARC(int(opts.CacheSize)); err != nil {
+		evictCallback := func(key interface{}, value interface{}) {
+			value.(*addrsRecord).Reset()
+			arPool.Put(value)
+		}
+		if cache, err = lru.NewARCWithEvict(int(opts.CacheSize), evictCallback); err != nil {
 			return nil, err
 		}
 	}
@@ -221,7 +238,7 @@ func (ab *dsAddrBook) loadRecord(id peer.ID, cache bool, update bool) (pr *addrs
 	}
 
 	if err == nil {
-		pr = &addrsRecord{AddrBookRecord: &pb.AddrBookRecord{}}
+		pr = arPool.Get().(*addrsRecord)
 		if err = pr.Unmarshal(data); err != nil {
 			return nil, err
 		}
@@ -229,7 +246,8 @@ func (ab *dsAddrBook) loadRecord(id peer.ID, cache bool, update bool) (pr *addrs
 			ab.asyncFlush(pr)
 		}
 	} else {
-		pr = &addrsRecord{AddrBookRecord: &pb.AddrBookRecord{Id: &pb.ProtoPeerID{ID: id}}}
+		pr = arPool.Get().(*addrsRecord)
+		pr.Id = &pb.ProtoPeerID{ID: id}
 	}
 
 	if cache {
@@ -275,7 +293,9 @@ var purgeQuery = query.Query{Prefix: addrBookBase.String()}
 // purgeCycle runs a GC cycle
 func (ab *dsAddrBook) purgeCycle() {
 	var id peer.ID
-	record := &addrsRecord{AddrBookRecord: &pb.AddrBookRecord{}}
+	record := arPool.Get().(*addrsRecord)
+	defer arPool.Put(record)
+
 	txn, err := ab.ds.NewTransaction(false)
 	if err != nil {
 		log.Warningf("failed while purging entries: %v\n", err)
