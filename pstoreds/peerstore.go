@@ -19,21 +19,26 @@ type Options struct {
 	CacheSize uint
 
 	// Sweep interval to purge expired addresses from the datastore.
-	GCInterval time.Duration
+	GCPruneInterval time.Duration
 
-	// Number of times to retry transactional writes.
-	WriteRetries uint
+	// Interval to renew the GC lookahead window.
+	GCLookaheadInterval time.Duration
+
+	// Initial delay before GC routines start. Intended to give the system time to initialise before starting GC.
+	GCInitialDelay time.Duration
 }
 
 // DefaultOpts returns the default options for a persistent peerstore:
 // * Cache size: 1024
-// * TTL sweep interval: 1 second
+// * GC prune interval: 5 minutes
+// * GC lookahead interval: 12 hours
 // * WriteRetries: 5
 func DefaultOpts() Options {
 	return Options{
-		CacheSize:    1024,
-		GCInterval:   5 * time.Minute,
-		WriteRetries: 5,
+		CacheSize:           1024,
+		GCPruneInterval:     5 * time.Minute,
+		GCLookaheadInterval: 12 * time.Hour,
+		GCInitialDelay:      60 * time.Second,
 	}
 }
 

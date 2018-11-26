@@ -37,7 +37,7 @@ func TestDsAddrBook(t *testing.T) {
 			t.Parallel()
 
 			opts := DefaultOpts()
-			opts.GCInterval = 1 * time.Second
+			opts.GCPruneInterval = 1 * time.Second
 			opts.CacheSize = 1024
 
 			pt.TestAddrBook(t, addressBookFactory(t, dsFactory, opts))
@@ -47,7 +47,7 @@ func TestDsAddrBook(t *testing.T) {
 			t.Parallel()
 
 			opts := DefaultOpts()
-			opts.GCInterval = 1 * time.Second
+			opts.GCPruneInterval = 1 * time.Second
 			opts.CacheSize = 0
 
 			pt.TestAddrBook(t, addressBookFactory(t, dsFactory, opts))
