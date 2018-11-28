@@ -19,7 +19,7 @@ type Options struct {
 	CacheSize uint
 
 	// Sweep interval to purge expired addresses from the datastore.
-	GCPruneInterval time.Duration
+	GCPurgeInterval time.Duration
 
 	// Interval to renew the GC lookahead window.
 	GCLookaheadInterval time.Duration
@@ -36,7 +36,7 @@ type Options struct {
 func DefaultOpts() Options {
 	return Options{
 		CacheSize:           1024,
-		GCPruneInterval:     5 * time.Minute,
+		GCPurgeInterval:     5 * time.Minute,
 		GCLookaheadInterval: 12 * time.Hour,
 		GCInitialDelay:      60 * time.Second,
 	}

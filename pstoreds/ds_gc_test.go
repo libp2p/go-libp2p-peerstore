@@ -40,7 +40,7 @@ func TestGCLookahead(t *testing.T) {
 	// effectively disable automatic GC for this test.
 	opts.GCInitialDelay = 90 * time.Hour
 	opts.GCLookaheadInterval = 10 * time.Second
-	opts.GCPruneInterval = 1 * time.Minute
+	opts.GCPurgeInterval = 1 * time.Minute
 
 	factory := addressBookFactory(t, badgerStore, opts)
 	ab, closeFn := factory()
@@ -85,7 +85,7 @@ func TestGCPurging(t *testing.T) {
 	// effectively disable automatic GC for this test.
 	opts.GCInitialDelay = 90 * time.Hour
 	opts.GCLookaheadInterval = 20 * time.Second
-	opts.GCPruneInterval = 1 * time.Minute
+	opts.GCPurgeInterval = 1 * time.Minute
 
 	factory := addressBookFactory(t, badgerStore, opts)
 	ab, closeFn := factory()

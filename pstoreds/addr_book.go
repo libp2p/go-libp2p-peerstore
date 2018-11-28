@@ -272,7 +272,7 @@ func (ab *dsAddrBook) background() {
 	go func() {
 		select {
 		case <-time.After(ab.opts.GCInitialDelay):
-			pruneTimer = time.NewTicker(ab.opts.GCPruneInterval)
+			pruneTimer = time.NewTicker(ab.opts.GCPurgeInterval)
 			lookaheadTimer = time.NewTicker(ab.opts.GCLookaheadInterval)
 		}
 	}()
