@@ -36,7 +36,7 @@ func BenchmarkPeerstore(b *testing.B, factory PeerstoreFactory, variant string) 
 	// Start all test peer producing goroutines, where each produces peers with as many
 	// multiaddrs as the n field in the param struct.
 	for _, p := range params {
-		go addressProducer(ctx, b, p.ch, p.n)
+		go AddressProducer(ctx, b, p.ch, p.n)
 	}
 
 	// So tests are always run in the same order.
