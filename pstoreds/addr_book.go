@@ -213,7 +213,7 @@ func (ab *dsAddrBook) asyncFlush(pr *addrsRecord) {
 }
 
 // loadRecord is a read-through fetch. It fetches a record from cache, falling back to the
-// datastore upon a miss, and returning an newly initialized record if the peer doesn't exist.
+// datastore upon a miss, and returning a newly initialized record if the peer doesn't exist.
 //
 // loadRecord calls Refresh() on the record before returning it. If the record changes
 // as a result and `update=true`, an async flush is scheduled.

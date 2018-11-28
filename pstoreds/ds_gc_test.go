@@ -113,7 +113,6 @@ func TestGCPurging(t *testing.T) {
 
 	<-time.After(2 * time.Second)
 	ab.(*dsAddrBook).purgeCycle()
-
 	if i := tp.countLookaheadEntries(); i != 2 {
 		t.Errorf("expected 2 GC lookahead entries, got: %v", i)
 	}
@@ -123,18 +122,15 @@ func TestGCPurging(t *testing.T) {
 
 	<-time.After(5 * time.Second)
 	ab.(*dsAddrBook).purgeCycle()
-
 	if i := tp.countLookaheadEntries(); i != 2 {
 		t.Errorf("expected 2 GC lookahead entries, got: %v", i)
 	}
 
 	<-time.After(5 * time.Second)
 	ab.(*dsAddrBook).purgeCycle()
-
 	if i := tp.countLookaheadEntries(); i != 0 {
 		t.Errorf("expected 0 GC lookahead entries, got: %v", i)
 	}
-
 	if i := len(ab.PeersWithAddrs()); i != 0 {
 		t.Errorf("expected 0 entries in database, got: %v", i)
 	}
