@@ -60,11 +60,12 @@ func TestGCLookahead(t *testing.T) {
 		t.Errorf("expected no GC lookahead entries, got: %v", i)
 	}
 
+	// change addresses of a peer to have TTL 1 second, placing them in the lookahead window.
+	ab.UpdateAddrs(ids[1], time.Hour, time.Second)
+
 	// Purge the cache, to exercise a different path in the lookahead cycle.
 	tp.clearCache()
 
-	// change addresses of a peer to have TTL 1 second, placing them in the lookahead window.
-	ab.UpdateAddrs(ids[1], time.Hour, time.Second)
 	ab.(*dsAddrBook).populateLookahead()
 	if i := tp.countLookaheadEntries(); i != 1 {
 		t.Errorf("expected 1 GC lookahead entry, got: %v", i)
@@ -83,7 +84,7 @@ func TestGCPurging(t *testing.T) {
 
 	// effectively disable automatic GC for this test.
 	opts.GCInitialDelay = 90 * time.Hour
-	opts.GCLookaheadInterval = 12 * time.Second
+	opts.GCLookaheadInterval = 20 * time.Second
 	opts.GCPruneInterval = 1 * time.Minute
 
 	factory := addressBookFactory(t, badgerStore, opts)
@@ -106,15 +107,18 @@ func TestGCPurging(t *testing.T) {
 	ab.AddAddrs(ids[0], addrs[20:30], 10*time.Second)
 	ab.AddAddrs(ids[1], addrs[50:60], 10*time.Second)
 
+	// this is inside the window, but it will survive the purges we do in the test.
+	ab.AddAddrs(ids[3], addrs[70:80], 15*time.Second)
+
 	ab.(*dsAddrBook).populateLookahead()
-	if i := tp.countLookaheadEntries(); i != 3 {
-		t.Errorf("expected 3 GC lookahead entries, got: %v", i)
+	if i := tp.countLookaheadEntries(); i != 4 {
+		t.Errorf("expected 4 GC lookahead entries, got: %v", i)
 	}
 
 	<-time.After(2 * time.Second)
 	ab.(*dsAddrBook).purgeCycle()
-	if i := tp.countLookaheadEntries(); i != 2 {
-		t.Errorf("expected 2 GC lookahead entries, got: %v", i)
+	if i := tp.countLookaheadEntries(); i != 3 {
+		t.Errorf("expected 3 GC lookahead entries, got: %v", i)
 	}
 
 	// Purge the cache, to exercise a different path in the purge cycle.
@@ -122,16 +126,19 @@ func TestGCPurging(t *testing.T) {
 
 	<-time.After(5 * time.Second)
 	ab.(*dsAddrBook).purgeCycle()
-	if i := tp.countLookaheadEntries(); i != 2 {
-		t.Errorf("expected 2 GC lookahead entries, got: %v", i)
+	if i := tp.countLookaheadEntries(); i != 3 {
+		t.Errorf("expected 3 GC lookahead entries, got: %v", i)
 	}
 
 	<-time.After(5 * time.Second)
 	ab.(*dsAddrBook).purgeCycle()
-	if i := tp.countLookaheadEntries(); i != 0 {
-		t.Errorf("expected 0 GC lookahead entries, got: %v", i)
+	if i := tp.countLookaheadEntries(); i != 1 {
+		t.Errorf("expected 1 GC lookahead entries, got: %v", i)
 	}
-	if i := len(ab.PeersWithAddrs()); i != 0 {
-		t.Errorf("expected 0 entries in database, got: %v", i)
+	if i := len(ab.PeersWithAddrs()); i != 1 {
+		t.Errorf("expected 1 entries in database, got: %v", i)
+	}
+	if p := ab.PeersWithAddrs()[0]; p != ids[3] {
+		t.Errorf("expected remaining peer to be #3, got: %v, expected: %v", p, ids[3])
 	}
 }
