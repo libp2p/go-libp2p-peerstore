@@ -142,3 +142,33 @@ func TestGCPurging(t *testing.T) {
 		t.Errorf("expected remaining peer to be #3, got: %v, expected: %v", p, ids[3])
 	}
 }
+
+func TestGCDelay(t *testing.T) {
+	ids := test.GeneratePeerIDs(10)
+	addrs := test.GenerateAddrs(100)
+
+	opts := DefaultOpts()
+
+	opts.GCInitialDelay = 2 * time.Second
+	opts.GCLookaheadInterval = 2 * time.Second
+	opts.GCPurgeInterval = 6 * time.Hour
+
+	factory := addressBookFactory(t, badgerStore, opts)
+	ab, closeFn := factory()
+	defer closeFn()
+
+	tp := &testProbe{t, ab}
+
+	ab.AddAddrs(ids[0], addrs, 1*time.Second)
+
+	// immediately after we should be having no lookahead entries.
+	if i := tp.countLookaheadEntries(); i != 0 {
+		t.Errorf("expected no lookahead entries, got: %d", i)
+	}
+
+	// delay + lookahead interval = 4 seconds + 2 seconds for some slack = 6 seconds.
+	<-time.After(6 * time.Second)
+	if i := tp.countLookaheadEntries(); i != 1 {
+		t.Errorf("expected 1 lookahead entry, got: %d", i)
+	}
+}
