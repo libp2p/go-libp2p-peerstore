@@ -67,6 +67,11 @@
       "version": "3.4.1"
     },
     {
+      "hash": "QmQjMHF8ptRgx4E57UFMiT4YM6kqaJeYxZ1MCDX23aw4rK",
+      "name": "golang-lru",
+      "version": "2017.10.18"
+    },
+    {
       "author": "Stebalien",
       "hash": "QmQDvJoB6aJWN3sjr3xsgXqKCXf4jU5zdMXpDMsBkYVNqa",
       "name": "go-buffer-pool",
@@ -83,12 +88,6 @@
       "hash": "QmUhiHo586S2XpAFvkL1xDxeNwVHVQg7sDTxzS8ituQawr",
       "name": "go-ds-leveldb",
       "version": "1.2.2"
-    },
-    {
-      "author": "raul",
-      "hash": "Qmavz5e4xJcZEV9KZ6EAxibXSgXCrPXuX5Jd8dDoirTMZR",
-      "name": "golang-lru",
-      "version": "1.1.0"
     }
   ],
   "gxVersion": "0.4.0",
