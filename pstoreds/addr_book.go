@@ -81,16 +81,16 @@ func (r *addrsRecord) Flush(ds ds.TxnDatastore) (err error) {
 	return txn.Commit()
 }
 
-// Refresh is called on records to perform housekeeping. The return value signals if the record was changed
-// as a result of the refresh.
+// Clean is called on records to perform housekeeping. The return value signals if the record was changed
+// as a result of the cleaning.
 //
-// Refresh does the following:
+// Clean does the following:
 // * sorts the addresses by expiration (soonest expiring first).
 // * removes the addresses that have expired.
 //
 // It short-circuits optimistically when we know there's nothing to do.
 //
-// Refresh is called from several points:
+// Clean is called from several points:
 // * when accessing and loading an entry.
 // * when performing periodic GC.
 // * after an entry has been modified (e.g. addresses have been added or removed,
@@ -98,7 +98,7 @@ func (r *addrsRecord) Flush(ds ds.TxnDatastore) (err error) {
 //
 // If the return value is true, the caller can perform a flush immediately, or can schedule an async
 // flush, depending on the context.
-func (r *addrsRecord) Refresh() (chgd bool) {
+func (r *addrsRecord) Clean() (chgd bool) {
 	now := time.Now().Unix()
 	if !r.dirty && len(r.Addrs) > 0 && r.Addrs[0].Expiry > now {
 		// record is not dirty, and we have no expired entries to purge.
@@ -198,14 +198,14 @@ func (ab *dsAddrBook) asyncFlush(pr *addrsRecord) {
 // loadRecord is a read-through fetch. It fetches a record from cache, falling back to the
 // datastore upon a miss, and returning a newly initialized record if the peer doesn't exist.
 //
-// loadRecord calls Refresh() on the record before returning it. If the record changes
+// loadRecord calls Clean() on the record before returning it. If the record changes
 // as a result and `update=true`, an async flush is scheduled.
 //
 // If `cache=true`, the record is inserted in the cache when loaded from the datastore.
 func (ab *dsAddrBook) loadRecord(id peer.ID, cache bool, update bool) (pr *addrsRecord, err error) {
 	if e, ok := ab.cache.Get(id); ok {
 		pr = e.(*addrsRecord)
-		if pr.Refresh() && update {
+		if pr.Clean() && update {
 			ab.asyncFlush(pr)
 		}
 		return pr, nil
@@ -229,7 +229,7 @@ func (ab *dsAddrBook) loadRecord(id peer.ID, cache bool, update bool) (pr *addrs
 		if err = pr.Unmarshal(data); err != nil {
 			return nil, err
 		}
-		if pr.Refresh() && update {
+		if pr.Clean() && update {
 			ab.asyncFlush(pr)
 		}
 	} else {
@@ -293,7 +293,7 @@ var purgeQuery = query.Query{Prefix: gcLookaheadBase.String(), KeysOnly: true}
 
 // purgeCycle runs a single GC cycle, operating within the lookahead window.
 //
-// It scans the lookahead region for entries that need to be visited, and performs a refresh on them. An errors trigger
+// It scans the lookahead region for entries that need to be visited, and performs a Clean() on them. An errors trigger
 // the removal of the GC entry, in order to prevent unactionable items from accumulating. If the error happened to be
 // temporary, the entry will be revisited in the next lookahead window.
 func (ab *dsAddrBook) purgeCycle() {
@@ -323,7 +323,7 @@ func (ab *dsAddrBook) purgeCycle() {
 		}
 	}
 
-	// This function drops a GC key if the entry is refreshed correctly. It may reschedule another visit
+	// This function drops a GC key if the entry is cleaned correctly. It may reschedule another visit
 	// if the next earliest expiry falls within the current window again.
 	dropOrReschedule := func(key ds.Key, ar *addrsRecord) {
 		if err = txn.Delete(key); err != nil {
@@ -377,11 +377,11 @@ func (ab *dsAddrBook) purgeCycle() {
 			continue
 		}
 
-		// if the record is in cache, we refresh it and flush it if necessary.
+		// if the record is in cache, we clean it and flush it if necessary.
 		if e, ok := ab.cache.Peek(id); ok {
 			cached := e.(*addrsRecord)
 			cached.Lock()
-			if cached.Refresh() {
+			if cached.Clean() {
 				if err = cached.FlushInTxn(txn); err != nil {
 					log.Warningf("failed to flush entry modified by GC for peer: &v, err: %v", id.Pretty(), err)
 				}
@@ -393,7 +393,7 @@ func (ab *dsAddrBook) purgeCycle() {
 
 		record.Reset()
 
-		// otherwise, fetch it from the store, refresh it and flush it.
+		// otherwise, fetch it from the store, clean it and flush it.
 		entryKey := addrBookBase.ChildString(gcKey.Name())
 		val, err := txn.Get(entryKey)
 		if err != nil {
@@ -406,7 +406,7 @@ func (ab *dsAddrBook) purgeCycle() {
 			dropInError(gcKey, err, "unmarshalling entry")
 			continue
 		}
-		if record.Refresh() {
+		if record.Clean() {
 			err = record.FlushInTxn(txn)
 			if err != nil {
 				log.Warningf("failed to flush entry modified by GC for peer: &v, err: %v", id.Pretty(), err)
@@ -554,7 +554,7 @@ func (ab *dsAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.D
 		pr.dirty = true
 	}
 
-	if pr.Refresh() {
+	if pr.Clean() {
 		pr.Flush(ab.ds)
 	}
 }
@@ -665,7 +665,7 @@ Outer:
 
 	pr.Addrs = append(pr.Addrs, added...)
 	pr.dirty = true
-	pr.Refresh()
+	pr.Clean()
 	return pr.Flush(ab.ds)
 }
 
@@ -698,7 +698,7 @@ func (ab *dsAddrBook) deleteAddrs(p peer.ID, addrs []ma.Multiaddr) (err error) {
 	pr.Addrs = pr.Addrs[:survived]
 
 	pr.dirty = true
-	pr.Refresh()
+	pr.Clean()
 	return pr.Flush(ab.ds)
 }
 
