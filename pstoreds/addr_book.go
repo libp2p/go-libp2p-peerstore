@@ -13,6 +13,7 @@ import (
 	query "github.com/ipfs/go-datastore/query"
 	logging "github.com/ipfs/go-log"
 
+	pool "github.com/libp2p/go-buffer-pool"
 	peer "github.com/libp2p/go-libp2p-peer"
 	pstore "github.com/libp2p/go-libp2p-peerstore"
 	pb "github.com/libp2p/go-libp2p-peerstore/pb"
@@ -47,38 +48,26 @@ type addrsRecord struct {
 	dirty bool
 }
 
-// FlushInTxn writes the record to the datastore by calling ds.Put, unless the record is
+// Flush writes the record to the datastore by calling ds.Put, unless the record is
 // marked for deletion, in which case the deletion is executed via ds.Delete.
-func (r *addrsRecord) FlushInTxn(txn ds.Txn) (err error) {
+func (r *addrsRecord) Flush(ds ds.Datastore) (err error) {
 	key := addrBookBase.ChildString(b32.RawStdEncoding.EncodeToString([]byte(r.Id.ID)))
 	if len(r.Addrs) == 0 {
-		return txn.Delete(key)
+		return ds.Delete(key)
 	}
-	// cannot use a buffer pool because data is retained in the txn until it's committed or discarded.
-	data, err := r.Marshal()
+	data := pool.Get(r.Size())
+	defer pool.Put(data)
+
+	n, err := r.MarshalTo(data)
 	if err != nil {
 		return err
 	}
-	if err = txn.Put(key, data); err != nil {
+	if err = ds.Put(key, data[:n]); err != nil {
 		return err
 	}
 	// write succeeded; record is no longer dirty.
 	r.dirty = false
 	return nil
-}
-
-// Flush creates a ds.Txn, and calls FlushInTxn with it.
-func (r *addrsRecord) Flush(ds ds.TxnDatastore) (err error) {
-	txn, err := ds.NewTransaction(false)
-	if err != nil {
-		return err
-	}
-	defer txn.Discard()
-
-	if err = r.FlushInTxn(txn); err != nil {
-		return err
-	}
-	return txn.Commit()
 }
 
 // Clean is called on records to perform housekeeping. The return value signals if the record was changed
@@ -141,7 +130,7 @@ type dsAddrBook struct {
 	opts Options
 
 	cache       cache
-	ds          ds.TxnDatastore
+	ds          ds.Datastore
 	subsManager *pstoremem.AddrSubManager
 
 	flushJobCh chan *addrsRecord
@@ -210,14 +199,8 @@ func (ab *dsAddrBook) loadRecord(id peer.ID, cache bool, update bool) (pr *addrs
 		return pr, nil
 	}
 
-	txn, err := ab.ds.NewTransaction(true)
-	if err != nil {
-		return nil, err
-	}
-	defer txn.Discard()
-
 	key := addrBookBase.ChildString(b32.RawStdEncoding.EncodeToString([]byte(id)))
-	data, err := txn.Get(key)
+	data, err := ab.ds.Get(key)
 
 	if err != nil && err != ds.ErrNotFound {
 		return nil, err
@@ -316,12 +299,6 @@ func (ab *dsAddrBook) purgeCycle() {
 
 	var id peer.ID
 	record := &addrsRecord{AddrBookRecord: &pb.AddrBookRecord{}}
-	txn, err := ab.ds.NewTransaction(false)
-	if err != nil {
-		log.Warningf("failed while purging entries: %v", err)
-		return
-	}
-	defer txn.Discard()
 
 	// This function drops an unparseable GC entry; this is for safety. It is an escape hatch in case
 	// we modify the format of keys going forward. If a user runs a new version against an old DB,
@@ -330,7 +307,7 @@ func (ab *dsAddrBook) purgeCycle() {
 		if err != nil {
 			log.Warningf("failed while %s with GC key: %v, err: %v", msg, key, err)
 		}
-		if err = txn.Delete(key); err != nil {
+		if err = ab.ds.Delete(key); err != nil {
 			log.Warningf("failed to delete corrupt GC lookahead entry: %v, err: %v", key, err)
 		}
 	}
@@ -338,20 +315,20 @@ func (ab *dsAddrBook) purgeCycle() {
 	// This function drops a GC key if the entry is cleaned correctly. It may reschedule another visit
 	// if the next earliest expiry falls within the current window again.
 	dropOrReschedule := func(key ds.Key, ar *addrsRecord) {
-		if err = txn.Delete(key); err != nil {
+		if err := ab.ds.Delete(key); err != nil {
 			log.Warningf("failed to delete lookahead entry: %v, err: %v", key, err)
 		}
 
 		// re-add the record if it needs to be visited again in this window.
 		if len(ar.Addrs) != 0 && ar.Addrs[0].Expiry <= ab.gcCurrWindowEnd {
 			gcKey := gcLookaheadBase.ChildString(fmt.Sprintf("%d/%s", ar.Addrs[0].Expiry, key.Name()))
-			if err = txn.Put(gcKey, []byte{}); err != nil {
+			if err := ab.ds.Put(gcKey, []byte{}); err != nil {
 				log.Warningf("failed to add new GC key: %v, err: %v", gcKey, err)
 			}
 		}
 	}
 
-	results, err := txn.Query(purgeQuery)
+	results, err := ab.ds.Query(purgeQuery)
 	if err != nil {
 		log.Warningf("failed while fetching entries to purge: %v", err)
 		return
@@ -394,7 +371,7 @@ func (ab *dsAddrBook) purgeCycle() {
 			cached := e.(*addrsRecord)
 			cached.Lock()
 			if cached.Clean() {
-				if err = cached.FlushInTxn(txn); err != nil {
+				if err = cached.Flush(ab.ds); err != nil {
 					log.Warningf("failed to flush entry modified by GC for peer: &v, err: %v", id.Pretty(), err)
 				}
 			}
@@ -407,7 +384,7 @@ func (ab *dsAddrBook) purgeCycle() {
 
 		// otherwise, fetch it from the store, clean it and flush it.
 		entryKey := addrBookBase.ChildString(gcKey.Name())
-		val, err := txn.Get(entryKey)
+		val, err := ab.ds.Get(entryKey)
 		if err != nil {
 			// captures all errors, including ErrNotFound.
 			dropInError(gcKey, err, "fetching entry")
@@ -419,17 +396,12 @@ func (ab *dsAddrBook) purgeCycle() {
 			continue
 		}
 		if record.Clean() {
-			err = record.FlushInTxn(txn)
+			err = record.Flush(ab.ds)
 			if err != nil {
 				log.Warningf("failed to flush entry modified by GC for peer: &v, err: %v", id.Pretty(), err)
 			}
 		}
 		dropOrReschedule(gcKey, record)
-	}
-
-	err = txn.Commit()
-	if err != nil {
-		log.Warningf("failed to commit GC prune transaction: %v", err)
 	}
 }
 
@@ -449,14 +421,7 @@ func (ab *dsAddrBook) populateLookahead() {
 
 	var id peer.ID
 	record := &addrsRecord{AddrBookRecord: &pb.AddrBookRecord{}}
-	txn, err := ab.ds.NewTransaction(false)
-	if err != nil {
-		log.Warningf("failed while filling lookahead GC region: %v", err)
-		return
-	}
-	defer txn.Discard()
-
-	results, err := txn.Query(populateLookaheadQuery)
+	results, err := ab.ds.Query(populateLookaheadQuery)
 	if err != nil {
 		log.Warningf("failed while filling lookahead GC region: %v", err)
 		return
@@ -483,7 +448,7 @@ func (ab *dsAddrBook) populateLookahead() {
 				continue
 			}
 			gcKey := gcLookaheadBase.ChildString(fmt.Sprintf("%d/%s", cached.Addrs[0].Expiry, idb32))
-			if err = txn.Put(gcKey, []byte{}); err != nil {
+			if err = ab.ds.Put(gcKey, []byte{}); err != nil {
 				log.Warningf("failed while inserting GC entry for peer: %v, err: %v", id.Pretty(), err)
 			}
 			cached.RUnlock()
@@ -492,7 +457,7 @@ func (ab *dsAddrBook) populateLookahead() {
 
 		record.Reset()
 
-		val, err := txn.Get(ds.RawKey(result.Key))
+		val, err := ab.ds.Get(ds.RawKey(result.Key))
 		if err != nil {
 			log.Warningf("failed which getting record from store for peer: %v, err: %v", id.Pretty(), err)
 			continue
@@ -503,14 +468,10 @@ func (ab *dsAddrBook) populateLookahead() {
 		}
 		if len(record.Addrs) > 0 && record.Addrs[0].Expiry <= until {
 			gcKey := gcLookaheadBase.ChildString(fmt.Sprintf("%d/%s", record.Addrs[0].Expiry, idb32))
-			if err = txn.Put(gcKey, []byte{}); err != nil {
+			if err = ab.ds.Put(gcKey, []byte{}); err != nil {
 				log.Warningf("failed while inserting GC entry for peer: %v, err: %v", id.Pretty(), err)
 			}
 		}
-	}
-
-	if err = txn.Commit(); err != nil {
-		log.Warningf("failed to commit GC lookahead transaction: %v", err)
 	}
 
 	ab.gcCurrWindowEnd = until
@@ -612,18 +573,8 @@ func (ab *dsAddrBook) ClearAddrs(p peer.ID) {
 	ab.cache.Remove(p)
 
 	key := addrBookBase.ChildString(b32.RawStdEncoding.EncodeToString([]byte(p)))
-	txn, err := ab.ds.NewTransaction(false)
-	if err != nil {
+	if err := ab.ds.Delete(key); err != nil {
 		log.Errorf("failed to clear addresses for peer %s: %v", p.Pretty(), err)
-	}
-	defer txn.Discard()
-
-	if err := txn.Delete(key); err != nil {
-		log.Errorf("failed to clear addresses for peer %s: %v", p.Pretty(), err)
-	}
-
-	if err = txn.Commit(); err != nil {
-		log.Errorf("failed to commit transaction when deleting keys, cause: %v", err)
 	}
 }
 
@@ -669,9 +620,8 @@ Outer:
 			Expiry: newExp,
 		}
 		added = append(added, entry)
-		// TODO: should we only broadcast if we updated the store successfully?
-		// we have no way of rolling back the state of the in-memory record, although we
-		// could at the expense of allocs. But is it worthwhile?
+		// note: there's a minor chance that writing the record will fail, in which case we would've broadcast
+		// the addresses without persisting them. This is very unlikely and not much of an issue.
 		ab.subsManager.BroadcastAddr(p, addr)
 	}
 

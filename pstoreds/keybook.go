@@ -23,12 +23,12 @@ var (
 )
 
 type dsKeyBook struct {
-	ds ds.TxnDatastore
+	ds ds.Datastore
 }
 
 var _ pstore.KeyBook = (*dsKeyBook)(nil)
 
-func NewKeyBook(_ context.Context, store ds.TxnDatastore, _ Options) (pstore.KeyBook, error) {
+func NewKeyBook(_ context.Context, store ds.Datastore, _ Options) (pstore.KeyBook, error) {
 	return &dsKeyBook{store}, nil
 }
 

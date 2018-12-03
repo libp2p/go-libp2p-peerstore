@@ -64,20 +64,14 @@ func NewPeerstore(ctx context.Context, store ds.TxnDatastore, opts Options) (pst
 }
 
 // uniquePeerIds extracts and returns unique peer IDs from database keys.
-func uniquePeerIds(ds ds.TxnDatastore, prefix ds.Key, extractor func(result query.Result) string) (peer.IDSlice, error) {
+func uniquePeerIds(ds ds.Datastore, prefix ds.Key, extractor func(result query.Result) string) (peer.IDSlice, error) {
 	var (
 		q       = query.Query{Prefix: prefix.String(), KeysOnly: true}
 		results query.Results
 		err     error
 	)
 
-	txn, err := ds.NewTransaction(true)
-	if err != nil {
-		return nil, err
-	}
-	defer txn.Discard()
-
-	if results, err = txn.Query(q); err != nil {
+	if results, err = ds.Query(q); err != nil {
 		log.Error(err)
 		return nil, err
 	}
