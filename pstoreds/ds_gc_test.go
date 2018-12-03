@@ -172,3 +172,34 @@ func TestGCDelay(t *testing.T) {
 		t.Errorf("expected 1 lookahead entry, got: %d", i)
 	}
 }
+
+func BenchmarkLookaheadCycle(b *testing.B) {
+	ids := test.GeneratePeerIDs(100)
+	addrs := test.GenerateAddrs(100)
+
+	opts := DefaultOpts()
+
+	opts.GCInitialDelay = 2 * time.Hour
+	opts.GCLookaheadInterval = 2 * time.Hour
+	opts.GCPurgeInterval = 6 * time.Hour
+
+	factory := addressBookFactory(b, badgerStore, opts)
+	ab, closeFn := factory()
+	defer closeFn()
+
+	inside, outside := 1*time.Minute, 48*time.Hour
+	for i, id := range ids {
+		var ttl time.Duration
+		if i%2 == 0 {
+			ttl = inside
+		} else {
+			ttl = outside
+		}
+		ab.AddAddrs(id, addrs, ttl)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		ab.(*dsAddrBook).populateLookahead()
+	}
+}
