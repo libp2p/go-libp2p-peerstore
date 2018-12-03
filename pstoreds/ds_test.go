@@ -15,7 +15,7 @@ import (
 	pt "github.com/libp2p/go-libp2p-peerstore/test"
 )
 
-type datastoreFactory func(tb testing.TB) (ds.TxnDatastore, func())
+type datastoreFactory func(tb testing.TB) (ds.Batching, func())
 
 var dstores = map[string]datastoreFactory{
 	"Badger": badgerStore,
@@ -88,7 +88,7 @@ func BenchmarkDsPeerstore(b *testing.B) {
 	}
 }
 
-func badgerStore(tb testing.TB) (ds.TxnDatastore, func()) {
+func badgerStore(tb testing.TB) (ds.Batching, func()) {
 	dataPath, err := ioutil.TempDir(os.TempDir(), "badger")
 	if err != nil {
 		tb.Fatal(err)

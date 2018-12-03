@@ -43,7 +43,7 @@ func DefaultOpts() Options {
 }
 
 // NewPeerstore creates a peerstore backed by the provided persistent datastore.
-func NewPeerstore(ctx context.Context, store ds.TxnDatastore, opts Options) (pstore.Peerstore, error) {
+func NewPeerstore(ctx context.Context, store ds.Batching, opts Options) (pstore.Peerstore, error) {
 	addrBook, err := NewAddrBook(ctx, store, opts)
 	if err != nil {
 		return nil, err
