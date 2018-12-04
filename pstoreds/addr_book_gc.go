@@ -8,7 +8,7 @@ import (
 
 	ds "github.com/ipfs/go-datastore"
 	query "github.com/ipfs/go-datastore/query"
-	"github.com/pkg/errors"
+	errors "github.com/pkg/errors"
 
 	peer "github.com/libp2p/go-libp2p-peer"
 	pb "github.com/libp2p/go-libp2p-peerstore/pb"
@@ -80,6 +80,9 @@ func (cb *cyclicBatch) Delete(key ds.Key) error {
 }
 
 func (cb *cyclicBatch) Commit() error {
+	if cb.Batch == nil {
+		return errors.New("cyclic batch is closed")
+	}
 	if err := cb.Batch.Commit(); err != nil {
 		return err
 	}
