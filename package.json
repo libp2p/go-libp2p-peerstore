@@ -15,9 +15,9 @@
     },
     {
       "author": "whyrusleeping",
-      "hash": "QmRKLtwMw131aK7ugC3G7ybpumMz78YrJe5dzneyindvG1",
+      "hash": "QmNTCey11oxhb1AxDnQBRHtdhap6Ctud872NjAYPYYXPuc",
       "name": "go-multiaddr",
-      "version": "1.3.6"
+      "version": "1.4.0"
     },
     {
       "author": "whyrusleeping",
@@ -33,15 +33,15 @@
     },
     {
       "author": "jbenet",
-      "hash": "QmQVUtnrNGtCRkCMpXgpApfzQjc8FDaDVxHqWH8cnZQeh5",
+      "hash": "QmZcLBXKaFe8ND5YHPkJRAwmhJGrVsi1JqDZNyJ4nRK5Mj",
       "name": "go-multiaddr-net",
-      "version": "1.6.6"
+      "version": "1.7.1"
     },
     {
       "author": "whyrusleeping",
-      "hash": "QmXZVrmSiWPyuET6BMbGK3PjzVnQBrcnYc4GkHKhK2KXLp",
+      "hash": "QmYW5GSNZboYmtWWhzYr4yS3WDAuettAMh3iDLn5nGvwtc",
       "name": "mafmt",
-      "version": "1.2.9"
+      "version": "1.2.10"
     },
     {
       "author": "whyrusleeping",
@@ -95,6 +95,6 @@
   "license": "MIT",
   "name": "go-libp2p-peerstore",
   "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
-  "version": "2.0.12"
+  "version": "2.0.13"
 }
 
