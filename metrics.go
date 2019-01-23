@@ -1,10 +1,10 @@
-package peerstore
+package pstore
 
 import (
 	"sync"
 	"time"
 
-	"github.com/libp2p/go-libp2p-peer"
+	peer "github.com/libp2p/go-libp2p-peer"
 )
 
 // LatencyEWMASmooting governs the decay of the EWMA (the speed

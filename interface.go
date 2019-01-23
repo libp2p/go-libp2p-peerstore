@@ -1,4 +1,4 @@
-package peerstore
+package pstore
 
 import (
 	"context"

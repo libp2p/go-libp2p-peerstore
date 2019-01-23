@@ -1,11 +1,11 @@
-package peerstore
+package pstore
 
 import (
 	"encoding/json"
 	"fmt"
 	"strings"
 
-	"github.com/libp2p/go-libp2p-peer"
+	peer "github.com/libp2p/go-libp2p-peer"
 	ma "github.com/multiformats/go-multiaddr"
 )
 
