@@ -11,8 +11,8 @@ import (
 	badger "github.com/ipfs/go-ds-badger"
 	leveldb "github.com/ipfs/go-ds-leveldb"
 
-	pstore "github.com/libp2p/go-libp2p-peerstore"
-	pt "github.com/libp2p/go-libp2p-peerstore/test"
+	pstore "github.com/libp2p/go-libp2p-peerstore/v3"
+	pt "github.com/libp2p/go-libp2p-peerstore/v3/test"
 )
 
 type datastoreFactory func(tb testing.TB) (ds.TxnDatastore, func())

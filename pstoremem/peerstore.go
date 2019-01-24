@@ -1,6 +1,6 @@
 package pstoremem
 
-import pstore "github.com/libp2p/go-libp2p-peerstore"
+import pstore "github.com/libp2p/go-libp2p-peerstore/v3"
 
 // NewPeerstore creates an in-memory threadsafe collection of peers.
 func NewPeerstore() pstore.Peerstore {

@@ -10,8 +10,8 @@ import (
 	peer "github.com/libp2p/go-libp2p-peer"
 	ma "github.com/multiformats/go-multiaddr"
 
-	pstore "github.com/libp2p/go-libp2p-peerstore"
-	addr "github.com/libp2p/go-libp2p-peerstore/addr"
+	pstore "github.com/libp2p/go-libp2p-peerstore/v3"
+	addr "github.com/libp2p/go-libp2p-peerstore/v3/addr"
 )
 
 var log = logging.Logger("peerstore")

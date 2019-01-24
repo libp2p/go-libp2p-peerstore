@@ -10,7 +10,7 @@ import (
 	query "github.com/ipfs/go-datastore/query"
 
 	peer "github.com/libp2p/go-libp2p-peer"
-	pstore "github.com/libp2p/go-libp2p-peerstore"
+	pstore "github.com/libp2p/go-libp2p-peerstore/v3"
 )
 
 // Configuration object for the peerstore.

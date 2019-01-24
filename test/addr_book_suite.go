@@ -7,7 +7,7 @@ import (
 
 	peer "github.com/libp2p/go-libp2p-peer"
 	pt "github.com/libp2p/go-libp2p-peer/test"
-	pstore "github.com/libp2p/go-libp2p-peerstore"
+	pstore "github.com/libp2p/go-libp2p-peerstore/v3"
 	ma "github.com/multiformats/go-multiaddr"
 )
 

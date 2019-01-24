@@ -17,8 +17,8 @@ import (
 	mh "github.com/multiformats/go-multihash"
 
 	peer "github.com/libp2p/go-libp2p-peer"
-	pstore "github.com/libp2p/go-libp2p-peerstore"
-	pstoremem "github.com/libp2p/go-libp2p-peerstore/pstoremem"
+	pstore "github.com/libp2p/go-libp2p-peerstore/v3"
+	pstoremem "github.com/libp2p/go-libp2p-peerstore/v3/pstoremem"
 )
 
 var (

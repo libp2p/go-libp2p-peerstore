@@ -12,7 +12,7 @@ import (
 	peer "github.com/libp2p/go-libp2p-peer"
 	ma "github.com/multiformats/go-multiaddr"
 
-	pstore "github.com/libp2p/go-libp2p-peerstore"
+	pstore "github.com/libp2p/go-libp2p-peerstore/v3"
 )
 
 var peerstoreSuite = map[string]func(pstore.Peerstore) func(*testing.T){

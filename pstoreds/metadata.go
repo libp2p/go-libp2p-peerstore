@@ -11,7 +11,7 @@ import (
 
 	pool "github.com/libp2p/go-buffer-pool"
 	peer "github.com/libp2p/go-libp2p-peer"
-	pstore "github.com/libp2p/go-libp2p-peerstore"
+	pstore "github.com/libp2p/go-libp2p-peerstore/v3"
 )
 
 // Metadata is stored under the following db key pattern:
