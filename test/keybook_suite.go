@@ -140,6 +140,8 @@ func testKeyBookPeers(kb pstore.KeyBook) func(t *testing.T) {
 
 func testInlinedPubKeyAddedOnRetrieve(kb pstore.KeyBook) func(t *testing.T) {
 	return func(t *testing.T) {
+		t.Skip("key inlining disabled for now: see libp2p/specs#111")
+
 		if peers := kb.PeersWithKeys(); len(peers) > 0 {
 			t.Error("expected peers to be empty on init")
 		}
