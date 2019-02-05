@@ -44,6 +44,7 @@ func TestGCLookahead(t *testing.T) {
 
 	factory := addressBookFactory(t, badgerStore, opts)
 	ab, closeFn := factory()
+	gc := ab.(*dsAddrBook).gc
 	defer closeFn()
 
 	tp := &testProbe{t, ab}
@@ -55,7 +56,8 @@ func TestGCLookahead(t *testing.T) {
 	ab.AddAddrs(ids[0], addrs[:10], time.Hour)
 	ab.AddAddrs(ids[1], addrs[10:20], time.Hour)
 	ab.AddAddrs(ids[2], addrs[20:30], time.Hour)
-	ab.(*dsAddrBook).populateLookahead()
+
+	gc.populateLookahead()
 	if i := tp.countLookaheadEntries(); i != 0 {
 		t.Errorf("expected no GC lookahead entries, got: %v", i)
 	}
@@ -66,14 +68,14 @@ func TestGCLookahead(t *testing.T) {
 	// Purge the cache, to exercise a different path in the lookahead cycle.
 	tp.clearCache()
 
-	ab.(*dsAddrBook).populateLookahead()
+	gc.populateLookahead()
 	if i := tp.countLookaheadEntries(); i != 1 {
 		t.Errorf("expected 1 GC lookahead entry, got: %v", i)
 	}
 
 	// change addresses of another to have TTL 5 second, placing them in the lookahead window.
 	ab.UpdateAddrs(ids[2], time.Hour, 5*time.Second)
-	ab.(*dsAddrBook).populateLookahead()
+	gc.populateLookahead()
 	if i := tp.countLookaheadEntries(); i != 2 {
 		t.Errorf("expected 2 GC lookahead entries, got: %v", i)
 	}
@@ -89,6 +91,7 @@ func TestGCPurging(t *testing.T) {
 
 	factory := addressBookFactory(t, badgerStore, opts)
 	ab, closeFn := factory()
+	gc := ab.(*dsAddrBook).gc
 	defer closeFn()
 
 	tp := &testProbe{t, ab}
@@ -110,13 +113,13 @@ func TestGCPurging(t *testing.T) {
 	// this is inside the window, but it will survive the purges we do in the test.
 	ab.AddAddrs(ids[3], addrs[70:80], 15*time.Second)
 
-	ab.(*dsAddrBook).populateLookahead()
+	gc.populateLookahead()
 	if i := tp.countLookaheadEntries(); i != 4 {
 		t.Errorf("expected 4 GC lookahead entries, got: %v", i)
 	}
 
 	<-time.After(2 * time.Second)
-	ab.(*dsAddrBook).purgeCycle()
+	gc.purgeCycle()
 	if i := tp.countLookaheadEntries(); i != 3 {
 		t.Errorf("expected 3 GC lookahead entries, got: %v", i)
 	}
@@ -125,13 +128,13 @@ func TestGCPurging(t *testing.T) {
 	tp.clearCache()
 
 	<-time.After(5 * time.Second)
-	ab.(*dsAddrBook).purgeCycle()
+	gc.purgeCycle()
 	if i := tp.countLookaheadEntries(); i != 3 {
 		t.Errorf("expected 3 GC lookahead entries, got: %v", i)
 	}
 
 	<-time.After(5 * time.Second)
-	ab.(*dsAddrBook).purgeCycle()
+	gc.purgeCycle()
 	if i := tp.countLookaheadEntries(); i != 1 {
 		t.Errorf("expected 1 GC lookahead entries, got: %v", i)
 	}
@@ -200,6 +203,6 @@ func BenchmarkLookaheadCycle(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ab.(*dsAddrBook).populateLookahead()
+		ab.(*dsAddrBook).gc.populateLookahead()
 	}
 }

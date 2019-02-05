@@ -1,14 +1,13 @@
 package pstoreds
 
 import (
+	"context"
 	"fmt"
 	"strconv"
-	"sync/atomic"
 	"time"
 
 	ds "github.com/ipfs/go-datastore"
 	query "github.com/ipfs/go-datastore/query"
-	errors "github.com/pkg/errors"
 
 	peer "github.com/libp2p/go-libp2p-peer"
 	pb "github.com/libp2p/go-libp2p-peerstore/pb"
@@ -20,14 +19,17 @@ var (
 	// GC lookahead entries are stored in keys with pattern:
 	// /peers/gc/addrs/<unix timestamp of next visit>/<peer ID b32> => nil
 	gcLookaheadBase = ds.NewKey("/peers/gc/addrs")
+
 	// in GC routines, how many operations do we place in a batch before it's committed.
 	gcOpsPerBatch = 20
+
 	// queries
 	purgeQuery = query.Query{
 		Prefix:   gcLookaheadBase.String(),
 		Orders:   []query.Order{query.OrderByKey{}},
 		KeysOnly: true,
 	}
+
 	populateLookaheadQuery = query.Query{
 		Prefix:   addrBookBase.String(),
 		Orders:   []query.Order{query.OrderByKey{}},
@@ -35,82 +37,73 @@ var (
 	}
 )
 
-// cyclicBatch buffers datastore write operations and automatically flushes them after gcOpsPerBatch (20) have been
-// queued. An explicit `Commit()` closes this cyclic batch, erroring all further operations.
-//
-// It is similar to go-datastore autobatch, but it's driven by an actual Batch facility offered by the
-// datastore.
-type cyclicBatch struct {
-	ds.Batch
-	ds      ds.Batching
-	pending int
+// dsAddrBookGc encapsulates the GC behaviour to maintain a datastore-backed address book.
+type dsAddrBookGc struct {
+	ctx           context.Context
+	ab            *dsAddrBook
+	running       chan struct{}
+	currWindowEnd int64
 }
 
-func newCyclicBatch(ds ds.Batching) (ds.Batch, error) {
-	batch, err := ds.Batch()
-	if err != nil {
-		return nil, err
+func newAddressBookGc(ctx context.Context, ab *dsAddrBook) *dsAddrBookGc {
+	return &dsAddrBookGc{
+		ctx:     ctx,
+		ab:      ab,
+		running: make(chan struct{}, 1),
 	}
-	return &cyclicBatch{Batch: batch, ds: ds}, nil
 }
 
-func (cb *cyclicBatch) cycle() (err error) {
-	if cb.Batch == nil {
-		return errors.New("cyclic batch is closed")
-	}
-	if cb.pending < gcOpsPerBatch {
-		// we haven't reached the threshold yet.
-		return nil
-	}
-	// commit and renew the batch.
-	if err = cb.Batch.Commit(); err != nil {
-		return errors.Wrap(err, "failed while committing cyclic batch")
-	}
-	if cb.Batch, err = cb.ds.Batch(); err != nil {
-		return errors.Wrap(err, "failed while renewing cyclic batch")
-	}
-	return nil
-}
+// gc prunes expired addresses from the datastore at regular intervals. It should be spawned as a goroutine.
+func (gc *dsAddrBookGc) background() {
+	gc.ab.done.Add(1)
+	defer gc.ab.done.Done()
 
-func (cb *cyclicBatch) Put(key ds.Key, val []byte) error {
-	if err := cb.cycle(); err != nil {
-		return err
+	select {
+	case <-time.After(gc.ab.opts.GCInitialDelay):
+	case <-gc.ab.ctx.Done():
+		// yield if we have been cancelled/closed before the delay elapses.
+		return
 	}
-	cb.pending++
-	return cb.Batch.Put(key, val)
-}
 
-func (cb *cyclicBatch) Delete(key ds.Key) error {
-	if err := cb.cycle(); err != nil {
-		return err
-	}
-	cb.pending++
-	return cb.Batch.Delete(key)
-}
+	purgeTimer := time.NewTicker(gc.ab.opts.GCPurgeInterval)
+	defer purgeTimer.Stop()
 
-func (cb *cyclicBatch) Commit() error {
-	if cb.Batch == nil {
-		return errors.New("cyclic batch is closed")
+	var lookaheadCh <-chan time.Time
+	if gc.ab.opts.GCLookaheadInterval > 0 {
+		lookaheadTimer := time.NewTicker(gc.ab.opts.GCLookaheadInterval)
+		lookaheadCh = lookaheadTimer.C
+		defer lookaheadTimer.Stop()
 	}
-	if err := cb.Batch.Commit(); err != nil {
-		return err
+
+	for {
+		select {
+		case <-purgeTimer.C:
+			gc.purgeCycle()
+
+		case <-lookaheadCh:
+			// will never trigger if lookahead is disabled (nil Duration).
+			gc.populateLookahead()
+
+		case <-gc.ctx.Done():
+			return
+		}
 	}
-	cb.pending = 0
-	cb.Batch = nil
-	return nil
 }
 
 // purgeCycle runs a single GC purge cycle. It operates within the lookahead window if lookahead is enabled; else it
 // visits all entries in the datastore, deleting the addresses that have expired.
-func (ab *dsAddrBook) purgeCycle() {
-	if atomic.LoadInt32(&ab.gcLookaheadRunning) > 0 {
+func (gc *dsAddrBookGc) purgeCycle() {
+	select {
+	case gc.running <- struct{}{}:
+		defer func() { <-gc.running }()
+	default:
 		// yield if lookahead is running.
 		return
 	}
 
 	var id peer.ID
 	record := &addrsRecord{AddrBookRecord: &pb.AddrBookRecord{}} // empty record to reuse and avoid allocs.
-	batch, err := newCyclicBatch(ab.ds)
+	batch, err := newCyclicBatch(gc.ab.ds)
 	if err != nil {
 		log.Warningf("failed while creating batch to purge GC entries: %v", err)
 	}
@@ -135,7 +128,7 @@ func (ab *dsAddrBook) purgeCycle() {
 		}
 
 		// re-add the record if it needs to be visited again in this window.
-		if len(ar.Addrs) != 0 && ar.Addrs[0].Expiry <= ab.gcCurrWindowEnd {
+		if len(ar.Addrs) != 0 && ar.Addrs[0].Expiry <= gc.currWindowEnd {
 			gcKey := gcLookaheadBase.ChildString(fmt.Sprintf("%d/%s", ar.Addrs[0].Expiry, key.Name()))
 			if err := batch.Put(gcKey, []byte{}); err != nil {
 				log.Warningf("failed to add new GC key: %v, err: %v", gcKey, err)
@@ -143,7 +136,7 @@ func (ab *dsAddrBook) purgeCycle() {
 		}
 	}
 
-	results, err := ab.ds.Query(purgeQuery)
+	results, err := gc.ab.ds.Query(purgeQuery)
 	if err != nil {
 		log.Warningf("failed while fetching entries to purge: %v", err)
 		return
@@ -181,7 +174,7 @@ func (ab *dsAddrBook) purgeCycle() {
 		}
 
 		// if the record is in cache, we clean it and flush it if necessary.
-		if e, ok := ab.cache.Peek(id); ok {
+		if e, ok := gc.ab.cache.Peek(id); ok {
 			cached := e.(*addrsRecord)
 			cached.Lock()
 			if cached.Clean() {
@@ -198,7 +191,7 @@ func (ab *dsAddrBook) purgeCycle() {
 
 		// otherwise, fetch it from the store, clean it and flush it.
 		entryKey := addrBookBase.ChildString(gcKey.Name())
-		val, err := ab.ds.Get(entryKey)
+		val, err := gc.ab.ds.Get(entryKey)
 		if err != nil {
 			// captures all errors, including ErrNotFound.
 			dropInError(gcKey, err, "fetching entry")
@@ -224,27 +217,31 @@ func (ab *dsAddrBook) purgeCycle() {
 }
 
 // populateLookahead populates the lookahead window by scanning the entire store and picking entries whose earliest
-// expiration falls within the new window.
+// expiration falls within the window period.
 //
 // Those entries are stored in the lookahead region in the store, indexed by the timestamp when they need to be
 // visited, to facilitate temporal range scans.
-func (ab *dsAddrBook) populateLookahead() {
-	if !atomic.CompareAndSwapInt32(&ab.gcLookaheadRunning, 0, 1) {
+func (gc *dsAddrBookGc) populateLookahead() {
+	select {
+	case gc.running <- struct{}{}:
+		defer func() { <-gc.running }()
+	default:
+		// yield if something's running.
 		return
 	}
 
-	until := time.Now().Add(ab.opts.GCLookaheadInterval).Unix()
+	until := time.Now().Add(gc.ab.opts.GCLookaheadInterval).Unix()
 
 	var id peer.ID
 	record := &addrsRecord{AddrBookRecord: &pb.AddrBookRecord{}}
-	results, err := ab.ds.Query(populateLookaheadQuery)
+	results, err := gc.ab.ds.Query(populateLookaheadQuery)
 	if err != nil {
 		log.Warningf("failed while querying to populate lookahead GC window: %v", err)
 		return
 	}
 	defer results.Close()
 
-	batch, err := newCyclicBatch(ab.ds)
+	batch, err := newCyclicBatch(gc.ab.ds)
 	if err != nil {
 		log.Warningf("failed while creating batch to populate lookahead GC window: %v", err)
 		return
@@ -262,7 +259,7 @@ func (ab *dsAddrBook) populateLookahead() {
 		}
 
 		// if the record is in cache, use the cached version.
-		if e, ok := ab.cache.Peek(id); ok {
+		if e, ok := gc.ab.cache.Peek(id); ok {
 			cached := e.(*addrsRecord)
 			cached.RLock()
 			if len(cached.Addrs) == 0 || cached.Addrs[0].Expiry > until {
@@ -279,7 +276,7 @@ func (ab *dsAddrBook) populateLookahead() {
 
 		record.Reset()
 
-		val, err := ab.ds.Get(ds.RawKey(result.Key))
+		val, err := gc.ab.ds.Get(ds.RawKey(result.Key))
 		if err != nil {
 			log.Warningf("failed which getting record from store for peer: %v, err: %v", id.Pretty(), err)
 			continue
@@ -300,6 +297,5 @@ func (ab *dsAddrBook) populateLookahead() {
 		log.Warningf("failed to commit GC lookahead batch: %v", err)
 	}
 
-	ab.gcCurrWindowEnd = until
-	atomic.StoreInt32(&ab.gcLookaheadRunning, 0)
+	gc.currWindowEnd = until
 }

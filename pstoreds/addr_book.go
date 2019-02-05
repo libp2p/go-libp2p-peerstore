@@ -118,20 +118,17 @@ func (r *addrsRecord) Clean() (chgd bool) {
 // dsAddrBook is an address book backed by a Datastore with a GC-like procedure
 // to purge expired entries. It uses an in-memory address stream manager.
 type dsAddrBook struct {
-	ctx context.Context
-
+	ctx  context.Context
 	opts Options
 
 	cache       cache
 	ds          ds.Batching
+	gc          *dsAddrBookGc
 	subsManager *pstoremem.AddrSubManager
 
 	flushJobCh chan *addrsRecord
 	cancelFn   func()
-	closeDone  sync.WaitGroup
-
-	gcCurrWindowEnd    int64
-	gcLookaheadRunning int32
+	done       sync.WaitGroup
 }
 
 var _ pstore.AddrBook = (*dsAddrBook)(nil)
@@ -157,16 +154,18 @@ func NewAddrBook(ctx context.Context, store ds.Batching, opts Options) (ab *dsAd
 		flushJobCh:  make(chan *addrsRecord, 32),
 	}
 
+	ab.gc = newAddressBookGc(ctx, ab)
+
 	// kick off background processes.
 	go ab.flusher()
-	go ab.gc()
+	go ab.gc.background()
 
 	return ab, nil
 }
 
 func (ab *dsAddrBook) Close() {
 	ab.cancelFn()
-	ab.closeDone.Wait()
+	ab.done.Wait()
 }
 
 func (ab *dsAddrBook) asyncFlush(pr *addrsRecord) {
@@ -219,7 +218,9 @@ func (ab *dsAddrBook) loadRecord(id peer.ID, cache bool, update bool) (pr *addrs
 
 // flusher is a goroutine that takes care of persisting asynchronous flushes to the datastore.
 func (ab *dsAddrBook) flusher() {
-	ab.closeDone.Add(1)
+	ab.done.Add(1)
+	defer ab.done.Done()
+
 	for {
 		select {
 		case fj := <-ab.flushJobCh:
@@ -236,37 +237,6 @@ func (ab *dsAddrBook) flusher() {
 			}
 
 		case <-ab.ctx.Done():
-			ab.closeDone.Done()
-			return
-		}
-	}
-}
-
-// gc is a goroutine that prunes expired addresses from the datastore at regular intervals.
-func (ab *dsAddrBook) gc() {
-	select {
-	case <-time.After(ab.opts.GCInitialDelay):
-	case <-ab.ctx.Done():
-		// yield if we have been cancelled/closed before the delay elapses.
-		return
-	}
-
-	ab.closeDone.Add(1)
-	purgeTimer := time.NewTicker(ab.opts.GCPurgeInterval)
-	lookaheadTimer := time.NewTicker(ab.opts.GCLookaheadInterval)
-
-	for {
-		select {
-		case <-purgeTimer.C:
-			ab.purgeCycle()
-
-		case <-lookaheadTimer.C:
-			ab.populateLookahead()
-
-		case <-ab.ctx.Done():
-			purgeTimer.Stop()
-			lookaheadTimer.Stop()
-			ab.closeDone.Done()
 			return
 		}
 	}
