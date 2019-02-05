@@ -23,8 +23,16 @@ var (
 	// in GC routines, how many operations do we place in a batch before it's committed.
 	gcOpsPerBatch = 20
 	// queries
-	purgeQuery             = query.Query{Prefix: gcLookaheadBase.String(), KeysOnly: true}
-	populateLookaheadQuery = query.Query{Prefix: addrBookBase.String(), KeysOnly: true}
+	purgeQuery = query.Query{
+		Prefix:   gcLookaheadBase.String(),
+		Orders:   []query.Order{query.OrderByKey{}},
+		KeysOnly: true,
+	}
+	populateLookaheadQuery = query.Query{
+		Prefix:   addrBookBase.String(),
+		Orders:   []query.Order{query.OrderByKey{}},
+		KeysOnly: true,
+	}
 )
 
 // cyclicBatch is similar to go-datastore autobatch, but it's driven by an actual Batch facility offered by the
