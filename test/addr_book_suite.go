@@ -90,8 +90,8 @@ func testAddAddress(ab pstore.AddrBook) func(*testing.T) {
 		})
 
 		t.Run("adding an existing address with an earlier expiration is noop", func(t *testing.T) {
-			id := generatePeerIds(1)[0]
-			addrs := generateAddrs(3)
+			id := GeneratePeerIDs(1)[0]
+			addrs := GenerateAddrs(3)
 
 			ab.AddAddrs(id, addrs, time.Hour)
 

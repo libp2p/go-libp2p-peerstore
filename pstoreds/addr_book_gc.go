@@ -35,10 +35,11 @@ var (
 	}
 )
 
-// cyclicBatch is similar to go-datastore autobatch, but it's driven by an actual Batch facility offered by the
-// datastore. It populates an ongoing batch with operations and automatically flushes it after N pending operations
-// have been reached. `N` is currently hardcoded to 20. An explicit `Commit()` closes this cyclic batch, erroring all
-// further operations.
+// cyclicBatch buffers datastore write operations and automatically flushes them after gcOpsPerBatch (20) have been
+// queued. An explicit `Commit()` closes this cyclic batch, erroring all further operations.
+//
+// It is similar to go-datastore autobatch, but it's driven by an actual Batch facility offered by the
+// datastore.
 type cyclicBatch struct {
 	ds.Batch
 	ds      ds.Batching
@@ -99,11 +100,8 @@ func (cb *cyclicBatch) Commit() error {
 	return nil
 }
 
-// purgeCycle runs a single GC cycle, operating within the lookahead window.
-//
-// It scans the lookahead region for entries that need to be visited, and performs a Clean() on them. An errors trigger
-// the removal of the GC entry, in order to prevent unactionable items from accumulating. If the error happened to be
-// temporary, the entry will be revisited in the next lookahead window.
+// purgeCycle runs a single GC purge cycle. It operates within the lookahead window if lookahead is enabled; else it
+// visits all entries in the datastore, deleting the addresses that have expired.
 func (ab *dsAddrBook) purgeCycle() {
 	if atomic.LoadInt32(&ab.gcLookaheadRunning) > 0 {
 		// yield if lookahead is running.
@@ -111,7 +109,7 @@ func (ab *dsAddrBook) purgeCycle() {
 	}
 
 	var id peer.ID
-	record := &addrsRecord{AddrBookRecord: &pb.AddrBookRecord{}}
+	record := &addrsRecord{AddrBookRecord: &pb.AddrBookRecord{}} // empty record to reuse and avoid allocs.
 	batch, err := newCyclicBatch(ab.ds)
 	if err != nil {
 		log.Warningf("failed while creating batch to purge GC entries: %v", err)
@@ -187,7 +185,7 @@ func (ab *dsAddrBook) purgeCycle() {
 			cached := e.(*addrsRecord)
 			cached.Lock()
 			if cached.Clean() {
-				if err = cached.Flush(batch); err != nil {
+				if err = cached.flush(batch); err != nil {
 					log.Warningf("failed to flush entry modified by GC for peer: &v, err: %v", id.Pretty(), err)
 				}
 			}
@@ -212,7 +210,7 @@ func (ab *dsAddrBook) purgeCycle() {
 			continue
 		}
 		if record.Clean() {
-			err = record.Flush(batch)
+			err = record.flush(batch)
 			if err != nil {
 				log.Warningf("failed to flush entry modified by GC for peer: &v, err: %v", id.Pretty(), err)
 			}
