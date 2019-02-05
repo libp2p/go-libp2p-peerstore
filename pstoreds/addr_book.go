@@ -36,11 +36,6 @@ var (
 	addrBookBase = ds.NewKey("/peers/addrs")
 )
 
-type dsWriter interface {
-	Put(key ds.Key, value []byte) error
-	Delete(key ds.Key) error
-}
-
 // addrsRecord decorates the AddrBookRecord with locks and metadata.
 type addrsRecord struct {
 	sync.RWMutex
@@ -50,17 +45,17 @@ type addrsRecord struct {
 
 // flush writes the record to the datastore by calling ds.Put, unless the record is
 // marked for deletion, in which case we call ds.Delete.
-func (r *addrsRecord) flush(ds dsWriter) (err error) {
+func (r *addrsRecord) flush(write ds.Write) (err error) {
 	key := addrBookBase.ChildString(b32.RawStdEncoding.EncodeToString([]byte(r.Id.ID)))
 	if len(r.Addrs) == 0 {
-		return ds.Delete(key)
+		return write.Delete(key)
 	}
 
 	data, err := r.Marshal()
 	if err != nil {
 		return err
 	}
-	if err = ds.Put(key, data); err != nil {
+	if err = write.Put(key, data); err != nil {
 		return err
 	}
 	// write succeeded; record is no longer dirty.
