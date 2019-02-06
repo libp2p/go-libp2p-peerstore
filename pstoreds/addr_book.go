@@ -63,23 +63,23 @@ func (r *addrsRecord) flush(write ds.Write) (err error) {
 	return nil
 }
 
-// Clean is called on records to perform housekeeping. The return value indicates if the record was changed
+// clean is called on records to perform housekeeping. The return value indicates if the record was changed
 // as a result of this call.
 //
-// Clean does the following:
+// clean does the following:
 // * sorts addresses by expiration (soonest expiring first).
 // * removes expired addresses.
 //
 // It short-circuits optimistically when there's nothing to do.
 //
-// Clean is called from several points:
+// clean is called from several points:
 // * when accessing an entry.
 // * when performing periodic GC.
 // * after an entry has been modified (e.g. addresses have been added or removed, TTLs updated, etc.)
 //
 // If the return value is true, the caller can perform a flush immediately, or can schedule an async
 // flush, depending on the context.
-func (r *addrsRecord) Clean() (chgd bool) {
+func (r *addrsRecord) clean() (chgd bool) {
 	now := time.Now().Unix()
 	if !r.dirty && len(r.Addrs) > 0 && r.Addrs[0].Expiry > now {
 		// record is not dirty, and we have no expired entries to purge.
@@ -195,14 +195,14 @@ func (ab *dsAddrBook) asyncFlush(pr *addrsRecord) {
 // loadRecord is a read-through fetch. It fetches a record from cache, falling back to the
 // datastore upon a miss, and returning a newly initialized record if the peer doesn't exist.
 //
-// loadRecord calls Clean() on existing recordsrecord before returning it. If the record changes
+// loadRecord calls clean() on existing recordsrecord before returning it. If the record changes
 // as a result and the update argument is true, an async flush is queued.
 //
 // If the cache argument is true, the record is inserted in the cache when loaded from the datastore.
 func (ab *dsAddrBook) loadRecord(id peer.ID, cache bool, update bool) (pr *addrsRecord, err error) {
 	if e, ok := ab.cache.Get(id); ok {
 		pr = e.(*addrsRecord)
-		if pr.Clean() && update {
+		if pr.clean() && update {
 			ab.asyncFlush(pr)
 		}
 		return pr, nil
@@ -219,7 +219,7 @@ func (ab *dsAddrBook) loadRecord(id peer.ID, cache bool, update bool) (pr *addrs
 		if err = pr.Unmarshal(data); err != nil {
 			return nil, err
 		}
-		if pr.Clean() && update {
+		if pr.clean() && update {
 			ab.asyncFlush(pr)
 		}
 	default:
@@ -307,7 +307,7 @@ func (ab *dsAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.D
 		pr.dirty = true
 	}
 
-	if pr.Clean() {
+	if pr.clean() {
 		pr.flush(ab.ds)
 	}
 }
@@ -407,7 +407,7 @@ Outer:
 
 	pr.Addrs = append(pr.Addrs, added...)
 	pr.dirty = true
-	pr.Clean()
+	pr.clean()
 	return pr.flush(ab.ds)
 }
 
@@ -440,7 +440,7 @@ func (ab *dsAddrBook) deleteAddrs(p peer.ID, addrs []ma.Multiaddr) (err error) {
 	pr.Addrs = pr.Addrs[:survived]
 
 	pr.dirty = true
-	pr.Clean()
+	pr.clean()
 	return pr.flush(ab.ds)
 }
 

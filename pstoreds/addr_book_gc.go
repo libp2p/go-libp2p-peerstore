@@ -212,7 +212,7 @@ func (gc *dsAddrBookGc) purgeLookahead() {
 		if e, ok := gc.ab.cache.Peek(id); ok {
 			cached := e.(*addrsRecord)
 			cached.Lock()
-			if cached.Clean() {
+			if cached.clean() {
 				if err = cached.flush(batch); err != nil {
 					log.Warningf("failed to flush entry modified by GC for peer: &v, err: %v", id.Pretty(), err)
 				}
@@ -237,7 +237,7 @@ func (gc *dsAddrBookGc) purgeLookahead() {
 			dropInError(gcKey, err, "unmarshalling entry")
 			continue
 		}
-		if record.Clean() {
+		if record.clean() {
 			err = record.flush(batch)
 			if err != nil {
 				log.Warningf("failed to flush entry modified by GC for peer: &v, err: %v", id.Pretty(), err)
@@ -282,7 +282,7 @@ func (gc *dsAddrBookGc) purgeStore() {
 		}
 
 		id := record.Id.ID
-		if !record.Clean() {
+		if !record.clean() {
 			continue
 		}
 
