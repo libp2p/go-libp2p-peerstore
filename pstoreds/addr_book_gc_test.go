@@ -41,7 +41,7 @@ func TestGCLookahead(t *testing.T) {
 	// effectively disable automatic GC for this test.
 	opts.GCInitialDelay = 90 * time.Hour
 	opts.GCLookaheadInterval = 10 * time.Second
-	opts.GCPurgeInterval = 1 * time.Minute
+	opts.GCPurgeInterval = 1 * time.Second
 
 	factory := addressBookFactory(t, badgerStore, opts)
 	ab, closeFn := factory()
@@ -88,7 +88,7 @@ func TestGCPurging(t *testing.T) {
 	// effectively disable automatic GC for this test.
 	opts.GCInitialDelay = 90 * time.Hour
 	opts.GCLookaheadInterval = 20 * time.Second
-	opts.GCPurgeInterval = 1 * time.Minute
+	opts.GCPurgeInterval = 1 * time.Second
 
 	factory := addressBookFactory(t, badgerStore, opts)
 	ab, closeFn := factory()
@@ -154,8 +154,8 @@ func TestGCDelay(t *testing.T) {
 	opts := DefaultOpts()
 
 	opts.GCInitialDelay = 2 * time.Second
-	opts.GCLookaheadInterval = 2 * time.Second
-	opts.GCPurgeInterval = 6 * time.Hour
+	opts.GCLookaheadInterval = 1 * time.Minute
+	opts.GCPurgeInterval = 30 * time.Second
 
 	factory := addressBookFactory(t, badgerStore, opts)
 	ab, closeFn := factory()
@@ -170,8 +170,8 @@ func TestGCDelay(t *testing.T) {
 		t.Errorf("expected no lookahead entries, got: %d", i)
 	}
 
-	// delay + lookahead interval = 4 seconds + 2 seconds for some slack = 6 seconds.
-	<-time.After(6 * time.Second)
+	// after the initial delay has passed.
+	<-time.After(3 * time.Second)
 	if i := tp.countLookaheadEntries(); i != 1 {
 		t.Errorf("expected 1 lookahead entry, got: %d", i)
 	}

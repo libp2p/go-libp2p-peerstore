@@ -107,6 +107,7 @@ func (gc *dsAddrBookGc) background() {
 	if gc.lookaheadEnabled {
 		lookaheadTimer := time.NewTicker(gc.ab.opts.GCLookaheadInterval)
 		lookaheadCh = lookaheadTimer.C
+		gc.populateLookahead() // do a lookahead now
 		defer lookaheadTimer.Stop()
 	}
 
