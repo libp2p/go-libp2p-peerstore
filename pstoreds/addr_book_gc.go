@@ -16,12 +16,11 @@ import (
 )
 
 var (
-	// GC lookahead entries are stored in keys with pattern:
+	// GC lookahead entries are stored in key pattern:
 	// /peers/gc/addrs/<unix timestamp of next visit>/<peer ID b32> => nil
+	// in databases with lexicographical key order, this time-indexing allows us to visit
+	// only the timeslice we are interested in.
 	gcLookaheadBase = ds.NewKey("/peers/gc/addrs")
-
-	// in GC routines, how many operations do we place in a batch before it's committed.
-	gcOpsPerBatch = 20
 
 	// queries
 	purgeLookaheadQuery = query.Query{
@@ -43,7 +42,6 @@ var (
 	}
 )
 
-// dsAddrBookGc encapsulates the GC behaviour to maintain a datastore-backed address book.
 type dsAddrBookGc struct {
 	ctx              context.Context
 	ab               *dsAddrBook
@@ -62,6 +60,10 @@ func newAddressBookGc(ctx context.Context, ab *dsAddrBook) (*dsAddrBookGc, error
 	}
 	if ab.opts.GCInitialDelay < 0 {
 		return nil, fmt.Errorf("negative GC initial delay provided: %s", ab.opts.GCInitialDelay)
+	}
+	if ab.opts.GCLookaheadInterval > 0 && ab.opts.GCLookaheadInterval < ab.opts.GCPurgeInterval {
+		return nil, fmt.Errorf("lookahead interval must be larger than purge interval, respectively: %s, %s",
+			ab.opts.GCLookaheadInterval, ab.opts.GCPurgeInterval)
 	}
 
 	lookaheadEnabled := ab.opts.GCLookaheadInterval > 0
@@ -136,7 +138,7 @@ func (gc *dsAddrBookGc) purgeLookahead() {
 
 	var id peer.ID
 	record := &addrsRecord{AddrBookRecord: &pb.AddrBookRecord{}} // empty record to reuse and avoid allocs.
-	batch, err := newCyclicBatch(gc.ab.ds)
+	batch, err := newCyclicBatch(gc.ab.ds, defaultOpsPerCyclicBatch)
 	if err != nil {
 		log.Warningf("failed while creating batch to purge GC entries: %v", err)
 	}
@@ -259,7 +261,7 @@ func (gc *dsAddrBookGc) purgeStore() {
 	}
 
 	record := &addrsRecord{AddrBookRecord: &pb.AddrBookRecord{}} // empty record to reuse and avoid allocs.
-	batch, err := newCyclicBatch(gc.ab.ds)
+	batch, err := newCyclicBatch(gc.ab.ds, defaultOpsPerCyclicBatch)
 	if err != nil {
 		log.Warningf("failed while creating batch to purge GC entries: %v", err)
 	}
@@ -324,7 +326,7 @@ func (gc *dsAddrBookGc) populateLookahead() {
 	}
 	defer results.Close()
 
-	batch, err := newCyclicBatch(gc.ab.ds)
+	batch, err := newCyclicBatch(gc.ab.ds, defaultOpsPerCyclicBatch)
 	if err != nil {
 		log.Warningf("failed while creating batch to populate lookahead GC window: %v", err)
 		return

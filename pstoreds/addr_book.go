@@ -31,7 +31,7 @@ const (
 var (
 	log = logging.Logger("peerstore/ds")
 
-	// Peer addresses are stored under the following db key pattern:
+	// Peer addresses are stored db key pattern:
 	// /peers/addrs/<b32 peer id no padding>
 	addrBookBase = ds.NewKey("/peers/addrs")
 )
@@ -44,7 +44,7 @@ type addrsRecord struct {
 }
 
 // flush writes the record to the datastore by calling ds.Put, unless the record is
-// marked for deletion, in which case we call ds.Delete.
+// marked for deletion, in which case we call ds.Delete. To be called within a lock.
 func (r *addrsRecord) flush(write ds.Write) (err error) {
 	key := addrBookBase.ChildString(b32.RawStdEncoding.EncodeToString([]byte(r.Id.ID)))
 	if len(r.Addrs) == 0 {
@@ -63,20 +63,19 @@ func (r *addrsRecord) flush(write ds.Write) (err error) {
 	return nil
 }
 
-// Clean is called on records to perform housekeeping. The return value signals if the record was changed
-// as a result of the cleaning.
+// Clean is called on records to perform housekeeping. The return value indicates if the record was changed
+// as a result of this call.
 //
 // Clean does the following:
-// * sorts the addresses by expiration (soonest expiring first).
-// * removes the addresses that have expired.
+// * sorts addresses by expiration (soonest expiring first).
+// * removes expired addresses.
 //
-// It short-circuits optimistically when we know there's nothing to do.
+// It short-circuits optimistically when there's nothing to do.
 //
 // Clean is called from several points:
-// * when accessing and loading an entry.
+// * when accessing an entry.
 // * when performing periodic GC.
-// * after an entry has been modified (e.g. addresses have been added or removed,
-//   TTLs updated, etc.)
+// * after an entry has been modified (e.g. addresses have been added or removed, TTLs updated, etc.)
 //
 // If the return value is true, the caller can perform a flush immediately, or can schedule an async
 // flush, depending on the context.
@@ -101,8 +100,8 @@ func (r *addrsRecord) Clean() (chgd bool) {
 		})
 	}
 
-	// since addresses are sorted by expiration, we find the first survivor and split the
-	// slice on its index.
+	// since addresses are sorted by expiration, we find the first
+	// survivor and split the slice on its index.
 	pivot := -1
 	for i, addr := range r.Addrs {
 		if addr.Expiry > now {
@@ -115,8 +114,8 @@ func (r *addrsRecord) Clean() (chgd bool) {
 	return r.dirty || pivot >= 0
 }
 
-// dsAddrBook is an address book backed by a Datastore with a GC-like procedure
-// to purge expired entries. It uses an in-memory address stream manager.
+// dsAddrBook is an address book backed by a Datastore with a GC procedure to purge expired entries. It uses an
+// in-memory address stream manager. See the NewAddrBook for more information.
 type dsAddrBook struct {
 	ctx  context.Context
 	opts Options
@@ -133,8 +132,25 @@ type dsAddrBook struct {
 
 var _ pstore.AddrBook = (*dsAddrBook)(nil)
 
-// NewAddrBook initializes a new address book given a Datastore instance, a context for managing the TTL manager,
-// and the interval at which the TTL manager should sweep the Datastore.
+// NewAddrBook initializes a new datastore-backed address book. It serves as a drop-in replacement for pstoremem
+// (memory-backed peerstore), and works with any datastore implementing the ds.Batching interface.
+//
+// Addresses and peer records are serialized into protobuf, storing one datastore entry per peer, along with metadata
+// to control address expiration. To alleviate disk access and serde overhead, we internally use a read/write-through
+// ARC cache, the size of which is adjustable via Options.CacheSize.
+//
+// The user has a choice of two GC algorithms:
+//
+//  - lookahead GC: minimises the amount of full store traversals by maintaining a time-indexed list of entries that
+//    need to be visited within the period specified in Options.GCLookaheadInterval. This is useful in scenarios with
+//    considerable TTL variance, coupled with datastores whose native iterators return entries in lexicographical key
+//    order. Enable this mode by passing a value Options.GCLookaheadInterval > 0. Lookahead windows are jumpy, not
+//    sliding. Purges operate exclusively over the lookahead window with periodicity Options.GCPurgeInterval.
+//
+//  - full-purge GC (default): performs a full visit of the store with periodicity Options.GCPurgeInterval. Useful when
+//    the range of possible TTL values is small and the values themselves are also extreme, e.g. 10 minutes or
+//    permanent, popular values used in other libp2p modules. In this cited case, optimizing with lookahead windows
+//    makes little sense.
 func NewAddrBook(ctx context.Context, store ds.Batching, opts Options) (ab *dsAddrBook, err error) {
 	var cache cache = new(noopCache)
 	if opts.CacheSize > 0 {
@@ -158,7 +174,6 @@ func NewAddrBook(ctx context.Context, store ds.Batching, opts Options) (ab *dsAd
 		return nil, err
 	}
 
-	// kick off background processes.
 	go ab.flusher()
 
 	return ab, nil
@@ -180,7 +195,7 @@ func (ab *dsAddrBook) asyncFlush(pr *addrsRecord) {
 // loadRecord is a read-through fetch. It fetches a record from cache, falling back to the
 // datastore upon a miss, and returning a newly initialized record if the peer doesn't exist.
 //
-// loadRecord calls Clean() on the record before returning it. If the record changes
+// loadRecord calls Clean() on existing recordsrecord before returning it. If the record changes
 // as a result and the update argument is true, an async flush is queued.
 //
 // If the cache argument is true, the record is inserted in the cache when loaded from the datastore.
