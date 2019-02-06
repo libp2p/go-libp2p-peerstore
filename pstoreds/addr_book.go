@@ -154,11 +154,12 @@ func NewAddrBook(ctx context.Context, store ds.Batching, opts Options) (ab *dsAd
 		flushJobCh:  make(chan *addrsRecord, 32),
 	}
 
-	ab.gc = newAddressBookGc(ctx, ab)
+	if ab.gc, err = newAddressBookGc(ctx, ab); err != nil {
+		return nil, err
+	}
 
 	// kick off background processes.
 	go ab.flusher()
-	go ab.gc.background()
 
 	return ab, nil
 }

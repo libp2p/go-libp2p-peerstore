@@ -5,7 +5,6 @@ import (
 	"time"
 
 	pstore "github.com/libp2p/go-libp2p-peerstore"
-	ma "github.com/multiformats/go-multiaddr"
 )
 
 var addressBookSuite = map[string]func(book pstore.AddrBook) func(*testing.T){
@@ -44,7 +43,7 @@ func testAddAddress(ab pstore.AddrBook) func(*testing.T) {
 
 			ab.AddAddr(id, addrs[0], time.Hour)
 
-			testHas(t, addrs, ab.Addrs(id))
+			AssertAddressesEqual(t, addrs, ab.Addrs(id))
 		})
 
 		t.Run("idempotent add single address", func(t *testing.T) {
@@ -54,7 +53,7 @@ func testAddAddress(ab pstore.AddrBook) func(*testing.T) {
 			ab.AddAddr(id, addrs[0], time.Hour)
 			ab.AddAddr(id, addrs[0], time.Hour)
 
-			testHas(t, addrs, ab.Addrs(id))
+			AssertAddressesEqual(t, addrs, ab.Addrs(id))
 		})
 
 		t.Run("add multiple addresses", func(t *testing.T) {
@@ -62,7 +61,7 @@ func testAddAddress(ab pstore.AddrBook) func(*testing.T) {
 			addrs := GenerateAddrs(3)
 
 			ab.AddAddrs(id, addrs, time.Hour)
-			testHas(t, addrs, ab.Addrs(id))
+			AssertAddressesEqual(t, addrs, ab.Addrs(id))
 		})
 
 		t.Run("idempotent add multiple addresses", func(t *testing.T) {
@@ -72,7 +71,7 @@ func testAddAddress(ab pstore.AddrBook) func(*testing.T) {
 			ab.AddAddrs(id, addrs, time.Hour)
 			ab.AddAddrs(id, addrs, time.Hour)
 
-			testHas(t, addrs, ab.Addrs(id))
+			AssertAddressesEqual(t, addrs, ab.Addrs(id))
 		})
 
 		t.Run("adding an existing address with a later expiration extends its ttl", func(t *testing.T) {
@@ -86,7 +85,7 @@ func testAddAddress(ab pstore.AddrBook) func(*testing.T) {
 
 			// after the initial TTL has expired, check that only the third address is present.
 			time.Sleep(1200 * time.Millisecond)
-			testHas(t, addrs[2:], ab.Addrs(id))
+			AssertAddressesEqual(t, addrs[2:], ab.Addrs(id))
 		})
 
 		t.Run("adding an existing address with an earlier expiration is noop", func(t *testing.T) {
@@ -101,7 +100,7 @@ func testAddAddress(ab pstore.AddrBook) func(*testing.T) {
 			// after the initial TTL has expired, check that all three addresses are still present (i.e. the TTL on
 			// the modified one was not shortened).
 			time.Sleep(2100 * time.Millisecond)
-			testHas(t, addrs, ab.Addrs(id))
+			AssertAddressesEqual(t, addrs, ab.Addrs(id))
 		})
 	}
 }
@@ -114,16 +113,16 @@ func testClearWorks(ab pstore.AddrBook) func(t *testing.T) {
 		ab.AddAddrs(ids[0], addrs[0:3], time.Hour)
 		ab.AddAddrs(ids[1], addrs[3:], time.Hour)
 
-		testHas(t, addrs[0:3], ab.Addrs(ids[0]))
-		testHas(t, addrs[3:], ab.Addrs(ids[1]))
+		AssertAddressesEqual(t, addrs[0:3], ab.Addrs(ids[0]))
+		AssertAddressesEqual(t, addrs[3:], ab.Addrs(ids[1]))
 
 		ab.ClearAddrs(ids[0])
-		testHas(t, nil, ab.Addrs(ids[0]))
-		testHas(t, addrs[3:], ab.Addrs(ids[1]))
+		AssertAddressesEqual(t, nil, ab.Addrs(ids[0]))
+		AssertAddressesEqual(t, addrs[3:], ab.Addrs(ids[1]))
 
 		ab.ClearAddrs(ids[1])
-		testHas(t, nil, ab.Addrs(ids[0]))
-		testHas(t, nil, ab.Addrs(ids[1]))
+		AssertAddressesEqual(t, nil, ab.Addrs(ids[0]))
+		AssertAddressesEqual(t, nil, ab.Addrs(ids[1]))
 	}
 }
 
@@ -133,7 +132,7 @@ func testSetNegativeTTLClears(m pstore.AddrBook) func(t *testing.T) {
 		addrs := GenerateAddrs(100)
 
 		m.SetAddrs(id, addrs, time.Hour)
-		testHas(t, addrs, m.Addrs(id))
+		AssertAddressesEqual(t, addrs, m.Addrs(id))
 
 		// remove two addresses.
 		m.SetAddr(id, addrs[50], -1)
@@ -143,7 +142,7 @@ func testSetNegativeTTLClears(m pstore.AddrBook) func(t *testing.T) {
 		survivors := append(addrs[0:50], addrs[51:]...)
 		survivors = append(survivors[0:74], survivors[75:]...)
 
-		testHas(t, survivors, m.Addrs(id))
+		AssertAddressesEqual(t, survivors, m.Addrs(id))
 	}
 }
 
@@ -167,8 +166,8 @@ func testUpdateTTLs(m pstore.AddrBook) func(t *testing.T) {
 			m.SetAddr(ids[1], addrs2[1], time.Minute)
 
 			// Sanity check.
-			testHas(t, addrs1, m.Addrs(ids[0]))
-			testHas(t, addrs2, m.Addrs(ids[1]))
+			AssertAddressesEqual(t, addrs1, m.Addrs(ids[0]))
+			AssertAddressesEqual(t, addrs2, m.Addrs(ids[1]))
 
 			// Will only affect addrs1[0].
 			// Badger does not support subsecond TTLs.
@@ -176,26 +175,26 @@ func testUpdateTTLs(m pstore.AddrBook) func(t *testing.T) {
 			m.UpdateAddrs(ids[0], time.Hour, 1*time.Second)
 
 			// No immediate effect.
-			testHas(t, addrs1, m.Addrs(ids[0]))
-			testHas(t, addrs2, m.Addrs(ids[1]))
+			AssertAddressesEqual(t, addrs1, m.Addrs(ids[0]))
+			AssertAddressesEqual(t, addrs2, m.Addrs(ids[1]))
 
 			// After a wait, addrs[0] is gone.
 			time.Sleep(1500 * time.Millisecond)
-			testHas(t, addrs1[1:2], m.Addrs(ids[0]))
-			testHas(t, addrs2, m.Addrs(ids[1]))
+			AssertAddressesEqual(t, addrs1[1:2], m.Addrs(ids[0]))
+			AssertAddressesEqual(t, addrs2, m.Addrs(ids[1]))
 
 			// Will only affect addrs2[0].
 			m.UpdateAddrs(ids[1], time.Hour, 1*time.Second)
 
 			// No immediate effect.
-			testHas(t, addrs1[1:2], m.Addrs(ids[0]))
-			testHas(t, addrs2, m.Addrs(ids[1]))
+			AssertAddressesEqual(t, addrs1[1:2], m.Addrs(ids[0]))
+			AssertAddressesEqual(t, addrs2, m.Addrs(ids[1]))
 
 			time.Sleep(1500 * time.Millisecond)
 
 			// First addrs is gone in both.
-			testHas(t, addrs1[1:], m.Addrs(ids[0]))
-			testHas(t, addrs2[1:], m.Addrs(ids[1]))
+			AssertAddressesEqual(t, addrs1[1:], m.Addrs(ids[0]))
+			AssertAddressesEqual(t, addrs2[1:], m.Addrs(ids[1]))
 		})
 
 	}
@@ -219,39 +218,39 @@ func testAddressesExpire(m pstore.AddrBook) func(t *testing.T) {
 		m.AddAddrs(ids[0], addrs1, time.Hour)
 		m.AddAddrs(ids[1], addrs2, time.Hour)
 
-		testHas(t, addrs1, m.Addrs(ids[0]))
-		testHas(t, addrs2, m.Addrs(ids[1]))
+		AssertAddressesEqual(t, addrs1, m.Addrs(ids[0]))
+		AssertAddressesEqual(t, addrs2, m.Addrs(ids[1]))
 
 		m.AddAddrs(ids[0], addrs1, 2*time.Hour)
 		m.AddAddrs(ids[1], addrs2, 2*time.Hour)
 
-		testHas(t, addrs1, m.Addrs(ids[0]))
-		testHas(t, addrs2, m.Addrs(ids[1]))
+		AssertAddressesEqual(t, addrs1, m.Addrs(ids[0]))
+		AssertAddressesEqual(t, addrs2, m.Addrs(ids[1]))
 
 		m.SetAddr(ids[0], addrs1[0], 100*time.Microsecond)
 		<-time.After(100 * time.Millisecond)
-		testHas(t, addrs1[1:3], m.Addrs(ids[0]))
-		testHas(t, addrs2, m.Addrs(ids[1]))
+		AssertAddressesEqual(t, addrs1[1:3], m.Addrs(ids[0]))
+		AssertAddressesEqual(t, addrs2, m.Addrs(ids[1]))
 
 		m.SetAddr(ids[0], addrs1[2], 100*time.Microsecond)
 		<-time.After(100 * time.Millisecond)
-		testHas(t, addrs1[1:2], m.Addrs(ids[0]))
-		testHas(t, addrs2, m.Addrs(ids[1]))
+		AssertAddressesEqual(t, addrs1[1:2], m.Addrs(ids[0]))
+		AssertAddressesEqual(t, addrs2, m.Addrs(ids[1]))
 
 		m.SetAddr(ids[1], addrs2[0], 100*time.Microsecond)
 		<-time.After(100 * time.Millisecond)
-		testHas(t, addrs1[1:2], m.Addrs(ids[0]))
-		testHas(t, addrs2[1:], m.Addrs(ids[1]))
+		AssertAddressesEqual(t, addrs1[1:2], m.Addrs(ids[0]))
+		AssertAddressesEqual(t, addrs2[1:], m.Addrs(ids[1]))
 
 		m.SetAddr(ids[1], addrs2[1], 100*time.Microsecond)
 		<-time.After(100 * time.Millisecond)
-		testHas(t, addrs1[1:2], m.Addrs(ids[0]))
-		testHas(t, nil, m.Addrs(ids[1]))
+		AssertAddressesEqual(t, addrs1[1:2], m.Addrs(ids[0]))
+		AssertAddressesEqual(t, nil, m.Addrs(ids[1]))
 
 		m.SetAddr(ids[0], addrs1[1], 100*time.Microsecond)
 		<-time.After(100 * time.Millisecond)
-		testHas(t, nil, m.Addrs(ids[0]))
-		testHas(t, nil, m.Addrs(ids[1]))
+		AssertAddressesEqual(t, nil, m.Addrs(ids[0]))
+		AssertAddressesEqual(t, nil, m.Addrs(ids[1]))
 	}
 }
 
@@ -305,27 +304,5 @@ func testPeersWithAddrs(m pstore.AddrBook) func(t *testing.T) {
 				t.Fatal("expected to find 2 peers")
 			}
 		})
-	}
-}
-
-func testHas(t *testing.T, exp, act []ma.Multiaddr) {
-	t.Helper()
-	if len(exp) != len(act) {
-		t.Fatalf("lengths not the same. expected %d, got %d\n", len(exp), len(act))
-	}
-
-	for _, a := range exp {
-		found := false
-
-		for _, b := range act {
-			if a.Equal(b) {
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			t.Fatalf("expected address %s not found", a)
-		}
 	}
 }

@@ -4,16 +4,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ipfs/go-datastore/query"
-	"github.com/libp2p/go-libp2p-peerstore"
-	"github.com/libp2p/go-libp2p-peerstore/test"
+	query "github.com/ipfs/go-datastore/query"
+	pstore "github.com/libp2p/go-libp2p-peerstore"
+	test "github.com/libp2p/go-libp2p-peerstore/test"
+	ma "github.com/multiformats/go-multiaddr"
 )
 
 var lookaheadQuery = query.Query{Prefix: gcLookaheadBase.String(), KeysOnly: true}
 
 type testProbe struct {
 	t  *testing.T
-	ab peerstore.AddrBook
+	ab pstore.AddrBook
 }
 
 func (tp *testProbe) countLookaheadEntries() (i int) {
@@ -119,7 +120,7 @@ func TestGCPurging(t *testing.T) {
 	}
 
 	<-time.After(2 * time.Second)
-	gc.purgeCycle()
+	gc.purgeLookahead()
 	if i := tp.countLookaheadEntries(); i != 3 {
 		t.Errorf("expected 3 GC lookahead entries, got: %v", i)
 	}
@@ -128,13 +129,13 @@ func TestGCPurging(t *testing.T) {
 	tp.clearCache()
 
 	<-time.After(5 * time.Second)
-	gc.purgeCycle()
+	gc.purgeLookahead()
 	if i := tp.countLookaheadEntries(); i != 3 {
 		t.Errorf("expected 3 GC lookahead entries, got: %v", i)
 	}
 
 	<-time.After(5 * time.Second)
-	gc.purgeCycle()
+	gc.purgeLookahead()
 	if i := tp.countLookaheadEntries(); i != 1 {
 		t.Errorf("expected 1 GC lookahead entries, got: %v", i)
 	}
@@ -174,6 +175,51 @@ func TestGCDelay(t *testing.T) {
 	if i := tp.countLookaheadEntries(); i != 1 {
 		t.Errorf("expected 1 lookahead entry, got: %d", i)
 	}
+}
+
+func TestGCLookaheadDisabled(t *testing.T) {
+	ids := test.GeneratePeerIDs(10)
+	addrs := test.GenerateAddrs(100)
+
+	opts := DefaultOpts()
+
+	// effectively disable automatic GC for this test.
+	opts.GCInitialDelay = 90 * time.Hour
+	opts.GCLookaheadInterval = 0 // disable lookahead
+	opts.GCPurgeInterval = 9 * time.Hour
+
+	factory := addressBookFactory(t, badgerStore, opts)
+	ab, closeFn := factory()
+	defer closeFn()
+
+	tp := &testProbe{t, ab}
+
+	// four peers:
+	//   ids[0] has 10 addresses, all of which expire in 500ms.
+	//   ids[1] has 20 addresses; 50% expire in 500ms and 50% in 10 hours.
+	//   ids[2] has 10 addresses; all expire in 10 hours.
+	//   ids[3] has 60 addresses; all expire in 10 hours.
+	ab.AddAddrs(ids[0], addrs[:10], 500*time.Millisecond)
+	ab.AddAddrs(ids[1], addrs[10:20], 500*time.Millisecond)
+	ab.AddAddrs(ids[1], addrs[20:30], 10*time.Hour)
+	ab.AddAddrs(ids[2], addrs[30:40], 10*time.Hour)
+	ab.AddAddrs(ids[3], addrs[40:], 10*time.Hour)
+
+	time.Sleep(100 * time.Millisecond)
+
+	if i := tp.countLookaheadEntries(); i != 0 {
+		t.Errorf("expected no GC lookahead entries, got: %v", i)
+	}
+
+	time.Sleep(500 * time.Millisecond)
+	gc := ab.(*dsAddrBook).gc
+	gc.purgeFunc()
+
+	var empty []ma.Multiaddr
+	test.AssertAddressesEqual(t, empty, ab.Addrs(ids[0]))
+	test.AssertAddressesEqual(t, addrs[20:30], ab.Addrs(ids[1]))
+	test.AssertAddressesEqual(t, addrs[30:40], ab.Addrs(ids[2]))
+	test.AssertAddressesEqual(t, addrs[40:], ab.Addrs(ids[3]))
 }
 
 func BenchmarkLookaheadCycle(b *testing.B) {

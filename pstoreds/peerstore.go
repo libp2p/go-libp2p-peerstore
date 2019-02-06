@@ -18,26 +18,30 @@ type Options struct {
 	// The size of the in-memory cache. A value of 0 or lower disables the cache.
 	CacheSize uint
 
-	// Sweep interval to purge expired addresses from the datastore.
+	// Sweep interval to purge expired addresses from the datastore. If this is a zero value, GC will not run
+	// automatically, but it'll be available on demand via explicit calls.
 	GCPurgeInterval time.Duration
 
-	// Interval to renew the GC lookahead window.
+	// Interval to renew the GC lookahead window. If this is a zero value, lookahead will be disabled and we'll
+	// traverse the entire datastore for every purge cycle.
 	GCLookaheadInterval time.Duration
 
-	// Initial delay before GC routines start. Intended to give the system time to initialise before starting GC.
+	// Initial delay before GC processes start. Intended to give the system breathing room to fully boot
+	// before starting GC.
 	GCInitialDelay time.Duration
 }
 
 // DefaultOpts returns the default options for a persistent peerstore:
-// * Cache size: 1024
-// * GC prune interval: 5 minutes
-// * GC lookahead interval: 12 hours
-// * WriteRetries: 5
+//
+// * Cache size: 1024.
+// * GC purge interval: 10 minutes.
+// * GC lookahead interval: disabled.
+// * GC initial delay: 60 seconds.
 func DefaultOpts() Options {
 	return Options{
 		CacheSize:           1024,
-		GCPurgeInterval:     5 * time.Minute,
-		GCLookaheadInterval: 12 * time.Hour,
+		GCPurgeInterval:     10 * time.Minute,
+		GCLookaheadInterval: 0,
 		GCInitialDelay:      60 * time.Second,
 	}
 }
@@ -88,12 +92,11 @@ func uniquePeerIds(ds ds.Datastore, prefix ds.Key, extractor func(result query.R
 		return peer.IDSlice{}, nil
 	}
 
-	ids := make(peer.IDSlice, len(idset))
-	i := 0
+	ids := make(peer.IDSlice, 0, len(idset))
 	for id := range idset {
 		pid, _ := base32.RawStdEncoding.DecodeString(id)
-		ids[i], _ = peer.IDFromBytes(pid)
-		i++
+		id, _ := peer.IDFromBytes(pid)
+		ids = append(ids, id)
 	}
 	return ids, nil
 }

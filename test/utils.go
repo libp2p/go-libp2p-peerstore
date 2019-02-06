@@ -72,3 +72,25 @@ func GeneratePeerIDs(count int) []peer.ID {
 	}
 	return ids
 }
+
+func AssertAddressesEqual(t *testing.T, exp, act []ma.Multiaddr) {
+	t.Helper()
+	if len(exp) != len(act) {
+		t.Fatalf("lengths not the same. expected %d, got %d\n", len(exp), len(act))
+	}
+
+	for _, a := range exp {
+		found := false
+
+		for _, b := range act {
+			if a.Equal(b) {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			t.Fatalf("expected address %s not found", a)
+		}
+	}
+}

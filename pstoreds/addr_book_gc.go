@@ -24,10 +24,16 @@ var (
 	gcOpsPerBatch = 20
 
 	// queries
-	purgeQuery = query.Query{
+	purgeLookaheadQuery = query.Query{
 		Prefix:   gcLookaheadBase.String(),
 		Orders:   []query.Order{query.OrderByKey{}},
 		KeysOnly: true,
+	}
+
+	purgeStoreQuery = query.Query{
+		Prefix:   addrBookBase.String(),
+		Orders:   []query.Order{query.OrderByKey{}},
+		KeysOnly: false,
 	}
 
 	populateLookaheadQuery = query.Query{
@@ -39,18 +45,45 @@ var (
 
 // dsAddrBookGc encapsulates the GC behaviour to maintain a datastore-backed address book.
 type dsAddrBookGc struct {
-	ctx           context.Context
-	ab            *dsAddrBook
-	running       chan struct{}
-	currWindowEnd int64
+	ctx              context.Context
+	ab               *dsAddrBook
+	running          chan struct{}
+	lookaheadEnabled bool
+	purgeFunc        func()
+	currWindowEnd    int64
 }
 
-func newAddressBookGc(ctx context.Context, ab *dsAddrBook) *dsAddrBookGc {
-	return &dsAddrBookGc{
-		ctx:     ctx,
-		ab:      ab,
-		running: make(chan struct{}, 1),
+func newAddressBookGc(ctx context.Context, ab *dsAddrBook) (*dsAddrBookGc, error) {
+	if ab.opts.GCPurgeInterval < 0 {
+		return nil, fmt.Errorf("negative GC purge interval provided: %s", ab.opts.GCPurgeInterval)
 	}
+	if ab.opts.GCLookaheadInterval < 0 {
+		return nil, fmt.Errorf("negative GC lookahead interval provided: %s", ab.opts.GCLookaheadInterval)
+	}
+	if ab.opts.GCInitialDelay < 0 {
+		return nil, fmt.Errorf("negative GC initial delay provided: %s", ab.opts.GCInitialDelay)
+	}
+
+	lookaheadEnabled := ab.opts.GCLookaheadInterval > 0
+	gc := &dsAddrBookGc{
+		ctx:              ctx,
+		ab:               ab,
+		running:          make(chan struct{}, 1),
+		lookaheadEnabled: lookaheadEnabled,
+	}
+
+	if lookaheadEnabled {
+		gc.purgeFunc = gc.purgeLookahead
+	} else {
+		gc.purgeFunc = gc.purgeStore
+	}
+
+	// do not start GC timers if purge is disabled; this GC can only be triggered manually.
+	if ab.opts.GCPurgeInterval > 0 {
+		go gc.background()
+	}
+
+	return gc, nil
 }
 
 // gc prunes expired addresses from the datastore at regular intervals. It should be spawned as a goroutine.
@@ -69,7 +102,7 @@ func (gc *dsAddrBookGc) background() {
 	defer purgeTimer.Stop()
 
 	var lookaheadCh <-chan time.Time
-	if gc.ab.opts.GCLookaheadInterval > 0 {
+	if gc.lookaheadEnabled {
 		lookaheadTimer := time.NewTicker(gc.ab.opts.GCLookaheadInterval)
 		lookaheadCh = lookaheadTimer.C
 		defer lookaheadTimer.Stop()
@@ -78,7 +111,7 @@ func (gc *dsAddrBookGc) background() {
 	for {
 		select {
 		case <-purgeTimer.C:
-			gc.purgeCycle()
+			gc.purgeFunc()
 
 		case <-lookaheadCh:
 			// will never trigger if lookahead is disabled (nil Duration).
@@ -92,7 +125,7 @@ func (gc *dsAddrBookGc) background() {
 
 // purgeCycle runs a single GC purge cycle. It operates within the lookahead window if lookahead is enabled; else it
 // visits all entries in the datastore, deleting the addresses that have expired.
-func (gc *dsAddrBookGc) purgeCycle() {
+func (gc *dsAddrBookGc) purgeLookahead() {
 	select {
 	case gc.running <- struct{}{}:
 		defer func() { <-gc.running }()
@@ -136,7 +169,7 @@ func (gc *dsAddrBookGc) purgeCycle() {
 		}
 	}
 
-	results, err := gc.ab.ds.Query(purgeQuery)
+	results, err := gc.ab.ds.Query(purgeLookaheadQuery)
 	if err != nil {
 		log.Warningf("failed while fetching entries to purge: %v", err)
 		return
@@ -216,12 +249,62 @@ func (gc *dsAddrBookGc) purgeCycle() {
 	}
 }
 
+func (gc *dsAddrBookGc) purgeStore() {
+	select {
+	case gc.running <- struct{}{}:
+		defer func() { <-gc.running }()
+	default:
+		// yield if lookahead is running.
+		return
+	}
+
+	record := &addrsRecord{AddrBookRecord: &pb.AddrBookRecord{}} // empty record to reuse and avoid allocs.
+	batch, err := newCyclicBatch(gc.ab.ds)
+	if err != nil {
+		log.Warningf("failed while creating batch to purge GC entries: %v", err)
+	}
+
+	results, err := gc.ab.ds.Query(purgeStoreQuery)
+	if err != nil {
+		log.Warningf("failed while opening iterator: %v", err)
+		return
+	}
+	defer results.Close()
+
+	// keys: 	/peers/addrs/<peer ID b32>
+	for result := range results.Next() {
+		record.Reset()
+		if err = record.Unmarshal(result.Value); err != nil {
+			// TODO log
+			continue
+		}
+
+		id := record.Id.ID
+		if !record.Clean() {
+			continue
+		}
+
+		if err := record.flush(batch); err != nil {
+			log.Warningf("failed to flush entry modified by GC for peer: &v, err: %v", id, err)
+		}
+		gc.ab.cache.Remove(id)
+	}
+
+	if err = batch.Commit(); err != nil {
+		log.Warningf("failed to commit GC purge batch: %v", err)
+	}
+}
+
 // populateLookahead populates the lookahead window by scanning the entire store and picking entries whose earliest
 // expiration falls within the window period.
 //
 // Those entries are stored in the lookahead region in the store, indexed by the timestamp when they need to be
 // visited, to facilitate temporal range scans.
 func (gc *dsAddrBookGc) populateLookahead() {
+	if gc.ab.opts.GCLookaheadInterval == 0 {
+		return
+	}
+
 	select {
 	case gc.running <- struct{}{}:
 		defer func() { <-gc.running }()
