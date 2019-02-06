@@ -31,16 +31,16 @@ type Options struct {
 	GCInitialDelay time.Duration
 }
 
-// DefaultOpts returns the default options for a persistent peerstore:
+// DefaultOpts returns the default options for a persistent peerstore, with the full-purge GC algorithm:
 //
 // * Cache size: 1024.
-// * GC purge interval: 10 minutes.
+// * GC purge interval: 2 hours.
 // * GC lookahead interval: disabled.
 // * GC initial delay: 60 seconds.
 func DefaultOpts() Options {
 	return Options{
 		CacheSize:           1024,
-		GCPurgeInterval:     10 * time.Minute,
+		GCPurgeInterval:     2 * time.Hour,
 		GCLookaheadInterval: 0,
 		GCInitialDelay:      60 * time.Second,
 	}
