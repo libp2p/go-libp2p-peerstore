@@ -82,6 +82,7 @@ func newAddressBookGc(ctx context.Context, ab *dsAddrBook) (*dsAddrBookGc, error
 
 	// do not start GC timers if purge is disabled; this GC can only be triggered manually.
 	if ab.opts.GCPurgeInterval > 0 {
+		gc.ab.childrenDone.Add(1)
 		go gc.background()
 	}
 
@@ -90,8 +91,7 @@ func newAddressBookGc(ctx context.Context, ab *dsAddrBook) (*dsAddrBookGc, error
 
 // gc prunes expired addresses from the datastore at regular intervals. It should be spawned as a goroutine.
 func (gc *dsAddrBookGc) background() {
-	gc.ab.done.Add(1)
-	defer gc.ab.done.Done()
+	defer gc.ab.childrenDone.Done()
 
 	select {
 	case <-time.After(gc.ab.opts.GCInitialDelay):

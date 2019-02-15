@@ -127,7 +127,9 @@ type dsAddrBook struct {
 
 	flushJobCh chan *addrsRecord
 	cancelFn   func()
-	done       sync.WaitGroup
+
+	// controls children goroutine lifetime.
+	childrenDone sync.WaitGroup
 }
 
 var _ pstore.AddrBook = (*dsAddrBook)(nil)
@@ -174,6 +176,7 @@ func NewAddrBook(ctx context.Context, store ds.Batching, opts Options) (ab *dsAd
 		return nil, err
 	}
 
+	ab.childrenDone.Add(1)
 	go ab.flusher()
 
 	return ab, nil
@@ -181,7 +184,7 @@ func NewAddrBook(ctx context.Context, store ds.Batching, opts Options) (ab *dsAd
 
 func (ab *dsAddrBook) Close() {
 	ab.cancelFn()
-	ab.done.Wait()
+	ab.childrenDone.Wait()
 }
 
 func (ab *dsAddrBook) asyncFlush(pr *addrsRecord) {
@@ -234,8 +237,7 @@ func (ab *dsAddrBook) loadRecord(id peer.ID, cache bool, update bool) (pr *addrs
 
 // flusher is a goroutine that takes care of persisting asynchronous flushes to the datastore.
 func (ab *dsAddrBook) flusher() {
-	ab.done.Add(1)
-	defer ab.done.Done()
+	defer ab.childrenDone.Done()
 
 	for {
 		select {
