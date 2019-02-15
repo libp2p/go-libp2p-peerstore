@@ -239,23 +239,39 @@ func (ab *dsAddrBook) loadRecord(id peer.ID, cache bool, update bool) (pr *addrs
 func (ab *dsAddrBook) flusher() {
 	defer ab.childrenDone.Done()
 
+	doFlush := func(fj *addrsRecord) {
+		if cached, ok := ab.cache.Peek(fj.Id.ID); ok {
+			// Only continue flushing if the record we have in memory is the same as for which the flush
+			// job was requested. If it's not in memory, it has been evicted and we don't know if we hold
+			// the latest state or not. Similarly, if it's cached but the pointer is different, it means
+			// it was evicted and has been reloaded, so we're also uncertain if we hold the latest state.
+			if pr := cached.(*addrsRecord); pr != fj {
+				pr.RLock()
+				pr.flush(ab.ds)
+				pr.RUnlock()
+			}
+		}
+	}
+
 	for {
 		select {
 		case fj := <-ab.flushJobCh:
-			if cached, ok := ab.cache.Peek(fj.Id.ID); ok {
-				// Only continue flushing if the record we have in memory is the same as for which the flush
-				// job was requested. If it's not in memory, it has been evicted and we don't know if we hold
-				// the latest state or not. Similarly, if it's cached but the pointer is different, it means
-				// it was evicted and has been reloaded, so we're also uncertain if we hold the latest state.
-				if pr := cached.(*addrsRecord); pr != fj {
-					pr.RLock()
-					pr.flush(ab.ds)
-					pr.RUnlock()
-				}
-			}
+			doFlush(fj)
 
 		case <-ab.ctx.Done():
-			return
+			// drain the flush queue, with a grace period of 1 second.
+			// async flush jobs are not important for consistency by definition (they correspond to expired addrs
+			// which will anyway expire on the next load).
+			for {
+				select {
+				case fj := <-ab.flushJobCh:
+					doFlush(fj)
+				case <-time.After(1 * time.Second):
+					return
+				default:
+					return
+				}
+			}
 		}
 	}
 }
