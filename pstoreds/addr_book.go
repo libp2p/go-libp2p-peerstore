@@ -77,8 +77,7 @@ func (r *addrsRecord) flush(write ds.Write) (err error) {
 // * when performing periodic GC.
 // * after an entry has been modified (e.g. addresses have been added or removed, TTLs updated, etc.)
 //
-// If the return value is true, the caller can perform a flush immediately, or can schedule an async
-// flush, depending on the context.
+// If the return value is true, the caller should perform a flush immediately to sync the record with the store.
 func (r *addrsRecord) clean() (chgd bool) {
 	now := time.Now().Unix()
 	if !r.dirty && len(r.Addrs) > 0 && r.Addrs[0].Expiry > now {
@@ -125,11 +124,9 @@ type dsAddrBook struct {
 	gc          *dsAddrBookGc
 	subsManager *pstoremem.AddrSubManager
 
-	flushJobCh chan *addrsRecord
-	cancelFn   func()
-
 	// controls children goroutine lifetime.
 	childrenDone sync.WaitGroup
+	cancelFn     func()
 }
 
 var _ pstore.AddrBook = (*dsAddrBook)(nil)
@@ -154,30 +151,26 @@ var _ pstore.AddrBook = (*dsAddrBook)(nil)
 //    permanent, popular values used in other libp2p modules. In this cited case, optimizing with lookahead windows
 //    makes little sense.
 func NewAddrBook(ctx context.Context, store ds.Batching, opts Options) (ab *dsAddrBook, err error) {
-	var cache cache = new(noopCache)
-	if opts.CacheSize > 0 {
-		if cache, err = lru.NewARC(int(opts.CacheSize)); err != nil {
-			return nil, err
-		}
-	}
-
 	ctx, cancelFn := context.WithCancel(ctx)
 	ab = &dsAddrBook{
 		ctx:         ctx,
-		cancelFn:    cancelFn,
-		opts:        opts,
-		cache:       cache,
 		ds:          store,
+		opts:        opts,
+		cancelFn:    cancelFn,
 		subsManager: pstoremem.NewAddrSubManager(),
-		flushJobCh:  make(chan *addrsRecord, 32),
+	}
+
+	if opts.CacheSize > 0 {
+		if ab.cache, err = lru.NewARC(int(opts.CacheSize)); err != nil {
+			return nil, err
+		}
+	} else {
+		ab.cache = new(noopCache)
 	}
 
 	if ab.gc, err = newAddressBookGc(ctx, ab); err != nil {
 		return nil, err
 	}
-
-	ab.childrenDone.Add(1)
-	go ab.flusher()
 
 	return ab, nil
 }
@@ -187,28 +180,23 @@ func (ab *dsAddrBook) Close() {
 	ab.childrenDone.Wait()
 }
 
-func (ab *dsAddrBook) asyncFlush(pr *addrsRecord) {
-	select {
-	case ab.flushJobCh <- pr:
-	default:
-		log.Warningf("flush queue is full; could not flush record for peer %s", pr.Id.ID)
-	}
-}
-
 // loadRecord is a read-through fetch. It fetches a record from cache, falling back to the
 // datastore upon a miss, and returning a newly initialized record if the peer doesn't exist.
 //
-// loadRecord calls clean() on existing recordsrecord before returning it. If the record changes
-// as a result and the update argument is true, an async flush is queued.
+// loadRecord calls clean() on an existing record before returning it. If the record changes
+// as a result and the update argument is true, the resulting state is saved in the datastore.
 //
 // If the cache argument is true, the record is inserted in the cache when loaded from the datastore.
 func (ab *dsAddrBook) loadRecord(id peer.ID, cache bool, update bool) (pr *addrsRecord, err error) {
 	if e, ok := ab.cache.Get(id); ok {
 		pr = e.(*addrsRecord)
+		pr.Lock()
+		defer pr.Unlock()
+
 		if pr.clean() && update {
-			ab.asyncFlush(pr)
+			err = pr.flush(ab.ds)
 		}
-		return pr, nil
+		return pr, err
 	}
 
 	pr = &addrsRecord{AddrBookRecord: &pb.AddrBookRecord{}}
@@ -217,13 +205,15 @@ func (ab *dsAddrBook) loadRecord(id peer.ID, cache bool, update bool) (pr *addrs
 
 	switch err {
 	case ds.ErrNotFound:
+		err = nil
 		pr.Id = &pb.ProtoPeerID{ID: id}
 	case nil:
 		if err = pr.Unmarshal(data); err != nil {
 			return nil, err
 		}
+		// this record is new and local for now (not in cache), so we don't need to lock.
 		if pr.clean() && update {
-			ab.asyncFlush(pr)
+			err = pr.flush(ab.ds)
 		}
 	default:
 		return nil, err
@@ -232,48 +222,7 @@ func (ab *dsAddrBook) loadRecord(id peer.ID, cache bool, update bool) (pr *addrs
 	if cache {
 		ab.cache.Add(id, pr)
 	}
-	return pr, nil
-}
-
-// flusher is a goroutine that takes care of persisting asynchronous flushes to the datastore.
-func (ab *dsAddrBook) flusher() {
-	defer ab.childrenDone.Done()
-
-	doFlush := func(fj *addrsRecord) {
-		if cached, ok := ab.cache.Peek(fj.Id.ID); ok {
-			// Only continue flushing if the record we have in memory is the same as for which the flush
-			// job was requested. If it's not in memory, it has been evicted and we don't know if we hold
-			// the latest state or not. Similarly, if it's cached but the pointer is different, it means
-			// it was evicted and has been reloaded, so we're also uncertain if we hold the latest state.
-			if pr := cached.(*addrsRecord); pr != fj {
-				pr.RLock()
-				pr.flush(ab.ds)
-				pr.RUnlock()
-			}
-		}
-	}
-
-	for {
-		select {
-		case fj := <-ab.flushJobCh:
-			doFlush(fj)
-
-		case <-ab.ctx.Done():
-			// drain the flush queue, with a grace period of 1 second.
-			// async flush jobs are not important for consistency by definition (they correspond to expired addrs
-			// which will anyway expire on the next load).
-			for {
-				select {
-				case fj := <-ab.flushJobCh:
-					doFlush(fj)
-				case <-time.After(1 * time.Second):
-					return
-				default:
-					return
-				}
-			}
-		}
-	}
+	return pr, err
 }
 
 // AddAddr will add a new address if it's not already in the AddrBook.

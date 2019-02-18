@@ -42,6 +42,7 @@ var (
 	}
 )
 
+// dsAddrBookGc is responsible for garbage collection in a datastore-backed address book.
 type dsAddrBookGc struct {
 	ctx              context.Context
 	ab               *dsAddrBook
@@ -149,7 +150,7 @@ func (gc *dsAddrBookGc) purgeLookahead() {
 	// if we don't clean up unparseable entries we'll end up accumulating garbage.
 	dropInError := func(key ds.Key, err error, msg string) {
 		if err != nil {
-			log.Warningf("failed while %s with GC key: %v, err: %v", msg, key, err)
+			log.Warningf("failed while %s record with GC key: %v, err: %v; deleting", msg, key, err)
 		}
 		if err = batch.Delete(key); err != nil {
 			log.Warningf("failed to delete corrupt GC lookahead entry: %v, err: %v", key, err)
