@@ -57,9 +57,9 @@
     },
     {
       "author": "magik6k",
-      "hash": "Qmc5CnrmiMiKzyHjnTxnBz4qmftz9bfyZ66iKW9Yf1fWvp",
+      "hash": "QmTNJogwkhnbHeRmAXWtzvN2KgVko2oNmHHQN1ggHVhF91",
       "name": "go-ds-badger",
-      "version": "1.12.1"
+      "version": "1.12.3"
     },
     {
       "hash": "QmUadX5EcvrBmxAV9sE7wUWtWSqxns5K84qKJBixmcT1w9",
@@ -95,6 +95,6 @@
   "license": "MIT",
   "name": "go-libp2p-peerstore",
   "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
-  "version": "2.0.16"
+  "version": "2.0.17"
 }
 
