@@ -3,12 +3,13 @@
 
 package pstore_pb
 
-import proto "github.com/gogo/protobuf/proto"
-import fmt "fmt"
-import math "math"
-import _ "github.com/gogo/protobuf/gogoproto"
-
-import io "io"
+import (
+	fmt "fmt"
+	_ "github.com/gogo/protobuf/gogoproto"
+	proto "github.com/gogo/protobuf/proto"
+	io "io"
+	math "math"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -26,17 +27,14 @@ type AddrBookRecord struct {
 	// The peer ID.
 	Id *ProtoPeerID `protobuf:"bytes,1,opt,name=id,proto3,customtype=ProtoPeerID" json:"id,omitempty"`
 	// The multiaddresses. This is a sorted list where element 0 expires the soonest.
-	Addrs                []*AddrBookRecord_AddrEntry `protobuf:"bytes,2,rep,name=addrs" json:"addrs,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}                    `json:"-"`
-	XXX_unrecognized     []byte                      `json:"-"`
-	XXX_sizecache        int32                       `json:"-"`
+	Addrs []*AddrBookRecord_AddrEntry `protobuf:"bytes,2,rep,name=addrs,proto3" json:"addrs,omitempty"`
 }
 
 func (m *AddrBookRecord) Reset()         { *m = AddrBookRecord{} }
 func (m *AddrBookRecord) String() string { return proto.CompactTextString(m) }
 func (*AddrBookRecord) ProtoMessage()    {}
 func (*AddrBookRecord) Descriptor() ([]byte, []int) {
-	return fileDescriptor_pstore_fcc3073dbc5464a9, []int{0}
+	return fileDescriptor_f96873690e08a98f, []int{0}
 }
 func (m *AddrBookRecord) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -53,8 +51,8 @@ func (m *AddrBookRecord) XXX_Marshal(b []byte, deterministic bool) ([]byte, erro
 		return b[:n], nil
 	}
 }
-func (dst *AddrBookRecord) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_AddrBookRecord.Merge(dst, src)
+func (m *AddrBookRecord) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_AddrBookRecord.Merge(m, src)
 }
 func (m *AddrBookRecord) XXX_Size() int {
 	return m.Size()
@@ -78,17 +76,14 @@ type AddrBookRecord_AddrEntry struct {
 	// The point in time when this address expires.
 	Expiry int64 `protobuf:"varint,2,opt,name=expiry,proto3" json:"expiry,omitempty"`
 	// The original TTL of this address.
-	Ttl                  int64    `protobuf:"varint,3,opt,name=ttl,proto3" json:"ttl,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Ttl int64 `protobuf:"varint,3,opt,name=ttl,proto3" json:"ttl,omitempty"`
 }
 
 func (m *AddrBookRecord_AddrEntry) Reset()         { *m = AddrBookRecord_AddrEntry{} }
 func (m *AddrBookRecord_AddrEntry) String() string { return proto.CompactTextString(m) }
 func (*AddrBookRecord_AddrEntry) ProtoMessage()    {}
 func (*AddrBookRecord_AddrEntry) Descriptor() ([]byte, []int) {
-	return fileDescriptor_pstore_fcc3073dbc5464a9, []int{0, 0}
+	return fileDescriptor_f96873690e08a98f, []int{0, 0}
 }
 func (m *AddrBookRecord_AddrEntry) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -105,8 +100,8 @@ func (m *AddrBookRecord_AddrEntry) XXX_Marshal(b []byte, deterministic bool) ([]
 		return b[:n], nil
 	}
 }
-func (dst *AddrBookRecord_AddrEntry) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_AddrBookRecord_AddrEntry.Merge(dst, src)
+func (m *AddrBookRecord_AddrEntry) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_AddrBookRecord_AddrEntry.Merge(m, src)
 }
 func (m *AddrBookRecord_AddrEntry) XXX_Size() int {
 	return m.Size()
@@ -135,6 +130,29 @@ func init() {
 	proto.RegisterType((*AddrBookRecord)(nil), "pstore.pb.AddrBookRecord")
 	proto.RegisterType((*AddrBookRecord_AddrEntry)(nil), "pstore.pb.AddrBookRecord.AddrEntry")
 }
+
+func init() { proto.RegisterFile("pstore.proto", fileDescriptor_f96873690e08a98f) }
+
+var fileDescriptor_f96873690e08a98f = []byte{
+	// 255 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x29, 0x28, 0x2e, 0xc9,
+	0x2f, 0x4a, 0xd5, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0xe2, 0x84, 0xf1, 0x92, 0xa4, 0x74, 0xd3,
+	0x33, 0x4b, 0x32, 0x4a, 0x93, 0xf4, 0x92, 0xf3, 0x73, 0xf5, 0xd3, 0xf3, 0xd3, 0xf3, 0xf5, 0xc1,
+	0x2a, 0x92, 0x4a, 0xd3, 0xc0, 0x3c, 0x30, 0x07, 0xcc, 0x82, 0xe8, 0x54, 0x3a, 0xc6, 0xc8, 0xc5,
+	0xe7, 0x98, 0x92, 0x52, 0xe4, 0x94, 0x9f, 0x9f, 0x1d, 0x94, 0x9a, 0x9c, 0x5f, 0x94, 0x22, 0x24,
+	0xcf, 0xc5, 0x94, 0x99, 0x22, 0xc1, 0xa8, 0xc0, 0xa8, 0xc1, 0xe3, 0xc4, 0x7f, 0xeb, 0x9e, 0x3c,
+	0x77, 0x00, 0x48, 0x65, 0x40, 0x6a, 0x6a, 0x91, 0xa7, 0x4b, 0x10, 0x53, 0x66, 0x8a, 0x90, 0x25,
+	0x17, 0x6b, 0x62, 0x4a, 0x4a, 0x51, 0xb1, 0x04, 0x93, 0x02, 0xb3, 0x06, 0xb7, 0x91, 0xb2, 0x1e,
+	0xdc, 0x76, 0x3d, 0x54, 0xa3, 0xc0, 0x5c, 0xd7, 0xbc, 0x92, 0xa2, 0xca, 0x20, 0x88, 0x0e, 0xa9,
+	0x08, 0x2e, 0x4e, 0xb8, 0x98, 0x90, 0x22, 0x17, 0x0b, 0x48, 0x14, 0x6a, 0x15, 0xef, 0xad, 0x7b,
+	0xf2, 0x9c, 0x60, 0xab, 0x40, 0x2a, 0x82, 0xc0, 0x52, 0x42, 0x62, 0x5c, 0x6c, 0xa9, 0x15, 0x05,
+	0x99, 0x45, 0x95, 0x12, 0x4c, 0x0a, 0x8c, 0x1a, 0xcc, 0x41, 0x50, 0x9e, 0x90, 0x00, 0x17, 0x73,
+	0x49, 0x49, 0x8e, 0x04, 0x33, 0x58, 0x10, 0xc4, 0x74, 0x52, 0xf8, 0xf1, 0x50, 0x8e, 0xf1, 0xc0,
+	0x23, 0x39, 0xc6, 0x13, 0x8f, 0xe4, 0x18, 0x2f, 0x3c, 0x92, 0x63, 0x7c, 0xf0, 0x48, 0x8e, 0x71,
+	0xc2, 0x63, 0x39, 0x86, 0x0b, 0x8f, 0xe5, 0x18, 0x6e, 0x3c, 0x96, 0x63, 0x48, 0x62, 0x03, 0xfb,
+	0xd8, 0x18, 0x10, 0x00, 0x00, 0xff, 0xff, 0xb1, 0x1a, 0x16, 0x43, 0x3b, 0x01, 0x00, 0x00,
+}
+
 func (m *AddrBookRecord) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
@@ -171,9 +189,6 @@ func (m *AddrBookRecord) MarshalTo(dAtA []byte) (int, error) {
 			}
 			i += n
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -213,9 +228,6 @@ func (m *AddrBookRecord_AddrEntry) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintPstore(dAtA, i, uint64(m.Ttl))
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -239,7 +251,6 @@ func NewPopulatedAddrBookRecord(r randyPstore, easy bool) *AddrBookRecord {
 		}
 	}
 	if !easy && r.Intn(10) != 0 {
-		this.XXX_unrecognized = randUnrecognizedPstore(r, 3)
 	}
 	return this
 }
@@ -256,7 +267,6 @@ func NewPopulatedAddrBookRecord_AddrEntry(r randyPstore, easy bool) *AddrBookRec
 		this.Ttl *= -1
 	}
 	if !easy && r.Intn(10) != 0 {
-		this.XXX_unrecognized = randUnrecognizedPstore(r, 4)
 	}
 	return this
 }
@@ -349,9 +359,6 @@ func (m *AddrBookRecord) Size() (n int) {
 			n += 1 + l + sovPstore(uint64(l))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -370,9 +377,6 @@ func (m *AddrBookRecord_AddrEntry) Size() (n int) {
 	}
 	if m.Ttl != 0 {
 		n += 1 + sovPstore(uint64(m.Ttl))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -405,7 +409,7 @@ func (m *AddrBookRecord) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -433,7 +437,7 @@ func (m *AddrBookRecord) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				byteLen |= (int(b) & 0x7F) << shift
+				byteLen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -442,6 +446,9 @@ func (m *AddrBookRecord) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthPstore
 			}
 			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthPstore
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -465,7 +472,7 @@ func (m *AddrBookRecord) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -474,6 +481,9 @@ func (m *AddrBookRecord) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthPstore
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthPstore
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -491,10 +501,12 @@ func (m *AddrBookRecord) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthPstore
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthPstore
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -519,7 +531,7 @@ func (m *AddrBookRecord_AddrEntry) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -547,7 +559,7 @@ func (m *AddrBookRecord_AddrEntry) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				byteLen |= (int(b) & 0x7F) << shift
+				byteLen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -556,6 +568,9 @@ func (m *AddrBookRecord_AddrEntry) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthPstore
 			}
 			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthPstore
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -579,7 +594,7 @@ func (m *AddrBookRecord_AddrEntry) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Expiry |= (int64(b) & 0x7F) << shift
+				m.Expiry |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -598,7 +613,7 @@ func (m *AddrBookRecord_AddrEntry) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Ttl |= (int64(b) & 0x7F) << shift
+				m.Ttl |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -612,10 +627,12 @@ func (m *AddrBookRecord_AddrEntry) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthPstore
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthPstore
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -679,8 +696,11 @@ func skipPstore(dAtA []byte) (n int, err error) {
 					break
 				}
 			}
-			iNdEx += length
 			if length < 0 {
+				return 0, ErrInvalidLengthPstore
+			}
+			iNdEx += length
+			if iNdEx < 0 {
 				return 0, ErrInvalidLengthPstore
 			}
 			return iNdEx, nil
@@ -711,6 +731,9 @@ func skipPstore(dAtA []byte) (n int, err error) {
 					return 0, err
 				}
 				iNdEx = start + next
+				if iNdEx < 0 {
+					return 0, ErrInvalidLengthPstore
+				}
 			}
 			return iNdEx, nil
 		case 4:
@@ -729,25 +752,3 @@ var (
 	ErrInvalidLengthPstore = fmt.Errorf("proto: negative length found during unmarshaling")
 	ErrIntOverflowPstore   = fmt.Errorf("proto: integer overflow")
 )
-
-func init() { proto.RegisterFile("pstore.proto", fileDescriptor_pstore_fcc3073dbc5464a9) }
-
-var fileDescriptor_pstore_fcc3073dbc5464a9 = []byte{
-	// 243 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x29, 0x28, 0x2e, 0xc9,
-	0x2f, 0x4a, 0xd5, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0xe2, 0x84, 0xf1, 0x92, 0xa4, 0x74, 0xd3,
-	0x33, 0x4b, 0x32, 0x4a, 0x93, 0xf4, 0x92, 0xf3, 0x73, 0xf5, 0xd3, 0xf3, 0xd3, 0xf3, 0xf5, 0xc1,
-	0x2a, 0x92, 0x4a, 0xd3, 0xc0, 0x3c, 0x30, 0x07, 0xcc, 0x82, 0xe8, 0x54, 0x3a, 0xc6, 0xc8, 0xc5,
-	0xe7, 0x98, 0x92, 0x52, 0xe4, 0x94, 0x9f, 0x9f, 0x1d, 0x94, 0x9a, 0x9c, 0x5f, 0x94, 0x22, 0x24,
-	0xcf, 0xc5, 0x94, 0x99, 0x22, 0xc1, 0xa8, 0xc0, 0xa8, 0xc1, 0xe3, 0xc4, 0x7f, 0xeb, 0x9e, 0x3c,
-	0x77, 0x00, 0x48, 0x65, 0x40, 0x6a, 0x6a, 0x91, 0xa7, 0x4b, 0x10, 0x53, 0x66, 0x8a, 0x90, 0x25,
-	0x17, 0x6b, 0x62, 0x4a, 0x4a, 0x51, 0xb1, 0x04, 0x93, 0x02, 0xb3, 0x06, 0xb7, 0x91, 0xb2, 0x1e,
-	0xdc, 0x76, 0x3d, 0x54, 0xa3, 0xc0, 0x5c, 0xd7, 0xbc, 0x92, 0xa2, 0xca, 0x20, 0x88, 0x0e, 0xa9,
-	0x08, 0x2e, 0x4e, 0xb8, 0x98, 0x90, 0x22, 0x17, 0x0b, 0x48, 0x14, 0x6a, 0x15, 0xef, 0xad, 0x7b,
-	0xf2, 0x9c, 0x60, 0xab, 0x40, 0x2a, 0x82, 0xc0, 0x52, 0x42, 0x62, 0x5c, 0x6c, 0xa9, 0x15, 0x05,
-	0x99, 0x45, 0x95, 0x12, 0x4c, 0x0a, 0x8c, 0x1a, 0xcc, 0x41, 0x50, 0x9e, 0x90, 0x00, 0x17, 0x73,
-	0x49, 0x49, 0x8e, 0x04, 0x33, 0x58, 0x10, 0xc4, 0x74, 0x12, 0xf9, 0xf1, 0x50, 0x8e, 0xf1, 0xc0,
-	0x23, 0x39, 0xc6, 0x13, 0x8f, 0xe4, 0x18, 0x2f, 0x3c, 0x92, 0x63, 0x7c, 0xf0, 0x48, 0x8e, 0x31,
-	0x89, 0x0d, 0xec, 0x4b, 0x63, 0x40, 0x00, 0x00, 0x00, 0xff, 0xff, 0x2b, 0x91, 0xbf, 0xc2, 0x2f,
-	0x01, 0x00, 0x00,
-}
