@@ -2,6 +2,7 @@ package peerstore
 
 import (
 	"fmt"
+	"io"
 	"sync"
 
 	peer "github.com/libp2p/go-libp2p-peer"
@@ -29,6 +30,19 @@ func NewPeerstore(kb KeyBook, ab AddrBook, md PeerMetadata) Peerstore {
 		PeerMetadata: md,
 		Metrics:      NewMetrics(),
 	}
+}
+
+func (ps *peerstore) Close() (err error) {
+	if cl, ok := ps.KeyBook.(io.Closer); ok {
+		cl.Close()
+	}
+	if cl, ok := ps.AddrBook.(io.Closer); ok {
+		cl.Close()
+	}
+	if cl, ok := ps.PeerMetadata.(io.Closer); ok {
+		cl.Close()
+	}
+	return nil
 }
 
 func (ps *peerstore) Peers() peer.IDSlice {

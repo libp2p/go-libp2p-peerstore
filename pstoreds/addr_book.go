@@ -175,9 +175,10 @@ func NewAddrBook(ctx context.Context, store ds.Batching, opts Options) (ab *dsAd
 	return ab, nil
 }
 
-func (ab *dsAddrBook) Close() {
+func (ab *dsAddrBook) Close() error {
 	ab.cancelFn()
 	ab.childrenDone.Wait()
+	return nil
 }
 
 // loadRecord is a read-through fetch. It fetches a record from cache, falling back to the

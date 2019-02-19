@@ -19,7 +19,6 @@ type datastoreFactory func(tb testing.TB) (ds.Batching, func())
 
 var dstores = map[string]datastoreFactory{
 	"Badger": badgerStore,
-	// TODO: Enable once go-ds-leveldb supports TTL via a shim.
 	// "Leveldb": leveldbStore,
 }
 
@@ -122,42 +121,41 @@ func leveldbStore(tb testing.TB) (ds.TxnDatastore, func()) {
 
 func peerstoreFactory(tb testing.TB, storeFactory datastoreFactory, opts Options) pt.PeerstoreFactory {
 	return func() (pstore.Peerstore, func()) {
-		store, closeFunc := storeFactory(tb)
-
+		store, storeCloseFn := storeFactory(tb)
 		ps, err := NewPeerstore(context.Background(), store, opts)
 		if err != nil {
 			tb.Fatal(err)
 		}
-
-		return ps, closeFunc
+		closer := func() {
+			ps.Close()
+			storeCloseFn()
+		}
+		return ps, closer
 	}
 }
 
 func addressBookFactory(tb testing.TB, storeFactory datastoreFactory, opts Options) pt.AddrBookFactory {
 	return func() (pstore.AddrBook, func()) {
 		store, closeFunc := storeFactory(tb)
-
 		ab, err := NewAddrBook(context.Background(), store, opts)
 		if err != nil {
 			tb.Fatal(err)
 		}
-
-		return ab, func() {
+		closer := func() {
 			ab.Close()
 			closeFunc()
 		}
+		return ab, closer
 	}
 }
 
 func keyBookFactory(tb testing.TB, storeFactory datastoreFactory, opts Options) pt.KeyBookFactory {
 	return func() (pstore.KeyBook, func()) {
-		store, closeFunc := storeFactory(tb)
-
+		store, storeCloseFn := storeFactory(tb)
 		kb, err := NewKeyBook(context.Background(), store, opts)
 		if err != nil {
 			tb.Fatal(err)
 		}
-
-		return kb, closeFunc
+		return kb, storeCloseFn
 	}
 }
