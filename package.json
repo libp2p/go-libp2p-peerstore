@@ -9,9 +9,9 @@
   "gxDependencies": [
     {
       "author": "whyrusleeping",
-      "hash": "QmcuXC5cxs79ro2cUuHs4HQ2bkDLJUYokwL8aivcX6HW3C",
+      "hash": "QmbkT7eMTyXfpeyB3ZMxxcxg7XH8t6uXp49jqzz4HB7BGF",
       "name": "go-log",
-      "version": "1.5.8"
+      "version": "1.5.9"
     },
     {
       "author": "whyrusleeping",
@@ -27,9 +27,9 @@
     },
     {
       "author": "whyrusleeping",
-      "hash": "QmNiJiXwWE3kRhZrC5ej3kSjWHm337pYfhjLGSCDNKJP2s",
+      "hash": "QmTW4SdgBWq9GjsBsHeUx8WuGxzhgzAf88UMH2w62PC8yK",
       "name": "go-libp2p-crypto",
-      "version": "2.0.4"
+      "version": "2.0.7"
     },
     {
       "author": "jbenet",
@@ -45,9 +45,9 @@
     },
     {
       "author": "whyrusleeping",
-      "hash": "QmY5Grm8pJdiSSVsYxx4uNRgweY72EmYwuSDbRnbFok3iY",
+      "hash": "QmTu65MVbemtUxJEWgsTtzv9Zv9P8rvmqNA4eG9TrTRGYc",
       "name": "go-libp2p-peer",
-      "version": "3.0.0"
+      "version": "3.1.1"
     },
     {
       "author": "multiformats",
@@ -57,9 +57,9 @@
     },
     {
       "author": "magik6k",
-      "hash": "QmfDLDtuAQGHbLWYDTpr8G8ETdUghWvgvRquxSNiVwyZyc",
+      "hash": "QmTNJogwkhnbHeRmAXWtzvN2KgVko2oNmHHQN1ggHVhF91",
       "name": "go-ds-badger",
-      "version": "1.12.0"
+      "version": "1.12.3"
     },
     {
       "hash": "QmUadX5EcvrBmxAV9sE7wUWtWSqxns5K84qKJBixmcT1w9",
@@ -95,6 +95,6 @@
   "license": "MIT",
   "name": "go-libp2p-peerstore",
   "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
-  "version": "2.0.13"
+  "version": "2.0.17"
 }
 
