@@ -48,7 +48,10 @@ type addrsRecord struct {
 func (r *addrsRecord) flush(write ds.Write) (err error) {
 	key := addrBookBase.ChildString(b32.RawStdEncoding.EncodeToString([]byte(r.Id.ID)))
 	if len(r.Addrs) == 0 {
-		return write.Delete(key)
+		if err = write.Delete(key); err == nil {
+			r.dirty = false
+		}
+		return err
 	}
 
 	data, err := r.Marshal()
