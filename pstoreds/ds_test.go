@@ -15,11 +15,10 @@ import (
 	pt "github.com/libp2p/go-libp2p-peerstore/test"
 )
 
-type datastoreFactory func(tb testing.TB) (ds.TxnDatastore, func())
+type datastoreFactory func(tb testing.TB) (ds.Batching, func())
 
 var dstores = map[string]datastoreFactory{
 	"Badger": badgerStore,
-	// TODO: Enable once go-ds-leveldb supports TTL via a shim.
 	// "Leveldb": leveldbStore,
 }
 
@@ -37,7 +36,7 @@ func TestDsAddrBook(t *testing.T) {
 			t.Parallel()
 
 			opts := DefaultOpts()
-			opts.TTLInterval = 100 * time.Microsecond
+			opts.GCPurgeInterval = 1 * time.Second
 			opts.CacheSize = 1024
 
 			pt.TestAddrBook(t, addressBookFactory(t, dsFactory, opts))
@@ -47,7 +46,7 @@ func TestDsAddrBook(t *testing.T) {
 			t.Parallel()
 
 			opts := DefaultOpts()
-			opts.TTLInterval = 100 * time.Microsecond
+			opts.GCPurgeInterval = 1 * time.Second
 			opts.CacheSize = 0
 
 			pt.TestAddrBook(t, addressBookFactory(t, dsFactory, opts))
@@ -88,7 +87,7 @@ func BenchmarkDsPeerstore(b *testing.B) {
 	}
 }
 
-func badgerStore(tb testing.TB) (ds.TxnDatastore, func()) {
+func badgerStore(tb testing.TB) (ds.Batching, func()) {
 	dataPath, err := ioutil.TempDir(os.TempDir(), "badger")
 	if err != nil {
 		tb.Fatal(err)
@@ -122,39 +121,41 @@ func leveldbStore(tb testing.TB) (ds.TxnDatastore, func()) {
 
 func peerstoreFactory(tb testing.TB, storeFactory datastoreFactory, opts Options) pt.PeerstoreFactory {
 	return func() (pstore.Peerstore, func()) {
-		store, closeFunc := storeFactory(tb)
-
+		store, storeCloseFn := storeFactory(tb)
 		ps, err := NewPeerstore(context.Background(), store, opts)
 		if err != nil {
 			tb.Fatal(err)
 		}
-
-		return ps, closeFunc
+		closer := func() {
+			ps.Close()
+			storeCloseFn()
+		}
+		return ps, closer
 	}
 }
 
 func addressBookFactory(tb testing.TB, storeFactory datastoreFactory, opts Options) pt.AddrBookFactory {
 	return func() (pstore.AddrBook, func()) {
 		store, closeFunc := storeFactory(tb)
-
 		ab, err := NewAddrBook(context.Background(), store, opts)
 		if err != nil {
 			tb.Fatal(err)
 		}
-
-		return ab, closeFunc
+		closer := func() {
+			ab.Close()
+			closeFunc()
+		}
+		return ab, closer
 	}
 }
 
 func keyBookFactory(tb testing.TB, storeFactory datastoreFactory, opts Options) pt.KeyBookFactory {
 	return func() (pstore.KeyBook, func()) {
-		store, closeFunc := storeFactory(tb)
-
+		store, storeCloseFn := storeFactory(tb)
 		kb, err := NewKeyBook(context.Background(), store, opts)
 		if err != nil {
 			tb.Fatal(err)
 		}
-
-		return kb, closeFunc
+		return kb, storeCloseFn
 	}
 }

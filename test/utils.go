@@ -10,7 +10,7 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 )
 
-func multiaddr(m string) ma.Multiaddr {
+func Multiaddr(m string) ma.Multiaddr {
 	maddr, err := ma.NewMultiaddr(m)
 	if err != nil {
 		panic(err)
@@ -23,7 +23,7 @@ type peerpair struct {
 	Addr []ma.Multiaddr
 }
 
-func randomPeer(b *testing.B, addrCount int) *peerpair {
+func RandomPeer(b *testing.B, addrCount int) *peerpair {
 	var (
 		pid   peer.ID
 		err   error
@@ -44,15 +44,53 @@ func randomPeer(b *testing.B, addrCount int) *peerpair {
 	return &peerpair{pid, addrs}
 }
 
-func addressProducer(ctx context.Context, b *testing.B, addrs chan *peerpair, addrsPerPeer int) {
+func AddressProducer(ctx context.Context, b *testing.B, addrs chan *peerpair, addrsPerPeer int) {
 	b.Helper()
 	defer close(addrs)
 	for {
-		p := randomPeer(b, addrsPerPeer)
+		p := RandomPeer(b, addrsPerPeer)
 		select {
 		case addrs <- p:
 		case <-ctx.Done():
 			return
+		}
+	}
+}
+
+func GenerateAddrs(count int) []ma.Multiaddr {
+	var addrs = make([]ma.Multiaddr, count)
+	for i := 0; i < count; i++ {
+		addrs[i] = Multiaddr(fmt.Sprintf("/ip4/1.1.1.%d/tcp/1111", i))
+	}
+	return addrs
+}
+
+func GeneratePeerIDs(count int) []peer.ID {
+	var ids = make([]peer.ID, count)
+	for i := 0; i < count; i++ {
+		ids[i], _ = pt.RandPeerID()
+	}
+	return ids
+}
+
+func AssertAddressesEqual(t *testing.T, exp, act []ma.Multiaddr) {
+	t.Helper()
+	if len(exp) != len(act) {
+		t.Fatalf("lengths not the same. expected %d, got %d\n", len(exp), len(act))
+	}
+
+	for _, a := range exp {
+		found := false
+
+		for _, b := range act {
+			if a.Equal(b) {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			t.Fatalf("expected address %s not found", a)
 		}
 	}
 }

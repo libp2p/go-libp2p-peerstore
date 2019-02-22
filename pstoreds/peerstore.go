@@ -18,28 +18,36 @@ type Options struct {
 	// The size of the in-memory cache. A value of 0 or lower disables the cache.
 	CacheSize uint
 
-	// Sweep interval to expire entries, only used when TTL is *not* natively managed
-	// by the underlying datastore.
-	TTLInterval time.Duration
+	// Sweep interval to purge expired addresses from the datastore. If this is a zero value, GC will not run
+	// automatically, but it'll be available on demand via explicit calls.
+	GCPurgeInterval time.Duration
 
-	// Number of times to retry transactional writes.
-	WriteRetries uint
+	// Interval to renew the GC lookahead window. If this is a zero value, lookahead will be disabled and we'll
+	// traverse the entire datastore for every purge cycle.
+	GCLookaheadInterval time.Duration
+
+	// Initial delay before GC processes start. Intended to give the system breathing room to fully boot
+	// before starting GC.
+	GCInitialDelay time.Duration
 }
 
-// DefaultOpts returns the default options for a persistent peerstore:
-// * Cache size: 1024
-// * TTL sweep interval: 1 second
-// * WriteRetries: 5
+// DefaultOpts returns the default options for a persistent peerstore, with the full-purge GC algorithm:
+//
+// * Cache size: 1024.
+// * GC purge interval: 2 hours.
+// * GC lookahead interval: disabled.
+// * GC initial delay: 60 seconds.
 func DefaultOpts() Options {
 	return Options{
-		CacheSize:    1024,
-		TTLInterval:  time.Second,
-		WriteRetries: 5,
+		CacheSize:           1024,
+		GCPurgeInterval:     2 * time.Hour,
+		GCLookaheadInterval: 0,
+		GCInitialDelay:      60 * time.Second,
 	}
 }
 
 // NewPeerstore creates a peerstore backed by the provided persistent datastore.
-func NewPeerstore(ctx context.Context, store ds.TxnDatastore, opts Options) (pstore.Peerstore, error) {
+func NewPeerstore(ctx context.Context, store ds.Batching, opts Options) (pstore.Peerstore, error) {
 	addrBook, err := NewAddrBook(ctx, store, opts)
 	if err != nil {
 		return nil, err
@@ -60,20 +68,14 @@ func NewPeerstore(ctx context.Context, store ds.TxnDatastore, opts Options) (pst
 }
 
 // uniquePeerIds extracts and returns unique peer IDs from database keys.
-func uniquePeerIds(ds ds.TxnDatastore, prefix ds.Key, extractor func(result query.Result) string) (peer.IDSlice, error) {
+func uniquePeerIds(ds ds.Datastore, prefix ds.Key, extractor func(result query.Result) string) (peer.IDSlice, error) {
 	var (
 		q       = query.Query{Prefix: prefix.String(), KeysOnly: true}
 		results query.Results
 		err     error
 	)
 
-	txn, err := ds.NewTransaction(true)
-	if err != nil {
-		return nil, err
-	}
-	defer txn.Discard()
-
-	if results, err = txn.Query(q); err != nil {
+	if results, err = ds.Query(q); err != nil {
 		log.Error(err)
 		return nil, err
 	}
@@ -90,12 +92,11 @@ func uniquePeerIds(ds ds.TxnDatastore, prefix ds.Key, extractor func(result quer
 		return peer.IDSlice{}, nil
 	}
 
-	ids := make(peer.IDSlice, len(idset))
-	i := 0
+	ids := make(peer.IDSlice, 0, len(idset))
 	for id := range idset {
 		pid, _ := base32.RawStdEncoding.DecodeString(id)
-		ids[i], _ = peer.IDFromBytes(pid)
-		i++
+		id, _ := peer.IDFromBytes(pid)
+		ids = append(ids, id)
 	}
 	return ids, nil
 }

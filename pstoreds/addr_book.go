@@ -2,49 +2,24 @@ package pstoreds
 
 import (
 	"context"
-	"encoding/binary"
-	"errors"
+	"fmt"
+	"sort"
+	"sync"
 	"time"
-
-	lru "github.com/hashicorp/golang-lru"
-	base32 "github.com/whyrusleeping/base32"
 
 	ds "github.com/ipfs/go-datastore"
 	query "github.com/ipfs/go-datastore/query"
 	logging "github.com/ipfs/go-log"
 
-	ma "github.com/multiformats/go-multiaddr"
-	mh "github.com/multiformats/go-multihash"
-
 	peer "github.com/libp2p/go-libp2p-peer"
 	pstore "github.com/libp2p/go-libp2p-peerstore"
+	pb "github.com/libp2p/go-libp2p-peerstore/pb"
 	pstoremem "github.com/libp2p/go-libp2p-peerstore/pstoremem"
+
+	lru "github.com/hashicorp/golang-lru"
+	ma "github.com/multiformats/go-multiaddr"
+	b32 "github.com/whyrusleeping/base32"
 )
-
-var (
-	log = logging.Logger("peerstore/ds")
-	// The maximum representable value in time.Time is time.Unix(1<<63-62135596801, 999999999).
-	// But it's too brittle and implementation-dependent, so we prefer to use 1<<62, which is in the
-	// year 146138514283. We're safe.
-	maxTime = time.Unix(1<<62, 0)
-
-	ErrTTLDatastore = errors.New("datastore must provide TTL support")
-)
-
-// Peer addresses are stored under the following db key pattern:
-// /peers/addr/<b32 peer id no padding>/<hash of maddr>
-var abBase = ds.NewKey("/peers/addrs")
-
-var _ pstore.AddrBook = (*dsAddrBook)(nil)
-
-// dsAddrBook is an address book backed by a Datastore with both an
-// in-memory TTL manager and an in-memory address stream manager.
-type dsAddrBook struct {
-	cache        cache
-	ds           ds.TxnDatastore
-	subsManager  *pstoremem.AddrSubManager
-	writeRetries int
-}
 
 type ttlWriteMode int
 
@@ -53,347 +28,283 @@ const (
 	ttlExtend
 )
 
-type cacheEntry struct {
-	expiration time.Time
-	addrs      []ma.Multiaddr
+var (
+	log = logging.Logger("peerstore/ds")
+
+	// Peer addresses are stored db key pattern:
+	// /peers/addrs/<b32 peer id no padding>
+	addrBookBase = ds.NewKey("/peers/addrs")
+)
+
+// addrsRecord decorates the AddrBookRecord with locks and metadata.
+type addrsRecord struct {
+	sync.RWMutex
+	*pb.AddrBookRecord
+	dirty bool
 }
 
-type addrRecord struct {
-	ttl  time.Duration
-	addr ma.Multiaddr
-}
+// flush writes the record to the datastore by calling ds.Put, unless the record is
+// marked for deletion, in which case we call ds.Delete. To be called within a lock.
+func (r *addrsRecord) flush(write ds.Write) (err error) {
+	key := addrBookBase.ChildString(b32.RawStdEncoding.EncodeToString([]byte(r.Id.ID)))
+	if len(r.Addrs) == 0 {
+		if err = write.Delete(key); err == nil {
+			r.dirty = false
+		}
+		return err
+	}
 
-func (ar *addrRecord) MarshalBinary() ([]byte, error) {
-	ttlB := make([]byte, 8)
-	binary.LittleEndian.PutUint64(ttlB, uint64(ar.ttl))
-	return append(ttlB, ar.addr.Bytes()...), nil
-}
-
-func (ar *addrRecord) UnmarshalBinary(b []byte) error {
-	ar.ttl = time.Duration(binary.LittleEndian.Uint64(b))
-	// this had been serialized by us, no need to check for errors
-	ar.addr, _ = ma.NewMultiaddrBytes(b[8:])
+	data, err := r.Marshal()
+	if err != nil {
+		return err
+	}
+	if err = write.Put(key, data); err != nil {
+		return err
+	}
+	// write succeeded; record is no longer dirty.
+	r.dirty = false
 	return nil
 }
 
-// NewAddrBook initializes a new address book given a
-// Datastore instance, a context for managing the TTL manager,
-// and the interval at which the TTL manager should sweep the Datastore.
-func NewAddrBook(ctx context.Context, store ds.TxnDatastore, opts Options) (*dsAddrBook, error) {
-	if _, ok := store.(ds.TTLDatastore); !ok {
-		return nil, ErrTTLDatastore
+// clean is called on records to perform housekeeping. The return value indicates if the record was changed
+// as a result of this call.
+//
+// clean does the following:
+// * sorts addresses by expiration (soonest expiring first).
+// * removes expired addresses.
+//
+// It short-circuits optimistically when there's nothing to do.
+//
+// clean is called from several points:
+// * when accessing an entry.
+// * when performing periodic GC.
+// * after an entry has been modified (e.g. addresses have been added or removed, TTLs updated, etc.)
+//
+// If the return value is true, the caller should perform a flush immediately to sync the record with the store.
+func (r *addrsRecord) clean() (chgd bool) {
+	now := time.Now().Unix()
+	if !r.dirty && len(r.Addrs) > 0 && r.Addrs[0].Expiry > now {
+		// record is not dirty, and we have no expired entries to purge.
+		return false
 	}
 
-	var (
-		cache cache = &noopCache{}
-		err   error
-	)
+	if len(r.Addrs) == 0 {
+		// this is a ghost record; let's signal it has to be written.
+		// flush() will take care of doing the deletion.
+		return true
+	}
 
-	if opts.CacheSize > 0 {
-		if cache, err = lru.NewARC(int(opts.CacheSize)); err != nil {
-			return nil, err
+	if r.dirty && len(r.Addrs) > 1 {
+		// the record has been modified, so it may need resorting.
+		// we keep addresses sorted by expiration, where 0 is the soonest expiring.
+		sort.Slice(r.Addrs, func(i, j int) bool {
+			return r.Addrs[i].Expiry < r.Addrs[j].Expiry
+		})
+	}
+
+	// since addresses are sorted by expiration, we find the first
+	// survivor and split the slice on its index.
+	pivot := -1
+	for i, addr := range r.Addrs {
+		if addr.Expiry > now {
+			break
 		}
+		pivot = i
 	}
 
-	mgr := &dsAddrBook{
-		cache:        cache,
-		ds:           store,
-		subsManager:  pstoremem.NewAddrSubManager(),
-		writeRetries: int(opts.WriteRetries),
-	}
-	return mgr, nil
+	r.Addrs = r.Addrs[pivot+1:]
+	return r.dirty || pivot >= 0
 }
 
-func keysAndAddrs(p peer.ID, addrs []ma.Multiaddr) ([]ds.Key, []ma.Multiaddr, error) {
-	var (
-		keys      = make([]ds.Key, len(addrs))
-		clean     = make([]ma.Multiaddr, len(addrs))
-		parentKey = abBase.ChildString(base32.RawStdEncoding.EncodeToString([]byte(p)))
-		i         = 0
-	)
+// dsAddrBook is an address book backed by a Datastore with a GC procedure to purge expired entries. It uses an
+// in-memory address stream manager. See the NewAddrBook for more information.
+type dsAddrBook struct {
+	ctx  context.Context
+	opts Options
 
-	for _, addr := range addrs {
-		if addr == nil {
-			continue
-		}
+	cache       cache
+	ds          ds.Batching
+	gc          *dsAddrBookGc
+	subsManager *pstoremem.AddrSubManager
 
-		hash, err := mh.Sum((addr).Bytes(), mh.MURMUR3, -1)
-		if err != nil {
-			return nil, nil, err
-		}
-		keys[i] = parentKey.ChildString(base32.RawStdEncoding.EncodeToString(hash))
-		clean[i] = addr
-		i++
+	// controls children goroutine lifetime.
+	childrenDone sync.WaitGroup
+	cancelFn     func()
+}
+
+var _ pstore.AddrBook = (*dsAddrBook)(nil)
+
+// NewAddrBook initializes a new datastore-backed address book. It serves as a drop-in replacement for pstoremem
+// (memory-backed peerstore), and works with any datastore implementing the ds.Batching interface.
+//
+// Addresses and peer records are serialized into protobuf, storing one datastore entry per peer, along with metadata
+// to control address expiration. To alleviate disk access and serde overhead, we internally use a read/write-through
+// ARC cache, the size of which is adjustable via Options.CacheSize.
+//
+// The user has a choice of two GC algorithms:
+//
+//  - lookahead GC: minimises the amount of full store traversals by maintaining a time-indexed list of entries that
+//    need to be visited within the period specified in Options.GCLookaheadInterval. This is useful in scenarios with
+//    considerable TTL variance, coupled with datastores whose native iterators return entries in lexicographical key
+//    order. Enable this mode by passing a value Options.GCLookaheadInterval > 0. Lookahead windows are jumpy, not
+//    sliding. Purges operate exclusively over the lookahead window with periodicity Options.GCPurgeInterval.
+//
+//  - full-purge GC (default): performs a full visit of the store with periodicity Options.GCPurgeInterval. Useful when
+//    the range of possible TTL values is small and the values themselves are also extreme, e.g. 10 minutes or
+//    permanent, popular values used in other libp2p modules. In this cited case, optimizing with lookahead windows
+//    makes little sense.
+func NewAddrBook(ctx context.Context, store ds.Batching, opts Options) (ab *dsAddrBook, err error) {
+	ctx, cancelFn := context.WithCancel(ctx)
+	ab = &dsAddrBook{
+		ctx:         ctx,
+		ds:          store,
+		opts:        opts,
+		cancelFn:    cancelFn,
+		subsManager: pstoremem.NewAddrSubManager(),
 	}
 
-	return keys[:i], clean[:i], nil
+	if opts.CacheSize > 0 {
+		if ab.cache, err = lru.NewARC(int(opts.CacheSize)); err != nil {
+			return nil, err
+		}
+	} else {
+		ab.cache = new(noopCache)
+	}
+
+	if ab.gc, err = newAddressBookGc(ctx, ab); err != nil {
+		return nil, err
+	}
+
+	return ab, nil
+}
+
+func (ab *dsAddrBook) Close() error {
+	ab.cancelFn()
+	ab.childrenDone.Wait()
+	return nil
+}
+
+// loadRecord is a read-through fetch. It fetches a record from cache, falling back to the
+// datastore upon a miss, and returning a newly initialized record if the peer doesn't exist.
+//
+// loadRecord calls clean() on an existing record before returning it. If the record changes
+// as a result and the update argument is true, the resulting state is saved in the datastore.
+//
+// If the cache argument is true, the record is inserted in the cache when loaded from the datastore.
+func (ab *dsAddrBook) loadRecord(id peer.ID, cache bool, update bool) (pr *addrsRecord, err error) {
+	if e, ok := ab.cache.Get(id); ok {
+		pr = e.(*addrsRecord)
+		pr.Lock()
+		defer pr.Unlock()
+
+		if pr.clean() && update {
+			err = pr.flush(ab.ds)
+		}
+		return pr, err
+	}
+
+	pr = &addrsRecord{AddrBookRecord: &pb.AddrBookRecord{}}
+	key := addrBookBase.ChildString(b32.RawStdEncoding.EncodeToString([]byte(id)))
+	data, err := ab.ds.Get(key)
+
+	switch err {
+	case ds.ErrNotFound:
+		err = nil
+		pr.Id = &pb.ProtoPeerID{ID: id}
+	case nil:
+		if err = pr.Unmarshal(data); err != nil {
+			return nil, err
+		}
+		// this record is new and local for now (not in cache), so we don't need to lock.
+		if pr.clean() && update {
+			err = pr.flush(ab.ds)
+		}
+	default:
+		return nil, err
+	}
+
+	if cache {
+		ab.cache.Add(id, pr)
+	}
+	return pr, err
 }
 
 // AddAddr will add a new address if it's not already in the AddrBook.
-func (mgr *dsAddrBook) AddAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) {
-	mgr.AddAddrs(p, []ma.Multiaddr{addr}, ttl)
+func (ab *dsAddrBook) AddAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) {
+	ab.AddAddrs(p, []ma.Multiaddr{addr}, ttl)
 }
 
 // AddAddrs will add many new addresses if they're not already in the AddrBook.
-func (mgr *dsAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
+func (ab *dsAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
 	if ttl <= 0 {
 		return
 	}
-	mgr.setAddrs(p, addrs, ttl, ttlExtend)
+	addrs = cleanAddrs(addrs)
+	ab.setAddrs(p, addrs, ttl, ttlExtend)
 }
 
 // SetAddr will add or update the TTL of an address in the AddrBook.
-func (mgr *dsAddrBook) SetAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) {
-	addrs := []ma.Multiaddr{addr}
-	mgr.SetAddrs(p, addrs, ttl)
+func (ab *dsAddrBook) SetAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) {
+	ab.SetAddrs(p, []ma.Multiaddr{addr}, ttl)
 }
 
 // SetAddrs will add or update the TTLs of addresses in the AddrBook.
-func (mgr *dsAddrBook) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
+func (ab *dsAddrBook) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
+	addrs = cleanAddrs(addrs)
 	if ttl <= 0 {
-		mgr.deleteAddrs(p, addrs)
+		ab.deleteAddrs(p, addrs)
 		return
 	}
-	mgr.setAddrs(p, addrs, ttl, ttlOverride)
-}
-
-func (mgr *dsAddrBook) deleteAddrs(p peer.ID, addrs []ma.Multiaddr) error {
-	// Keys and cleaned up addresses.
-	keys, addrs, err := keysAndAddrs(p, addrs)
-	if err != nil {
-		return err
-	}
-
-	mgr.cache.Remove(p)
-	// Attempt transactional KV deletion.
-	for i := 0; i < mgr.writeRetries; i++ {
-		if err = mgr.dbDelete(keys); err == nil {
-			break
-		}
-		log.Errorf("failed to delete addresses for peer %s: %s\n", p.Pretty(), err)
-	}
-
-	if err != nil {
-		log.Errorf("failed to avoid write conflict for peer %s after %d retries: %v\n", p.Pretty(), mgr.writeRetries, err)
-		return err
-	}
-
-	return nil
-}
-
-func (mgr *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration, mode ttlWriteMode) error {
-	// Keys and cleaned up addresses.
-	keys, addrs, err := keysAndAddrs(p, addrs)
-	if err != nil {
-		return err
-	}
-
-	mgr.cache.Remove(p)
-	// Attempt transactional KV insertion.
-	var existed []bool
-	for i := 0; i < mgr.writeRetries; i++ {
-		if existed, err = mgr.dbInsert(keys, addrs, ttl, mode); err == nil {
-			break
-		}
-		log.Errorf("failed to write addresses for peer %s: %s\n", p.Pretty(), err)
-	}
-
-	if err != nil {
-		log.Errorf("failed to avoid write conflict for peer %s after %d retries: %v\n", p.Pretty(), mgr.writeRetries, err)
-		return err
-	}
-
-	// Update was successful, so broadcast event only for new addresses.
-	for i, _ := range keys {
-		if !existed[i] {
-			mgr.subsManager.BroadcastAddr(p, addrs[i])
-		}
-	}
-	return nil
-}
-
-// dbInsert performs a transactional insert of the provided keys and values.
-func (mgr *dsAddrBook) dbInsert(keys []ds.Key, addrs []ma.Multiaddr, ttl time.Duration, mode ttlWriteMode) ([]bool, error) {
-	var (
-		err     error
-		existed = make([]bool, len(keys))
-		exp     = time.Now().Add(ttl)
-	)
-
-	txn, err := mgr.ds.NewTransaction(false)
-	if err != nil {
-		return nil, err
-	}
-	defer txn.Discard()
-
-	ttltxn := txn.(ds.TTLDatastore)
-	for i, key := range keys {
-		// Check if the key existed previously.
-		if existed[i], err = ttltxn.Has(key); err != nil {
-			log.Errorf("transaction failed and aborted while checking key existence: %s, cause: %v", key.String(), err)
-			return nil, err
-		}
-
-		// The key embeds a hash of the value, so if it existed, we can safely skip the insert and
-		// just update the TTL.
-		if existed[i] {
-			switch mode {
-			case ttlOverride:
-				err = ttltxn.SetTTL(key, ttl)
-			case ttlExtend:
-				var curr time.Time
-				if curr, err = ttltxn.GetExpiration(key); err == nil && exp.After(curr) {
-					err = ttltxn.SetTTL(key, ttl)
-				}
-			}
-			if err != nil {
-				// mode will be printed as an int
-				log.Errorf("failed while updating the ttl for key: %s, mode: %v, cause: %v", key.String(), mode, err)
-				return nil, err
-			}
-			continue
-		}
-
-		r := &addrRecord{
-			ttl:  ttl,
-			addr: addrs[i],
-		}
-		value, _ := r.MarshalBinary()
-		if err = ttltxn.PutWithTTL(key, value, ttl); err != nil {
-			log.Errorf("transaction failed and aborted while setting key: %s, cause: %v", key.String(), err)
-			return nil, err
-		}
-	}
-
-	if err = txn.Commit(); err != nil {
-		log.Errorf("failed to commit transaction when setting keys, cause: %v", err)
-		return nil, err
-	}
-
-	return existed, nil
+	ab.setAddrs(p, addrs, ttl, ttlOverride)
 }
 
 // UpdateAddrs will update any addresses for a given peer and TTL combination to
 // have a new TTL.
-func (mgr *dsAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.Duration) {
-	mgr.cache.Remove(p)
-
-	var err error
-	for i := 0; i < mgr.writeRetries; i++ {
-		if err = mgr.dbUpdateTTL(p, oldTTL, newTTL); err == nil {
-			break
-		}
-		log.Errorf("failed to update ttlsfor peer %s: %s\n", p.Pretty(), err)
-	}
-
+func (ab *dsAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.Duration) {
+	pr, err := ab.loadRecord(p, true, false)
 	if err != nil {
-		log.Errorf("failed to avoid write conflict when updating ttls for peer %s after %d retries: %v\n",
-			p.Pretty(), mgr.writeRetries, err)
+		log.Errorf("failed to update ttls for peer %s: %s\n", p.Pretty(), err)
 	}
-}
 
-func (mgr *dsAddrBook) dbUpdateTTL(p peer.ID, oldTTL time.Duration, newTTL time.Duration) error {
-	var (
-		prefix  = abBase.ChildString(base32.RawStdEncoding.EncodeToString([]byte(p)))
-		q       = query.Query{Prefix: prefix.String(), KeysOnly: false}
-		results query.Results
-		err     error
-	)
+	pr.Lock()
+	defer pr.Unlock()
 
-	txn, err := mgr.ds.NewTransaction(false)
-	if err != nil {
-		return err
-	}
-	defer txn.Discard()
-
-	if results, err = txn.Query(q); err != nil {
-		return err
-	}
-	defer results.Close()
-
-	ttltxn := txn.(ds.TTLDatastore)
-	r := &addrRecord{}
-	for result := range results.Next() {
-		r.UnmarshalBinary(result.Value)
-		if r.ttl != oldTTL {
+	newExp := time.Now().Add(newTTL).Unix()
+	for _, entry := range pr.Addrs {
+		if entry.Ttl != int64(oldTTL) {
 			continue
 		}
-
-		r.ttl = newTTL
-		value, _ := r.MarshalBinary()
-		if err = ttltxn.PutWithTTL(ds.RawKey(result.Key), value, newTTL); err != nil {
-			return err
-		}
+		entry.Ttl, entry.Expiry = int64(newTTL), newExp
+		pr.dirty = true
 	}
 
-	if err := txn.Commit(); err != nil {
-		log.Errorf("failed to commit transaction when updating ttls, cause: %v", err)
-		return err
+	if pr.clean() {
+		pr.flush(ab.ds)
 	}
-
-	return nil
 }
 
 // Addrs returns all of the non-expired addresses for a given peer.
-func (mgr *dsAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
-	var (
-		prefix  = abBase.ChildString(base32.RawStdEncoding.EncodeToString([]byte(p)))
-		q       = query.Query{Prefix: prefix.String(), KeysOnly: false, ReturnExpirations: true}
-		results query.Results
-		err     error
-	)
-
-	// Check the cache and return the entry only if it hasn't expired; if expired, remove.
-	if e, ok := mgr.cache.Get(p); ok {
-		entry := e.(cacheEntry)
-		if entry.expiration.After(time.Now()) {
-			addrs := make([]ma.Multiaddr, len(entry.addrs))
-			copy(addrs, entry.addrs)
-			return addrs
-		} else {
-			mgr.cache.Remove(p)
-		}
-	}
-
-	txn, err := mgr.ds.NewTransaction(true)
+func (ab *dsAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
+	pr, err := ab.loadRecord(p, true, true)
 	if err != nil {
+		log.Warning("failed to load peerstore entry for peer %v while querying addrs, err: %v", p, err)
 		return nil
 	}
-	defer txn.Discard()
 
-	if results, err = txn.Query(q); err != nil {
-		log.Error(err)
-		return nil
+	pr.RLock()
+	defer pr.RUnlock()
+
+	addrs := make([]ma.Multiaddr, 0, len(pr.Addrs))
+	for _, a := range pr.Addrs {
+		addrs = append(addrs, a.Addr)
 	}
-	defer results.Close()
-
-	var addrs []ma.Multiaddr
-	var r addrRecord
-	// used to set the expiration for the entire cache entry
-	earliestExp := maxTime
-	for result := range results.Next() {
-		if err = r.UnmarshalBinary(result.Value); err == nil {
-			addrs = append(addrs, r.addr)
-		}
-
-		if exp := result.Expiration; !exp.IsZero() && exp.Before(earliestExp) {
-			earliestExp = exp
-		}
-	}
-
-	// Store a copy in the cache.
-	addrsCpy := make([]ma.Multiaddr, len(addrs))
-	copy(addrsCpy, addrs)
-	entry := cacheEntry{addrs: addrsCpy, expiration: earliestExp}
-	mgr.cache.Add(p, entry)
-
 	return addrs
 }
 
 // Peers returns all of the peer IDs for which the AddrBook has addresses.
-func (mgr *dsAddrBook) PeersWithAddrs() peer.IDSlice {
-	ids, err := uniquePeerIds(mgr.ds, abBase, func(result query.Result) string {
-		return ds.RawKey(result.Key).Parent().Name()
+func (ab *dsAddrBook) PeersWithAddrs() peer.IDSlice {
+	ids, err := uniquePeerIds(ab.ds, addrBookBase, func(result query.Result) string {
+		return ds.RawKey(result.Key).Name()
 	})
 	if err != nil {
 		log.Errorf("error while retrieving peers with addresses: %v", err)
@@ -403,107 +314,114 @@ func (mgr *dsAddrBook) PeersWithAddrs() peer.IDSlice {
 
 // AddrStream returns a channel on which all new addresses discovered for a
 // given peer ID will be published.
-func (mgr *dsAddrBook) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Multiaddr {
-	initial := mgr.Addrs(p)
-	return mgr.subsManager.AddrStream(ctx, p, initial)
+func (ab *dsAddrBook) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Multiaddr {
+	initial := ab.Addrs(p)
+	return ab.subsManager.AddrStream(ctx, p, initial)
 }
 
 // ClearAddrs will delete all known addresses for a peer ID.
-func (mgr *dsAddrBook) ClearAddrs(p peer.ID) {
-	var (
-		err      error
-		prefix   = abBase.ChildString(base32.RawStdEncoding.EncodeToString([]byte(p)))
-		deleteFn func() error
-	)
+func (ab *dsAddrBook) ClearAddrs(p peer.ID) {
+	ab.cache.Remove(p)
 
-	if e, ok := mgr.cache.Peek(p); ok {
-		mgr.cache.Remove(p)
-		keys, _, _ := keysAndAddrs(p, e.(cacheEntry).addrs)
-		deleteFn = func() error {
-			return mgr.dbDelete(keys)
-		}
-	} else {
-		deleteFn = func() error {
-			return mgr.dbDeleteIter(prefix)
-		}
-	}
-
-	// Attempt transactional KV deletion.
-	for i := 0; i < mgr.writeRetries; i++ {
-		if err = deleteFn(); err == nil {
-			break
-		}
-		log.Errorf("failed to clear addresses for peer %s: %s\n", p.Pretty(), err)
-	}
-
-	if err != nil {
-		log.Errorf("failed to clear addresses for peer %s after %d attempts\n", p.Pretty(), mgr.writeRetries)
+	key := addrBookBase.ChildString(b32.RawStdEncoding.EncodeToString([]byte(p)))
+	if err := ab.ds.Delete(key); err != nil {
+		log.Errorf("failed to clear addresses for peer %s: %v", p.Pretty(), err)
 	}
 }
 
-// dbDelete transactionally deletes the provided keys.
-func (mgr *dsAddrBook) dbDelete(keys []ds.Key) error {
-	var err error
-
-	txn, err := mgr.ds.NewTransaction(false)
+func (ab *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration, mode ttlWriteMode) (err error) {
+	pr, err := ab.loadRecord(p, true, false)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to load peerstore entry for peer %v while setting addrs, err: %v", p, err)
 	}
-	defer txn.Discard()
 
-	for _, key := range keys {
-		if err = txn.Delete(key); err != nil {
-			log.Errorf("failed to delete key: %s, cause: %v", key.String(), err)
-			return err
+	pr.Lock()
+	defer pr.Unlock()
+
+	newExp := time.Now().Add(ttl).Unix()
+	existed := make([]bool, len(addrs)) // keeps track of which addrs we found.
+
+Outer:
+	for i, incoming := range addrs {
+		for _, have := range pr.Addrs {
+			if incoming.Equal(have.Addr) {
+				existed[i] = true
+				if mode == ttlExtend && have.Expiry > newExp {
+					// if we're only extending TTLs but the addr already has a longer one, we skip it.
+					continue Outer
+				}
+				have.Expiry = newExp
+				// we found the address, and addresses cannot be duplicate,
+				// so let's move on to the next.
+				continue Outer
+			}
 		}
 	}
 
-	if err = txn.Commit(); err != nil {
-		log.Errorf("failed to commit transaction when deleting keys, cause: %v", err)
-		return err
+	// add addresses we didn't hold.
+	var added []*pb.AddrBookRecord_AddrEntry
+	for i, e := range existed {
+		if e {
+			continue
+		}
+		addr := addrs[i]
+		entry := &pb.AddrBookRecord_AddrEntry{
+			Addr:   &pb.ProtoAddr{Multiaddr: addr},
+			Ttl:    int64(ttl),
+			Expiry: newExp,
+		}
+		added = append(added, entry)
+		// note: there's a minor chance that writing the record will fail, in which case we would've broadcast
+		// the addresses without persisting them. This is very unlikely and not much of an issue.
+		ab.subsManager.BroadcastAddr(p, addr)
 	}
 
-	return nil
+	pr.Addrs = append(pr.Addrs, added...)
+	pr.dirty = true
+	pr.clean()
+	return pr.flush(ab.ds)
 }
 
-// dbDeleteIter removes all entries whose keys are prefixed with the argument.
-// it returns a slice of the removed keys in case it's needed
-func (mgr *dsAddrBook) dbDeleteIter(prefix ds.Key) error {
-	q := query.Query{Prefix: prefix.String(), KeysOnly: true}
-
-	txn, err := mgr.ds.NewTransaction(false)
+func (ab *dsAddrBook) deleteAddrs(p peer.ID, addrs []ma.Multiaddr) (err error) {
+	pr, err := ab.loadRecord(p, false, false)
 	if err != nil {
-		return err
-	}
-	defer txn.Discard()
-
-	results, err := txn.Query(q)
-	if err != nil {
-		log.Errorf("failed to fetch all keys prefixed with: %s, cause: %v", prefix.String(), err)
-		return err
+		return fmt.Errorf("failed to load peerstore entry for peer %v while deleting addrs, err: %v", p, err)
 	}
 
-	var keys = make([]ds.Key, 0, 4) // cap: 4 to reduce allocs
-	var key ds.Key
-	for result := range results.Next() {
-		key = ds.RawKey(result.Key)
-		keys = append(keys, key)
+	if pr.Addrs == nil {
+		return nil
+	}
 
-		if err = txn.Delete(key); err != nil {
-			log.Errorf("failed to delete key: %s, cause: %v", key.String(), err)
-			return err
+	pr.Lock()
+	defer pr.Unlock()
+
+	// deletes addresses in place, and avoiding copies until we encounter the first deletion.
+	survived := 0
+	for i, addr := range pr.Addrs {
+		for _, del := range addrs {
+			if addr.Addr.Equal(del) {
+				continue
+			}
+			if i != survived {
+				pr.Addrs[survived] = pr.Addrs[i]
+			}
+			survived++
 		}
 	}
+	pr.Addrs = pr.Addrs[:survived]
 
-	if err = results.Close(); err != nil {
-		log.Errorf("failed to close cursor, cause: %v", err)
-		return err
+	pr.dirty = true
+	pr.clean()
+	return pr.flush(ab.ds)
+}
+
+func cleanAddrs(addrs []ma.Multiaddr) []ma.Multiaddr {
+	clean := make([]ma.Multiaddr, 0, len(addrs))
+	for _, addr := range addrs {
+		if addr == nil {
+			continue
+		}
+		clean = append(clean, addr)
 	}
-
-	if err = txn.Commit(); err != nil {
-		log.Errorf("failed to commit transaction when deleting keys, cause: %v", err)
-		return err
-	}
-
-	return nil
+	return clean
 }

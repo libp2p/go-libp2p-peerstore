@@ -8,11 +8,14 @@ type cache interface {
 	Remove(key interface{})
 	Contains(key interface{}) bool
 	Peek(key interface{}) (value interface{}, ok bool)
+	Keys() []interface{}
 }
 
 // noopCache is a dummy implementation that's used when the cache is disabled.
 type noopCache struct {
 }
+
+var _ cache = (*noopCache)(nil)
 
 func (*noopCache) Get(key interface{}) (value interface{}, ok bool) {
 	return nil, false
@@ -30,4 +33,8 @@ func (*noopCache) Contains(key interface{}) bool {
 
 func (*noopCache) Peek(key interface{}) (value interface{}, ok bool) {
 	return nil, false
+}
+
+func (*noopCache) Keys() (keys []interface{}) {
+	return keys
 }
