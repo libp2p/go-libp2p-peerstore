@@ -33,14 +33,21 @@ func NewPeerstore(kb KeyBook, ab AddrBook, md PeerMetadata) Peerstore {
 }
 
 func (ps *peerstore) Close() (err error) {
-	if cl, ok := ps.KeyBook.(io.Closer); ok {
-		cl.Close()
+	var errs []error
+	weakClose := func(name string, c interface{}) {
+		if cl, ok := c.(io.Closer); ok {
+			if err = cl.Close(); err != nil {
+				errs = append(errs, fmt.Errorf("%s error: %s", name, err))
+			}
+		}
 	}
-	if cl, ok := ps.AddrBook.(io.Closer); ok {
-		cl.Close()
-	}
-	if cl, ok := ps.PeerMetadata.(io.Closer); ok {
-		cl.Close()
+
+	weakClose("keybook", ps.KeyBook)
+	weakClose("addressbook", ps.AddrBook)
+	weakClose("peermetadata", ps.PeerMetadata)
+
+	if len(errs) > 0 {
+		return fmt.Errorf("failed while closing peerstore; err(s): %q", errs)
 	}
 	return nil
 }
