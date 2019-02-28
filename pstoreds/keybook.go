@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	base32 "github.com/whyrusleeping/base32"
+	base32 "github.com/multiformats/go-base32"
 
 	ds "github.com/ipfs/go-datastore"
 	query "github.com/ipfs/go-datastore/query"
