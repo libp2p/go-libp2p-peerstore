@@ -17,8 +17,8 @@ import (
 	pstoremem "github.com/libp2p/go-libp2p-peerstore/pstoremem"
 
 	lru "github.com/hashicorp/golang-lru"
+	b32 "github.com/multiformats/go-base32"
 	ma "github.com/multiformats/go-multiaddr"
-	b32 "github.com/whyrusleeping/base32"
 )
 
 type ttlWriteMode int

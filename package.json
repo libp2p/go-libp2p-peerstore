@@ -79,15 +79,15 @@
     },
     {
       "author": "whyrusleeping",
-      "hash": "QmfVj3x4D6Jkq9SEoi5n2NmoUomLwoeiwnYz2KQa15wRw6",
-      "name": "base32",
-      "version": "0.0.2"
-    },
-    {
-      "author": "whyrusleeping",
       "hash": "QmbgYmpUkuCDnXi4hci3Jt797iVXbpuBKRTCqGz57h48Sk",
       "name": "go-ds-leveldb",
       "version": "1.3.0"
+    },
+    {
+      "author": "Golang",
+      "hash": "QmPbbYin7KBd1Y1BfUe15vHzwJiioyi3wtKQTtXWWf8SC5",
+      "name": "base32",
+      "version": "0.0.3"
     }
   ],
   "gxVersion": "0.4.0",
