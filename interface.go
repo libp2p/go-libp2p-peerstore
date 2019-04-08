@@ -131,8 +131,9 @@ type KeyBook interface {
 	// AddPubKey stores the public key of a peer.
 	AddPubKey(peer.ID, ic.PubKey) error
 
-	// PrivKey returns the private key of a peer, if known. Generally this might only be our own private key, 
-	// see https://discuss.libp2p.io/t/what-is-the-purpose-of-having-map-peer-id-privatekey-in-peerstore/74.
+	// PrivKey returns the private key of a peer, if known. Generally this might only be our own
+	// private key, see
+	// https://discuss.libp2p.io/t/what-is-the-purpose-of-having-map-peer-id-privatekey-in-peerstore/74.
 	PrivKey(peer.ID) ic.PrivKey
 
 	// AddPrivKey stores the private key of a peer.
