@@ -264,6 +264,7 @@ func (ab *dsAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.D
 	pr, err := ab.loadRecord(p, true, false)
 	if err != nil {
 		log.Errorf("failed to update ttls for peer %s: %s\n", p.Pretty(), err)
+		return
 	}
 
 	pr.Lock()
