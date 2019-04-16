@@ -19,3 +19,5 @@ require (
 	github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1
 	github.com/whyrusleeping/mafmt v1.2.8
 )
+
+go 1.11
