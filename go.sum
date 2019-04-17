@@ -70,6 +70,8 @@ github.com/libp2p/go-buffer-pool v0.0.1 h1:9Rrn/H46cXjaA2HQ5Y8lyhOS1NhTkZ4yuEs2r
 github.com/libp2p/go-buffer-pool v0.0.1/go.mod h1:xtyIz9PMobb13WaxR6Zo1Pd1zXJKYg0a8KiIvDp3TzQ=
 github.com/libp2p/go-libp2p-core v0.0.0-20190416150442-54a1b70f07da h1:zkOK0lDgEDQbkX+R5n3RGtRQQs3Ldh+FH0TEEg8S3P0=
 github.com/libp2p/go-libp2p-core v0.0.0-20190416150442-54a1b70f07da/go.mod h1:5WmdfBZgh0OiotzGCDVDutKBwXGIf3rRDtxbNF33WYo=
+github.com/libp2p/go-libp2p-core v0.0.0-20190417162149-f41b5dd7c01b h1:G7jk8dtQP5NeK5uckxMarWHNH0bTTDpSUMPUQwGtFEU=
+github.com/libp2p/go-libp2p-core v0.0.0-20190417162149-f41b5dd7c01b/go.mod h1:4iqSipG3tx8vB0FVHHRPVl6/lZqPht2Lhd/ZBlIGNSo=
 github.com/libp2p/go-libp2p-crypto v0.0.1 h1:JNQd8CmoGTohO/akqrH16ewsqZpci2CbgYH/LmYl8gw=
 github.com/libp2p/go-libp2p-crypto v0.0.1/go.mod h1:yJkNyDmO341d5wwXxDUGO0LykUVT72ImHNUqh5D/dBE=
 github.com/libp2p/go-libp2p-peer v0.0.1 h1:0qwAOljzYewINrU+Kndoc+1jAL7vzY/oY2Go4DCGfyY=
