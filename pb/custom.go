@@ -46,7 +46,7 @@ func (id *ProtoPeerID) Unmarshal(data []byte) (err error) {
 
 func (id *ProtoPeerID) UnmarshalJSON(data []byte) error {
 	var v []byte
-	err := json.Unmarshal(data, v)
+	err := json.Unmarshal(data, &v)
 	if err != nil {
 		return err
 	}
