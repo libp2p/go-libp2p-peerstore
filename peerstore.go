@@ -10,8 +10,8 @@ import (
 
 var _ Peerstore = (*peerstore)(nil)
 
-const maxInternedProtocols = 256
-const maxInternedProtocolSize = 96
+const maxInternedProtocols = 512
+const maxInternedProtocolSize = 256
 
 type peerstore struct {
 	Metrics
