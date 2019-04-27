@@ -21,7 +21,7 @@ type peerstore struct {
 	PeerMetadata
 
 	// lock for protocol information, separate from datastore lock
-	protolock         sync.Mutex
+	protolock         sync.RWMutex
 	internedProtocols map[string]string
 }
 
@@ -142,8 +142,8 @@ func (ps *peerstore) getProtocolMap(p peer.ID) (map[string]struct{}, error) {
 }
 
 func (ps *peerstore) GetProtocols(p peer.ID) ([]string, error) {
-	ps.protolock.Lock()
-	defer ps.protolock.Unlock()
+	ps.protolock.RLock()
+	defer ps.protolock.RUnlock()
 	pmap, err := ps.getProtocolMap(p)
 	if err != nil {
 		return nil, err
@@ -158,8 +158,8 @@ func (ps *peerstore) GetProtocols(p peer.ID) ([]string, error) {
 }
 
 func (ps *peerstore) SupportsProtocols(p peer.ID, protos ...string) ([]string, error) {
-	ps.protolock.Lock()
-	defer ps.protolock.Unlock()
+	ps.protolock.RLock()
+	defer ps.protolock.RUnlock()
 	pmap, err := ps.getProtocolMap(p)
 	if err != nil {
 		return nil, err
