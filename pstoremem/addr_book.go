@@ -30,7 +30,7 @@ var _ pstore.AddrBook = (*memoryAddrBook)(nil)
 
 // memoryAddrBook manages addresses.
 type memoryAddrBook struct {
-	addrmu sync.Mutex
+	addrmu sync.RWMutex
 	// Use pointers to save memory. Maps always leave some fraction of their
 	// space unused. storing the *values* directly in the map will
 	// drastically increase the space waste. In our case, by 6x.
@@ -68,8 +68,8 @@ func (mab *memoryAddrBook) gc() {
 }
 
 func (mab *memoryAddrBook) PeersWithAddrs() peer.IDSlice {
-	mab.addrmu.Lock()
-	defer mab.addrmu.Unlock()
+	mab.addrmu.RLock()
+	defer mab.addrmu.RUnlock()
 
 	pids := make(peer.IDSlice, 0, len(mab.addrs))
 	for pid := range mab.addrs {
@@ -178,8 +178,8 @@ func (mab *memoryAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL t
 
 // Addresses returns all known (and valid) addresses for a given
 func (mab *memoryAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
-	mab.addrmu.Lock()
-	defer mab.addrmu.Unlock()
+	mab.addrmu.RLock()
+	defer mab.addrmu.RUnlock()
 
 	amap, found := mab.addrs[p]
 	if !found {
@@ -210,8 +210,8 @@ func (mab *memoryAddrBook) ClearAddrs(p peer.ID) {
 // AddrStream returns a channel on which all new addresses discovered for a
 // given peer ID will be published.
 func (mab *memoryAddrBook) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Multiaddr {
-	mab.addrmu.Lock()
-	defer mab.addrmu.Unlock()
+	mab.addrmu.RLock()
+	defer mab.addrmu.RUnlock()
 
 	baseaddrslice := mab.addrs[p]
 	initial := make([]ma.Multiaddr, 0, len(baseaddrslice))
