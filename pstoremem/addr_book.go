@@ -75,6 +75,11 @@ func (mab *memoryAddrBook) background() {
 	}
 }
 
+func (mab *memoryAddrBook) Close() error {
+	mab.cancel()
+	return nil
+}
+
 // gc garbage collects the in-memory address book. The caller *must* hold the addrmu lock.
 func (mab *memoryAddrBook) gc() {
 	now := time.Now()
