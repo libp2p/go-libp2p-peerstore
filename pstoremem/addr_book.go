@@ -37,14 +37,41 @@ type memoryAddrBook struct {
 	addrs map[peer.ID]map[string]*expiringAddr
 
 	nextGC time.Time
+	ctx    context.Context
+	cancel func()
 
 	subManager *AddrSubManager
 }
 
 func NewAddrBook() pstore.AddrBook {
-	return &memoryAddrBook{
+	ctx, cancel := context.WithCancel(context.Background())
+
+	ab := &memoryAddrBook{
 		addrs:      make(map[peer.ID]map[string]*expiringAddr),
 		subManager: NewAddrSubManager(),
+		ctx:        ctx,
+		cancel:     cancel,
+	}
+
+	go ab.background()
+	return ab
+}
+
+// background periodically schedules a gc
+func (mab *memoryAddrBook) background() {
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			mab.addrmu.Lock()
+			mab.gc()
+			mab.addrmu.Unlock()
+
+		case <-mab.ctx.Done():
+			return
+		}
 	}
 }
 
