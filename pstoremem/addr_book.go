@@ -188,11 +188,9 @@ func (mab *memoryAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
 
 	now := time.Now()
 	good := make([]ma.Multiaddr, 0, len(amap))
-	for k, m := range amap {
+	for _, m := range amap {
 		if !m.ExpiredBy(now) {
 			good = append(good, m.Addr)
-		} else {
-			delete(amap, k)
 		}
 	}
 
