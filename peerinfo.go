@@ -1,15 +1,22 @@
 package peerstore
 
-import moved "github.com/libp2p/go-libp2p-core/peer"
+import (
+	core "github.com/libp2p/go-libp2p-core/peer"
+	ma "github.com/multiformats/go-multiaddr"
+)
 
-// Deprecated: Use github.com/libp2p/go-libp2p-core/peer.Info instead.
-type PeerInfo = moved.Info
+// Deprecated: use github.com/libp2p/go-libp2p-core/peer.Info instead.
+type PeerInfo = core.AddrInfo
 
-// Deprecated: Use github.com/libp2p/go-libp2p-core/peer.ErrInvalidAddr instead.
-var ErrInvalidAddr = moved.ErrInvalidAddr
+// Deprecated: use github.com/libp2p/go-libp2p-core/peer.ErrInvalidAddr instead.
+var ErrInvalidAddr = core.ErrInvalidAddr
 
-// Deprecated: Use github.com/libp2p/go-libp2p-core/peer.InfoFromP2pAddr instead.
-var InfoFromP2pAddr = moved.InfoFromP2pAddr
+// Deprecated: use github.com/libp2p/go-libp2p-core/peer.AddrInfoFromP2pAddr instead.
+func InfoFromP2pAddr(m ma.Multiaddr) (*core.AddrInfo, error) {
+	return core.AddrInfoFromP2pAddr(m)
+}
 
-// Deprecated: Use github.com/libp2p/go-libp2p-core/peer.InfoToP2pAddrs instead.
-var InfoToP2pAddrs = moved.InfoToP2pAddrs
+// Deprecated: use github.com/libp2p/go-libp2p-core/peer.AddrInfoToP2pAddrs instead.
+func InfoToP2pAddrs(pi *core.AddrInfo) ([]ma.Multiaddr, error) {
+	return core.AddrInfoToP2pAddrs(pi)
+}

@@ -8,8 +8,8 @@ require (
 	github.com/ipfs/go-ds-leveldb v0.0.1
 	github.com/ipfs/go-log v0.0.1
 	github.com/libp2p/go-buffer-pool v0.0.1
-	github.com/libp2p/go-libp2p-core v0.0.0-20190417162149-f41b5dd7c01b
-	github.com/libp2p/go-libp2p-crypto v0.0.1
+	github.com/libp2p/go-libp2p-core v0.0.0-20190508144953-ed42958fbb3a
+	github.com/libp2p/go-libp2p-crypto v0.0.2-0.20190422130203-0dad27f616de
 	github.com/libp2p/go-libp2p-peer v0.1.1-0.20190416165916-0ced864b34b3
 	github.com/multiformats/go-base32 v0.0.3
 	github.com/multiformats/go-multiaddr v0.0.2

@@ -13,7 +13,7 @@ import (
 // 1 is 100% change, 0 is no change.
 var LatencyEWMASmoothing = 0.1
 
-// Deprecated: Use github.com/libp2p/go-libp2p-core/peerstore.Metrics instead.
+// Deprecated: use github.com/libp2p/go-libp2p-core/peerstore.Metrics instead.
 type Metrics = moved.Metrics
 
 type metrics struct {
