@@ -112,6 +112,7 @@ func (mab *memoryAddrBook) gc() {
 				delete(s.addrs, p)
 			}
 		}
+		atomic.StoreUint32(&s.size, uint32(len(s.addrs)))
 		s.lk.Unlock()
 	}
 
