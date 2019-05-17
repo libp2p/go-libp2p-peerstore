@@ -8,12 +8,13 @@ import (
 	pstore "github.com/libp2p/go-libp2p-peerstore"
 )
 
-const maxInternedProtocols = 64
-const maxInternedProtocolSize = 128
+const (
+	maxInternedProtocols    = 512
+	maxInternedProtocolSize = 256
+)
 
 type protoSegment struct {
 	sync.RWMutex
-	interned  map[string]string
 	protocols map[peer.ID]map[string]struct{}
 }
 
@@ -24,41 +25,60 @@ func (s *protoSegments) get(id peer.ID) *protoSegment {
 	return s[b[len(b)-1]]
 }
 
-func (s *protoSegment) internProtocol(proto string) string {
-	if len(proto) > maxInternedProtocolSize {
-		return proto
-	}
-
-	if interned, ok := s.interned[proto]; ok {
-		return interned
-	}
-
-	if len(s.interned) >= maxInternedProtocols {
-		s.interned = make(map[string]string, maxInternedProtocols)
-	}
-
-	s.interned[proto] = proto
-	return proto
-}
-
 type memoryProtoBook struct {
 	segments protoSegments
+
+	lk       sync.RWMutex
+	interned map[string]string
 }
 
 var _ pstore.ProtoBook = (*memoryProtoBook)(nil)
 
 func NewProtoBook() pstore.ProtoBook {
 	return &memoryProtoBook{
+		interned: make(map[string]string, maxInternedProtocols),
 		segments: func() (ret protoSegments) {
 			for i := range ret {
 				ret[i] = &protoSegment{
-					interned:  make(map[string]string),
 					protocols: make(map[peer.ID]map[string]struct{}),
 				}
 			}
 			return ret
 		}(),
 	}
+}
+
+func (pb *memoryProtoBook) internProtocol(proto string) string {
+	if len(proto) > maxInternedProtocolSize {
+		return proto
+	}
+
+	// check if it is interned with the read lock
+	pb.lk.RLock()
+	interned, ok := pb.interned[proto]
+	pb.lk.RUnlock()
+
+	if ok {
+		return interned
+	}
+
+	// intern with the write lock
+	pb.lk.Lock()
+	defer pb.lk.Unlock()
+
+	// check again in case it got interned in between locks
+	interned, ok = pb.interned[proto]
+	if ok {
+		return interned
+	}
+
+	// if we've filled the table, throw it away and start over
+	if len(pb.interned) >= maxInternedProtocols {
+		pb.interned = make(map[string]string, maxInternedProtocols)
+	}
+
+	pb.interned[proto] = proto
+	return proto
 }
 
 func (pb *memoryProtoBook) SetProtocols(p peer.ID, protos ...string) error {
@@ -68,7 +88,7 @@ func (pb *memoryProtoBook) SetProtocols(p peer.ID, protos ...string) error {
 
 	newprotos := make(map[string]struct{}, len(protos))
 	for _, proto := range protos {
-		newprotos[s.internProtocol(proto)] = struct{}{}
+		newprotos[pb.internProtocol(proto)] = struct{}{}
 	}
 
 	s.protocols[p] = newprotos
@@ -88,7 +108,7 @@ func (pb *memoryProtoBook) AddProtocols(p peer.ID, protos ...string) error {
 	}
 
 	for _, proto := range protos {
-		protomap[s.internProtocol(proto)] = struct{}{}
+		protomap[pb.internProtocol(proto)] = struct{}{}
 	}
 
 	return nil
