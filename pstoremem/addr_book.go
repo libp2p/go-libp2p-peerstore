@@ -4,7 +4,6 @@ import (
 	"context"
 	"sort"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	logging "github.com/ipfs/go-log"
@@ -36,7 +35,6 @@ type addrSegment struct {
 	// space unused. storing the *values* directly in the map will
 	// drastically increase the space waste. In our case, by 6x.
 	addrs map[peer.ID]map[string]*expiringAddr
-	size  uint32
 }
 
 func (s *addrSegments) get(p peer.ID) *addrSegment {
@@ -110,19 +108,13 @@ func (mab *memoryAddrBook) gc() {
 				delete(s.addrs, p)
 			}
 		}
-		atomic.StoreUint32(&s.size, uint32(len(s.addrs)))
 		s.Unlock()
 	}
 
 }
 
 func (mab *memoryAddrBook) PeersWithAddrs() peer.IDSlice {
-	var length uint32
-	for _, s := range mab.segments {
-		length += atomic.LoadUint32(&s.size)
-	}
-
-	pids := make(peer.IDSlice, 0, length)
+	var pids peer.IDSlice
 	for _, s := range mab.segments {
 		s.RLock()
 		for pid, _ := range s.addrs {
@@ -150,9 +142,6 @@ func (mab *memoryAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 	s := mab.segments.get(p)
 	s.Lock()
 	defer s.Unlock()
-
-	// update the segment size
-	defer atomic.StoreUint32(&s.size, uint32(len(s.addrs)))
 
 	amap := s.addrs[p]
 	if amap == nil {
@@ -187,9 +176,6 @@ func (mab *memoryAddrBook) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 	s.Lock()
 	defer s.Unlock()
 
-	// update the segment size
-	defer atomic.StoreUint32(&s.size, uint32(len(s.addrs)))
-
 	amap := s.addrs[p]
 	if amap == nil {
 		amap = make(map[string]*expiringAddr, len(addrs))
@@ -220,9 +206,6 @@ func (mab *memoryAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL t
 	s := mab.segments.get(p)
 	s.Lock()
 	defer s.Unlock()
-
-	// update the segment size
-	defer atomic.StoreUint32(&s.size, uint32(len(s.addrs)))
 
 	amap, found := s.addrs[p]
 	if !found {
@@ -266,9 +249,6 @@ func (mab *memoryAddrBook) ClearAddrs(p peer.ID) {
 	s := mab.segments.get(p)
 	s.Lock()
 	defer s.Unlock()
-
-	// update the segment size
-	defer atomic.StoreUint32(&s.size, uint32(len(s.addrs)))
 
 	delete(s.addrs, p)
 }
