@@ -20,8 +20,8 @@ type protoSegment struct {
 
 type protoSegments [256]*protoSegment
 
-func (s *protoSegments) get(id peer.ID) *protoSegment {
-	b := []byte(id)
+func (s *protoSegments) get(p peer.ID) *protoSegment {
+	b := []byte(p)
 	return s[b[len(b)-1]]
 }
 

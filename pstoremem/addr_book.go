@@ -39,8 +39,8 @@ type addrSegment struct {
 	size  uint32
 }
 
-func (s *addrSegments) get(id peer.ID) *addrSegment {
-	b := []byte(id)
+func (s *addrSegments) get(p peer.ID) *addrSegment {
+	b := []byte(p)
 	return s[b[len(b)-1]]
 }
 
