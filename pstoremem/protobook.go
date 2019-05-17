@@ -21,8 +21,7 @@ type protoSegment struct {
 type protoSegments [256]*protoSegment
 
 func (s *protoSegments) get(p peer.ID) *protoSegment {
-	b := []byte(p)
-	return s[b[len(b)-1]]
+	return s[byte(p[len(p)-1])]
 }
 
 type memoryProtoBook struct {

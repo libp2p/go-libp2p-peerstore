@@ -40,8 +40,7 @@ type addrSegment struct {
 }
 
 func (s *addrSegments) get(p peer.ID) *addrSegment {
-	b := []byte(p)
-	return s[b[len(b)-1]]
+	return s[byte(p[len(p)-1])]
 }
 
 // memoryAddrBook manages addresses.

@@ -21,23 +21,19 @@ func NewProtoBook(meta pstore.PeerMetadata) pstore.ProtoBook {
 }
 
 func (pb *dsProtoBook) Lock(p peer.ID) {
-	b := []byte(p)
-	pb.lks[b[len(b)-1]].Lock()
+	pb.lks[byte(p[len(p)-1])].Lock()
 }
 
 func (pb *dsProtoBook) Unlock(p peer.ID) {
-	b := []byte(p)
-	pb.lks[b[len(b)-1]].Unlock()
+	pb.lks[byte(p[len(p)-1])].Unlock()
 }
 
 func (pb *dsProtoBook) RLock(p peer.ID) {
-	b := []byte(p)
-	pb.lks[b[len(b)-1]].RLock()
+	pb.lks[byte(p[len(p)-1])].RLock()
 }
 
 func (pb *dsProtoBook) RUnlock(p peer.ID) {
-	b := []byte(p)
-	pb.lks[b[len(b)-1]].RUnlock()
+	pb.lks[byte(p[len(p)-1])].RUnlock()
 }
 
 func (pb *dsProtoBook) SetProtocols(p peer.ID, protos ...string) error {
