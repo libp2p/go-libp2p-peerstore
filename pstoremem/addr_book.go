@@ -30,10 +30,13 @@ func (e *expiringAddr) ExpiredBy(t time.Time) bool {
 type addrSegments [256]*addrSegment
 
 type addrSegment struct {
-	size uint32
+	sync.RWMutex
 
-	lk    sync.RWMutex
+	// Use pointers to save memory. Maps always leave some fraction of their
+	// space unused. storing the *values* directly in the map will
+	// drastically increase the space waste. In our case, by 6x.
 	addrs map[peer.ID]map[string]*expiringAddr
+	size  uint32
 }
 
 func (s *addrSegments) get(id peer.ID) *addrSegment {
@@ -43,10 +46,6 @@ func (s *addrSegments) get(id peer.ID) *addrSegment {
 
 // memoryAddrBook manages addresses.
 type memoryAddrBook struct {
-	addrmu sync.RWMutex
-	// Use pointers to save memory. Maps always leave some fraction of their
-	// space unused. storing the *values* directly in the map will
-	// drastically increase the space waste. In our case, by 6x.
 	segments addrSegments
 
 	ctx    context.Context
@@ -101,7 +100,7 @@ func (mab *memoryAddrBook) Close() error {
 func (mab *memoryAddrBook) gc() {
 	now := time.Now()
 	for _, s := range mab.segments {
-		s.lk.Lock()
+		s.Lock()
 		for p, amap := range s.addrs {
 			for k, addr := range amap {
 				if addr.ExpiredBy(now) {
@@ -113,7 +112,7 @@ func (mab *memoryAddrBook) gc() {
 			}
 		}
 		atomic.StoreUint32(&s.size, uint32(len(s.addrs)))
-		s.lk.Unlock()
+		s.Unlock()
 	}
 
 }
@@ -126,11 +125,11 @@ func (mab *memoryAddrBook) PeersWithAddrs() peer.IDSlice {
 
 	pids := make(peer.IDSlice, 0, length)
 	for _, s := range mab.segments {
-		s.lk.RLock()
+		s.RLock()
 		for pid, _ := range s.addrs {
 			pids = append(pids, pid)
 		}
-		s.lk.RUnlock()
+		s.RUnlock()
 	}
 	return pids
 }
@@ -150,8 +149,8 @@ func (mab *memoryAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 	}
 
 	s := mab.segments.get(p)
-	s.lk.Lock()
-	defer s.lk.Unlock()
+	s.Lock()
+	defer s.Unlock()
 
 	// update the segment size
 	defer atomic.StoreUint32(&s.size, uint32(len(s.addrs)))
@@ -186,8 +185,8 @@ func (mab *memoryAddrBook) SetAddr(p peer.ID, addr ma.Multiaddr, ttl time.Durati
 // This is used when we receive the best estimate of the validity of an address.
 func (mab *memoryAddrBook) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
 	s := mab.segments.get(p)
-	s.lk.Lock()
-	defer s.lk.Unlock()
+	s.Lock()
+	defer s.Unlock()
 
 	// update the segment size
 	defer atomic.StoreUint32(&s.size, uint32(len(s.addrs)))
@@ -220,8 +219,8 @@ func (mab *memoryAddrBook) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 // the given oldTTL to have the given newTTL.
 func (mab *memoryAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.Duration) {
 	s := mab.segments.get(p)
-	s.lk.Lock()
-	defer s.lk.Unlock()
+	s.Lock()
+	defer s.Unlock()
 
 	// update the segment size
 	defer atomic.StoreUint32(&s.size, uint32(len(s.addrs)))
@@ -244,8 +243,8 @@ func (mab *memoryAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL t
 // Addresses returns all known (and valid) addresses for a given
 func (mab *memoryAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
 	s := mab.segments.get(p)
-	s.lk.RLock()
-	defer s.lk.RUnlock()
+	s.RLock()
+	defer s.RUnlock()
 
 	amap, found := s.addrs[p]
 	if !found {
@@ -266,8 +265,8 @@ func (mab *memoryAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
 // ClearAddrs removes all previously stored addresses
 func (mab *memoryAddrBook) ClearAddrs(p peer.ID) {
 	s := mab.segments.get(p)
-	s.lk.Lock()
-	defer s.lk.Unlock()
+	s.Lock()
+	defer s.Unlock()
 
 	// update the segment size
 	defer atomic.StoreUint32(&s.size, uint32(len(s.addrs)))
@@ -279,8 +278,8 @@ func (mab *memoryAddrBook) ClearAddrs(p peer.ID) {
 // given peer ID will be published.
 func (mab *memoryAddrBook) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Multiaddr {
 	s := mab.segments.get(p)
-	s.lk.RLock()
-	defer s.lk.RUnlock()
+	s.RLock()
+	defer s.RUnlock()
 
 	baseaddrslice := s.addrs[p]
 	initial := make([]ma.Multiaddr, 0, len(baseaddrslice))

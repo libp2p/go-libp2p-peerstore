@@ -12,7 +12,7 @@ const maxInternedProtocols = 64
 const maxInternedProtocolSize = 128
 
 type protoSegment struct {
-	lk        sync.RWMutex
+	sync.RWMutex
 	interned  map[string]string
 	protocols map[peer.ID]map[string]struct{}
 }
@@ -63,8 +63,8 @@ func NewProtoBook() pstore.ProtoBook {
 
 func (pb *memoryProtoBook) SetProtocols(p peer.ID, protos ...string) error {
 	s := pb.segments.get(p)
-	s.lk.Lock()
-	defer s.lk.Unlock()
+	s.Lock()
+	defer s.Unlock()
 
 	newprotos := make(map[string]struct{}, len(protos))
 	for _, proto := range protos {
@@ -78,8 +78,8 @@ func (pb *memoryProtoBook) SetProtocols(p peer.ID, protos ...string) error {
 
 func (pb *memoryProtoBook) AddProtocols(p peer.ID, protos ...string) error {
 	s := pb.segments.get(p)
-	s.lk.Lock()
-	defer s.lk.Unlock()
+	s.Lock()
+	defer s.Unlock()
 
 	protomap, ok := s.protocols[p]
 	if !ok {
@@ -96,8 +96,8 @@ func (pb *memoryProtoBook) AddProtocols(p peer.ID, protos ...string) error {
 
 func (pb *memoryProtoBook) GetProtocols(p peer.ID) ([]string, error) {
 	s := pb.segments.get(p)
-	s.lk.RLock()
-	defer s.lk.RUnlock()
+	s.RLock()
+	defer s.RUnlock()
 
 	out := make([]string, 0, len(s.protocols))
 	for k := range s.protocols[p] {
@@ -109,8 +109,8 @@ func (pb *memoryProtoBook) GetProtocols(p peer.ID) ([]string, error) {
 
 func (pb *memoryProtoBook) SupportsProtocols(p peer.ID, protos ...string) ([]string, error) {
 	s := pb.segments.get(p)
-	s.lk.RLock()
-	defer s.lk.RUnlock()
+	s.RLock()
+	defer s.RUnlock()
 
 	out := make([]string, 0, len(protos))
 	for _, proto := range protos {
