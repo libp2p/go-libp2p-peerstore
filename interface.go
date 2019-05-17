@@ -56,16 +56,12 @@ type Peerstore interface {
 	KeyBook
 	PeerMetadata
 	Metrics
+	ProtoBook
 
 	// PeerInfo returns a peer.PeerInfo struct for given peer.ID.
 	// This is a small slice of the information Peerstore has on
 	// that peer, useful to other services.
 	PeerInfo(peer.ID) PeerInfo
-
-	GetProtocols(peer.ID) ([]string, error)
-	AddProtocols(peer.ID, ...string) error
-	SetProtocols(peer.ID, ...string) error
-	SupportsProtocols(peer.ID, ...string) ([]string, error)
 
 	// Peers returns all of the peer IDs stored across all inner stores.
 	Peers() peer.IDSlice
@@ -141,4 +137,12 @@ type KeyBook interface {
 
 	// PeersWithKeys returns all the peer IDs stored in the KeyBook
 	PeersWithKeys() peer.IDSlice
+}
+
+// ProtoBook tracks the protocols supported by peers
+type ProtoBook interface {
+	GetProtocols(peer.ID) ([]string, error)
+	AddProtocols(peer.ID, ...string) error
+	SetProtocols(peer.ID, ...string) error
+	SupportsProtocols(peer.ID, ...string) ([]string, error)
 }

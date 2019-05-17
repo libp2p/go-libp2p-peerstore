@@ -27,18 +27,18 @@ func (e *expiringAddr) ExpiredBy(t time.Time) bool {
 	return t.After(e.Expires)
 }
 
-type segments [256]*segment
+type addrSegments [256]*addrSegment
 
-type segment struct {
+type addrSegment struct {
 	size uint32
 
 	lk    sync.RWMutex
 	addrs map[peer.ID]map[string]*expiringAddr
 }
 
-func (s *segments) get(id peer.ID) *segment {
+func (s *addrSegments) get(id peer.ID) *addrSegment {
 	b := []byte(id)
-	return s[b[len(b)-1]%byte(255)]
+	return s[b[len(b)-1]]
 }
 
 // memoryAddrBook manages addresses.
@@ -47,7 +47,7 @@ type memoryAddrBook struct {
 	// Use pointers to save memory. Maps always leave some fraction of their
 	// space unused. storing the *values* directly in the map will
 	// drastically increase the space waste. In our case, by 6x.
-	segments segments
+	segments addrSegments
 
 	ctx    context.Context
 	cancel func()
@@ -61,9 +61,9 @@ func NewAddrBook() pstore.AddrBook {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	ab := &memoryAddrBook{
-		segments: func() (ret segments) {
+		segments: func() (ret addrSegments) {
 			for i, _ := range ret {
-				ret[i] = &segment{addrs: make(map[peer.ID]map[string]*expiringAddr)}
+				ret[i] = &addrSegment{addrs: make(map[peer.ID]map[string]*expiringAddr)}
 			}
 			return ret
 		}(),
