@@ -9,36 +9,38 @@ import (
 	pstore "github.com/libp2p/go-libp2p-peerstore"
 )
 
+type protoSegment struct {
+	sync.RWMutex
+}
+
+type protoSegments [256]*protoSegment
+
+func (s *protoSegments) get(p peer.ID) *protoSegment {
+	return s[byte(p[len(p)-1])]
+}
+
 type dsProtoBook struct {
-	lks  [256]sync.RWMutex
-	meta pstore.PeerMetadata
+	segments protoSegments
+	meta     pstore.PeerMetadata
 }
 
 var _ pstore.ProtoBook = (*dsProtoBook)(nil)
 
 func NewProtoBook(meta pstore.PeerMetadata) pstore.ProtoBook {
-	return &dsProtoBook{meta: meta}
-}
-
-func (pb *dsProtoBook) lock(p peer.ID) {
-	pb.lks[byte(p[len(p)-1])].Lock()
-}
-
-func (pb *dsProtoBook) unlock(p peer.ID) {
-	pb.lks[byte(p[len(p)-1])].Unlock()
-}
-
-func (pb *dsProtoBook) rlock(p peer.ID) {
-	pb.lks[byte(p[len(p)-1])].RLock()
-}
-
-func (pb *dsProtoBook) runlock(p peer.ID) {
-	pb.lks[byte(p[len(p)-1])].RUnlock()
+	return &dsProtoBook{
+		meta: meta,
+		segments: func() (ret protoSegments) {
+			for i := range ret {
+				ret[i] = &protoSegment{}
+			}
+			return ret
+		}(),
+	}
 }
 
 func (pb *dsProtoBook) SetProtocols(p peer.ID, protos ...string) error {
-	pb.lock(p)
-	defer pb.unlock(p)
+	pb.segments.get(p).Lock()
+	defer pb.segments.get(p).Unlock()
 
 	protomap := make(map[string]struct{}, len(protos))
 	for _, proto := range protos {
@@ -49,8 +51,8 @@ func (pb *dsProtoBook) SetProtocols(p peer.ID, protos ...string) error {
 }
 
 func (pb *dsProtoBook) AddProtocols(p peer.ID, protos ...string) error {
-	pb.lock(p)
-	defer pb.unlock(p)
+	pb.segments.get(p).Lock()
+	defer pb.segments.get(p).Unlock()
 
 	pmap, err := pb.getProtocolMap(p)
 	if err != nil {
@@ -65,8 +67,8 @@ func (pb *dsProtoBook) AddProtocols(p peer.ID, protos ...string) error {
 }
 
 func (pb *dsProtoBook) GetProtocols(p peer.ID) ([]string, error) {
-	pb.rlock(p)
-	defer pb.runlock(p)
+	pb.segments.get(p).RLock()
+	defer pb.segments.get(p).RUnlock()
 
 	pmap, err := pb.getProtocolMap(p)
 	if err != nil {
@@ -82,8 +84,8 @@ func (pb *dsProtoBook) GetProtocols(p peer.ID) ([]string, error) {
 }
 
 func (pb *dsProtoBook) SupportsProtocols(p peer.ID, protos ...string) ([]string, error) {
-	pb.rlock(p)
-	defer pb.runlock(p)
+	pb.segments.get(p).RLock()
+	defer pb.segments.get(p).RUnlock()
 
 	pmap, err := pb.getProtocolMap(p)
 	if err != nil {
