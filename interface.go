@@ -1,45 +1,46 @@
 package peerstore
 
-import (
-	moved "github.com/libp2p/go-libp2p-core/peerstore"
-)
+import core "github.com/libp2p/go-libp2p-core/peerstore"
 
 // Deprecated: use github.com/libp2p/go-libp2p-core/peerstore.ErrNotFound instead.
-var ErrNotFound = moved.ErrNotFound
+var ErrNotFound = core.ErrNotFound
 
 var (
 	// Deprecated: use github.com/libp2p/go-libp2p-core/peerstore.AddressTTL instead.
-	AddressTTL = moved.AddressTTL
+	AddressTTL = core.AddressTTL
 
 	// Deprecated: use github.com/libp2p/go-libp2p-core/peerstore.TempAddrTTL instead.
-	TempAddrTTL = moved.TempAddrTTL
+	TempAddrTTL = core.TempAddrTTL
 
 	// Deprecated: use github.com/libp2p/go-libp2p-core/peerstore.ProviderAddrTTL instead.
-	ProviderAddrTTL = moved.ProviderAddrTTL
+	ProviderAddrTTL = core.ProviderAddrTTL
 
 	// Deprecated: use github.com/libp2p/go-libp2p-core/peerstore.RecentlyConnectedAddrTTL instead.
-	RecentlyConnectedAddrTTL = moved.RecentlyConnectedAddrTTL
+	RecentlyConnectedAddrTTL = core.RecentlyConnectedAddrTTL
 
 	// Deprecated: use github.com/libp2p/go-libp2p-core/peerstore.OwnObservedAddrTTL instead.
-	OwnObservedAddrTTL = moved.OwnObservedAddrTTL
+	OwnObservedAddrTTL = core.OwnObservedAddrTTL
 )
 
 const (
 	// Deprecated: use github.com/libp2p/go-libp2p-core/peerstore.PermanentAddrTTL instead.
-	PermanentAddrTTL = moved.PermanentAddrTTL
+	PermanentAddrTTL = core.PermanentAddrTTL
 
 	// Deprecated: use github.com/libp2p/go-libp2p-core/peerstore.ConnectedAddrTTL instead.
-	ConnectedAddrTTL = moved.ConnectedAddrTTL
+	ConnectedAddrTTL = core.ConnectedAddrTTL
 )
 
 // Deprecated: use github.com/libp2p/go-libp2p-core/peerstore.Peerstore instead.
-type Peerstore = moved.Peerstore
+type Peerstore = core.Peerstore
 
-// Deprecated: use github.com/libp2p/go-libp2p-core/peerstore.Peerstore instead.
-type PeerMetadata = moved.PeerMetadata
+// Deprecated: use github.com/libp2p/go-libp2p-core/peerstore.PeerMetadata instead.
+type PeerMetadata = core.PeerMetadata
 
 // Deprecated: use github.com/libp2p/go-libp2p-core/peerstore.AddrBook instead.
-type AddrBook = moved.AddrBook
+type AddrBook = core.AddrBook
 
 // Deprecated: use github.com/libp2p/go-libp2p-core/peerstore.KeyBook instead.
-type KeyBook = moved.KeyBook
+type KeyBook = core.KeyBook
+
+// Deprecated: use github.com/libp2p/go-libp2p-core/peerstore.ProtoBook instead.
+type ProtoBook = core.ProtoBook
