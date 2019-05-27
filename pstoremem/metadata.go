@@ -7,6 +7,11 @@ import (
 	pstore "github.com/libp2p/go-libp2p-peerstore"
 )
 
+var internKeys = map[string]bool{
+	"AgentVersion":    true,
+	"ProtocolVersion": true,
+}
+
 type metakey struct {
 	id  peer.ID
 	key string
@@ -15,8 +20,9 @@ type metakey struct {
 type memoryPeerMetadata struct {
 	// store other data, like versions
 	//ds ds.ThreadSafeDatastore
-	ds     map[metakey]interface{}
-	dslock sync.RWMutex
+	ds       map[metakey]interface{}
+	dslock   sync.RWMutex
+	interned map[string]interface{}
 }
 
 var _ pstore.PeerMetadata = (*memoryPeerMetadata)(nil)
@@ -30,6 +36,13 @@ func NewPeerMetadata() pstore.PeerMetadata {
 func (ps *memoryPeerMetadata) Put(p peer.ID, key string, val interface{}) error {
 	ps.dslock.Lock()
 	defer ps.dslock.Unlock()
+	if vals, ok := val.(string); ok && internKeys[key] {
+		if interned, ok := ps.interned[vals]; ok {
+			val = interned
+		} else {
+			ps.interned[vals] = val
+		}
+	}
 	ps.ds[metakey{p, key}] = val
 	return nil
 }
