@@ -11,7 +11,7 @@ import (
 	badger "github.com/ipfs/go-ds-badger"
 	leveldb "github.com/ipfs/go-ds-leveldb"
 
-	pstore "github.com/libp2p/go-libp2p-peerstore"
+	pstore "github.com/libp2p/go-libp2p-core/peerstore"
 	pt "github.com/libp2p/go-libp2p-peerstore/test"
 )
 

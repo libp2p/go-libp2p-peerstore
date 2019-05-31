@@ -10,8 +10,8 @@ import (
 	ds "github.com/ipfs/go-datastore"
 
 	pool "github.com/libp2p/go-buffer-pool"
-	peer "github.com/libp2p/go-libp2p-peer"
-	pstore "github.com/libp2p/go-libp2p-peerstore"
+	peer "github.com/libp2p/go-libp2p-core/peer"
+	pstore "github.com/libp2p/go-libp2p-core/peerstore"
 )
 
 // Metadata is stored under the following db key pattern:

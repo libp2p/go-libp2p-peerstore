@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/libp2p/go-libp2p-peer/test"
+	testutil "github.com/libp2p/go-libp2p-core/test"
 )
 
 func TestLatencyEWMAFun(t *testing.T) {

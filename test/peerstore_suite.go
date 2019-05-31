@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	crypto "github.com/libp2p/go-libp2p-crypto"
-	peer "github.com/libp2p/go-libp2p-peer"
+	crypto "github.com/libp2p/go-libp2p/crypto"
+	peer "github.com/libp2p/go-libp2p-core/peer"
 	ma "github.com/multiformats/go-multiaddr"
 
-	pstore "github.com/libp2p/go-libp2p-peerstore"
+	pstore "github.com/libp2p/go-libp2p-core/peerstore"
 )
 
 var peerstoreSuite = map[string]func(pstore.Peerstore) func(*testing.T){

@@ -9,7 +9,7 @@ import (
 	ds "github.com/ipfs/go-datastore"
 	query "github.com/ipfs/go-datastore/query"
 
-	peer "github.com/libp2p/go-libp2p-peer"
+	peer "github.com/libp2p/go-libp2p-core/peer"
 	pb "github.com/libp2p/go-libp2p-peerstore/pb"
 
 	b32 "github.com/multiformats/go-base32"

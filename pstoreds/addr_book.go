@@ -11,8 +11,8 @@ import (
 	query "github.com/ipfs/go-datastore/query"
 	logging "github.com/ipfs/go-log"
 
-	peer "github.com/libp2p/go-libp2p-peer"
-	pstore "github.com/libp2p/go-libp2p-peerstore"
+	peer "github.com/libp2p/go-libp2p-core/peer"
+	pstore "github.com/libp2p/go-libp2p-core/peerstore"
 	pb "github.com/libp2p/go-libp2p-peerstore/pb"
 	pstoremem "github.com/libp2p/go-libp2p-peerstore/pstoremem"
 
