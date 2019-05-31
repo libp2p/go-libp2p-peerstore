@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	pstore "github.com/libp2p/go-libp2p-peerstore"
+	pstore "github.com/libp2p/go-libp2p-core/peerstore"
 )
 
 var addressBookSuite = map[string]func(book pstore.AddrBook) func(*testing.T){

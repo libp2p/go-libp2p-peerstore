@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 
 	proto "github.com/gogo/protobuf/proto"
-	peer "github.com/libp2p/go-libp2p-peer"
-	pt "github.com/libp2p/go-libp2p-peer/test"
+	peer "github.com/libp2p/go-libp2p-core/peer"
+	pt "github.com/libp2p/go-libp2p-core/test"
 	ma "github.com/multiformats/go-multiaddr"
 )
 

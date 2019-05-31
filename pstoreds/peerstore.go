@@ -9,7 +9,8 @@ import (
 	ds "github.com/ipfs/go-datastore"
 	query "github.com/ipfs/go-datastore/query"
 
-	peer "github.com/libp2p/go-libp2p-peer"
+	peer "github.com/libp2p/go-libp2p-core/peer"
+	peerstore "github.com/libp2p/go-libp2p-core/peerstore"
 	pstore "github.com/libp2p/go-libp2p-peerstore"
 )
 
@@ -47,7 +48,7 @@ func DefaultOpts() Options {
 }
 
 // NewPeerstore creates a peerstore backed by the provided persistent datastore.
-func NewPeerstore(ctx context.Context, store ds.Batching, opts Options) (pstore.Peerstore, error) {
+func NewPeerstore(ctx context.Context, store ds.Batching, opts Options) (peerstore.Peerstore, error) {
 	addrBook, err := NewAddrBook(ctx, store, opts)
 	if err != nil {
 		return nil, err

@@ -7,14 +7,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/libp2p/go-libp2p-peer/test"
+	"github.com/libp2p/go-libp2p-core/test"
 )
 
 func TestLatencyEWMAFun(t *testing.T) {
 	t.Skip("run it for fun")
 
 	m := NewMetrics()
-	id, err := testutil.RandPeerID()
+	id, err := test.RandPeerID()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func TestLatencyEWMAFun(t *testing.T) {
 
 func TestLatencyEWMA(t *testing.T) {
 	m := NewMetrics()
-	id, err := testutil.RandPeerID()
+	id, err := test.RandPeerID()
 	if err != nil {
 		t.Fatal(err)
 	}

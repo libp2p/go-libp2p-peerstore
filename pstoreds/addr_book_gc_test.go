@@ -5,7 +5,7 @@ import (
 	"time"
 
 	query "github.com/ipfs/go-datastore/query"
-	pstore "github.com/libp2p/go-libp2p-peerstore"
+	pstore "github.com/libp2p/go-libp2p-core/peerstore"
 	test "github.com/libp2p/go-libp2p-peerstore/test"
 	ma "github.com/multiformats/go-multiaddr"
 )
