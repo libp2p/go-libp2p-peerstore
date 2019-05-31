@@ -4,7 +4,7 @@ import (
 	"errors"
 	"sync"
 
-	ic "github.com/libp2p/go-libp2p/crypto"
+	ic "github.com/libp2p/go-libp2p-core/crypto"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 
 	pstore "github.com/libp2p/go-libp2p-core/peerstore"
