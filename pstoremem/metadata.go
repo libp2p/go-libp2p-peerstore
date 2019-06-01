@@ -29,7 +29,8 @@ var _ pstore.PeerMetadata = (*memoryPeerMetadata)(nil)
 
 func NewPeerMetadata() pstore.PeerMetadata {
 	return &memoryPeerMetadata{
-		ds: make(map[metakey]interface{}),
+		ds:       make(map[metakey]interface{}),
+		interned: make(map[string]interface{}),
 	}
 }
 
