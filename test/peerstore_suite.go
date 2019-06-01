@@ -21,6 +21,7 @@ var peerstoreSuite = map[string]func(pstore.Peerstore) func(*testing.T){
 	"AddStreamDuplicates":      testAddrStreamDuplicates,
 	"PeerstoreProtoStore":      testPeerstoreProtoStore,
 	"BasicPeerstore":           testBasicPeerstore,
+	"Metadata":                 testMetadata,
 }
 
 type PeerstoreFactory func() (pstore.Peerstore, func())
@@ -275,6 +276,46 @@ func testBasicPeerstore(ps pstore.Peerstore) func(t *testing.T) {
 		pinfo := ps.PeerInfo(pids[0])
 		if !pinfo.Addrs[0].Equal(addrs[0]) {
 			t.Fatal("stored wrong address")
+		}
+	}
+}
+
+func testMetadata(ps pstore.Peerstore) func(t *testing.T) {
+	return func(t *testing.T) {
+		pids := make([]peer.ID, 10)
+		for i := range pids {
+			priv, _, _ := crypto.GenerateKeyPair(crypto.RSA, 512)
+			p, _ := peer.IDFromPrivateKey(priv)
+			pids[i] = p
+		}
+		for _, p := range pids {
+			if err := ps.Put(p, "AgentVersion", "string"); err != nil {
+				t.Errorf("failed to put %q: %s", "AgentVersion", err)
+			}
+			if err := ps.Put(p, "bar", 1); err != nil {
+				t.Errorf("failed to put %q: %s", "bar", err)
+			}
+		}
+		for _, p := range pids {
+			v, err := ps.Get(p, "AgentVersion")
+			if err != nil {
+				t.Errorf("failed to find %q: %s", "AgentVersion", err)
+				continue
+			}
+			if v != "string" {
+				t.Errorf("expected %q, got %q", "string", p)
+				continue
+			}
+
+			v, err = ps.Get(p, "bar")
+			if err != nil {
+				t.Errorf("failed to find %q: %s", "bar", err)
+				continue
+			}
+			if v != 1 {
+				t.Errorf("expected %q, got %v", 1, v)
+				continue
+			}
 		}
 	}
 }
