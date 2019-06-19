@@ -102,6 +102,28 @@ func (pb *dsProtoBook) SupportsProtocols(p peer.ID, protos ...string) ([]string,
 	return res, nil
 }
 
+func (pb *dsProtoBook) RemoveProtocols(p peer.ID, protos ...string) error {
+	s := pb.segments.get(p)
+	s.RLock()
+	defer s.RUnlock()
+
+	pmap, err := pb.getProtocolMap(p)
+	if err != nil {
+		return err
+	}
+
+	if len(pmap) == 0 {
+		// nothing to do.
+		return nil
+	}
+
+	for _, proto := range protos {
+		delete(pmap, proto)
+	}
+
+	return pb.meta.Put(p, "protocols", pmap)
+}
+
 func (pb *dsProtoBook) getProtocolMap(p peer.ID) (map[string]struct{}, error) {
 	iprotomap, err := pb.meta.Get(p, "protocols")
 	switch err {
