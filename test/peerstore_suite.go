@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"reflect"
 	"sort"
 	"testing"
 	"time"
@@ -240,7 +241,8 @@ func testPeerstoreProtoStore(ps pstore.Peerstore) func(t *testing.T) {
 			t.Fatal("got wrong supported array: ", supported)
 		}
 
-		err = ps.SetProtocols(p1, "other")
+		protos = []string{"other", "yet another", "one more"}
+		err = ps.SetProtocols(p1, protos...)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -252,6 +254,29 @@ func testPeerstoreProtoStore(ps pstore.Peerstore) func(t *testing.T) {
 
 		if len(supported) != 0 {
 			t.Fatal("none of those protocols should have been supported")
+		}
+
+		supported, err = ps.GetProtocols(p1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sort.Strings(supported)
+		sort.Strings(protos)
+		if !reflect.DeepEqual(supported, protos) {
+			t.Fatalf("expected previously set protos; expected: %v, have: %v", protos, supported)
+		}
+
+		err = ps.RemoveProtocols(p1, protos[:2]...)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		supported, err = ps.GetProtocols(p1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(supported, protos[2:]) {
+			t.Fatal("expected only one protocol to remain")
 		}
 	}
 }
