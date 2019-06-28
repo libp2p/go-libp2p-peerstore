@@ -154,10 +154,10 @@ func (mab *memoryAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 			log.Warningf("was passed nil multiaddr for %s", p)
 			continue
 		}
-		addrstr := string(addr.Bytes())
-		a, found := amap[addrstr]
+		asBytes := addr.Bytes()
+		a, found := amap[string(asBytes)] // won't allocate.
 		if !found || exp.After(a.Expires) {
-			amap[addrstr] = &expiringAddr{Addr: addr, Expires: exp, TTL: ttl}
+			amap[string(asBytes)] = &expiringAddr{Addr: addr, Expires: exp, TTL: ttl}
 
 			mab.subManager.BroadcastAddr(p, addr)
 		}
@@ -188,14 +188,14 @@ func (mab *memoryAddrBook) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 			log.Warningf("was passed nil multiaddr for %s", p)
 			continue
 		}
-		// re-set all of them for new ttl.
-		addrstr := string(addr.Bytes())
 
+		// re-set all of them for new ttl.
+		aBytes := addr.Bytes()
 		if ttl > 0 {
-			amap[addrstr] = &expiringAddr{Addr: addr, Expires: exp, TTL: ttl}
+			amap[string(aBytes)] = &expiringAddr{Addr: addr, Expires: exp, TTL: ttl}
 			mab.subManager.BroadcastAddr(p, addr)
 		} else {
-			delete(amap, addrstr)
+			delete(amap, string(aBytes))
 		}
 	}
 }
