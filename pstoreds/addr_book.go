@@ -207,6 +207,9 @@ func (ab *dsAddrBook) Close() error {
 //
 // If the cache argument is true, the record is inserted in the cache when loaded from the datastore.
 func (ab *dsAddrBook) loadRecord(id peer.ID, cache bool, update bool) (pr *addrsRecord, err error) {
+	if err := id.Validate(); err != nil {
+		return nil, err
+	}
 	if e, ok := ab.cache.Get(id); ok {
 		pr = e.(*addrsRecord)
 		pr.Lock()
@@ -421,6 +424,11 @@ func (ab *dsAddrBook) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Multi
 
 // ClearAddrs will delete all known addresses for a peer ID.
 func (ab *dsAddrBook) ClearAddrs(p peer.ID) {
+	if err := p.Validate(); err != nil {
+		// nothing to do
+		return
+	}
+
 	ab.cache.Remove(p)
 
 	key := addrBookBase.ChildString(b32.RawStdEncoding.EncodeToString([]byte(p)))
