@@ -13,6 +13,8 @@ import (
 	pb "github.com/libp2p/go-libp2p-peerstore/pb"
 
 	b32 "github.com/multiformats/go-base32"
+
+	timers "github.com/Kubuxu/go-more-timers"
 )
 
 var (
@@ -56,6 +58,9 @@ func newAddressBookGc(ctx context.Context, ab *dsAddrBook) (*dsAddrBookGc, error
 	if ab.opts.GCPurgeInterval < 0 {
 		return nil, fmt.Errorf("negative GC purge interval provided: %s", ab.opts.GCPurgeInterval)
 	}
+	if ab.opts.GCPurgeDeviation < 0 {
+		return nil, fmt.Errorf("negative GC purge deviation provided: %s", ab.opts.GCPurgeInterval)
+	}
 	if ab.opts.GCLookaheadInterval < 0 {
 		return nil, fmt.Errorf("negative GC lookahead interval provided: %s", ab.opts.GCLookaheadInterval)
 	}
@@ -94,19 +99,21 @@ func newAddressBookGc(ctx context.Context, ab *dsAddrBook) (*dsAddrBookGc, error
 func (gc *dsAddrBookGc) background() {
 	defer gc.ab.childrenDone.Done()
 
+	opts := gc.ab.opts
+
 	select {
-	case <-time.After(gc.ab.opts.GCInitialDelay):
+	case <-time.After(opts.GCInitialDelay):
 	case <-gc.ab.ctx.Done():
 		// yield if we have been cancelled/closed before the delay elapses.
 		return
 	}
 
-	purgeTimer := time.NewTicker(gc.ab.opts.GCPurgeInterval)
+	purgeTimer := timers.NewGaussian(opts.GCPurgeInterval, opts.GCPurgeDeviation)
 	defer purgeTimer.Stop()
 
 	var lookaheadCh <-chan time.Time
 	if gc.lookaheadEnabled {
-		lookaheadTimer := time.NewTicker(gc.ab.opts.GCLookaheadInterval)
+		lookaheadTimer := time.NewTicker(opts.GCLookaheadInterval)
 		lookaheadCh = lookaheadTimer.C
 		gc.populateLookahead() // do a lookahead now
 		defer lookaheadTimer.Stop()
@@ -116,6 +123,7 @@ func (gc *dsAddrBookGc) background() {
 		select {
 		case <-purgeTimer.C:
 			gc.purgeFunc()
+			purgeTimer.ResetLast()
 
 		case <-lookaheadCh:
 			// will never trigger if lookahead is disabled (nil Duration).

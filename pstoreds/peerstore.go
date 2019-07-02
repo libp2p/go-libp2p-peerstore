@@ -23,6 +23,9 @@ type Options struct {
 	// automatically, but it'll be available on demand via explicit calls.
 	GCPurgeInterval time.Duration
 
+	// Defines standard deviation in purge intervals.
+	GCPurgeDeviation time.Duration
+
 	// Interval to renew the GC lookahead window. If this is a zero value, lookahead will be disabled and we'll
 	// traverse the entire datastore for every purge cycle.
 	GCLookaheadInterval time.Duration
@@ -42,6 +45,7 @@ func DefaultOpts() Options {
 	return Options{
 		CacheSize:           1024,
 		GCPurgeInterval:     2 * time.Hour,
+		GCPurgeDeviation:    0,
 		GCLookaheadInterval: 0,
 		GCInitialDelay:      60 * time.Second,
 	}
