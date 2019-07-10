@@ -39,8 +39,9 @@ func NewProtoBook(meta pstore.PeerMetadata) pstore.ProtoBook {
 }
 
 func (pb *dsProtoBook) SetProtocols(p peer.ID, protos ...string) error {
-	pb.segments.get(p).Lock()
-	defer pb.segments.get(p).Unlock()
+	s := pb.segments.get(p)
+	s.Lock()
+	defer s.Unlock()
 
 	protomap := make(map[string]struct{}, len(protos))
 	for _, proto := range protos {
@@ -51,8 +52,9 @@ func (pb *dsProtoBook) SetProtocols(p peer.ID, protos ...string) error {
 }
 
 func (pb *dsProtoBook) AddProtocols(p peer.ID, protos ...string) error {
-	pb.segments.get(p).Lock()
-	defer pb.segments.get(p).Unlock()
+	s := pb.segments.get(p)
+	s.Lock()
+	defer s.Unlock()
 
 	pmap, err := pb.getProtocolMap(p)
 	if err != nil {
@@ -67,8 +69,9 @@ func (pb *dsProtoBook) AddProtocols(p peer.ID, protos ...string) error {
 }
 
 func (pb *dsProtoBook) GetProtocols(p peer.ID) ([]string, error) {
-	pb.segments.get(p).RLock()
-	defer pb.segments.get(p).RUnlock()
+	s := pb.segments.get(p)
+	s.RLock()
+	defer s.RUnlock()
 
 	pmap, err := pb.getProtocolMap(p)
 	if err != nil {
@@ -84,8 +87,9 @@ func (pb *dsProtoBook) GetProtocols(p peer.ID) ([]string, error) {
 }
 
 func (pb *dsProtoBook) SupportsProtocols(p peer.ID, protos ...string) ([]string, error) {
-	pb.segments.get(p).RLock()
-	defer pb.segments.get(p).RUnlock()
+	s := pb.segments.get(p)
+	s.RLock()
+	defer s.RUnlock()
 
 	pmap, err := pb.getProtocolMap(p)
 	if err != nil {
@@ -104,8 +108,8 @@ func (pb *dsProtoBook) SupportsProtocols(p peer.ID, protos ...string) ([]string,
 
 func (pb *dsProtoBook) RemoveProtocols(p peer.ID, protos ...string) error {
 	s := pb.segments.get(p)
-	s.RLock()
-	defer s.RUnlock()
+	s.Lock()
+	defer s.Unlock()
 
 	pmap, err := pb.getProtocolMap(p)
 	if err != nil {

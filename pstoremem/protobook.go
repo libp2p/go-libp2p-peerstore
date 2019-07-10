@@ -114,8 +114,8 @@ func (pb *memoryProtoBook) GetProtocols(p peer.ID) ([]string, error) {
 
 func (pb *memoryProtoBook) RemoveProtocols(p peer.ID, protos ...string) error {
 	s := pb.segments.get(p)
-	s.RLock()
-	defer s.RUnlock()
+	s.Lock()
+	defer s.Unlock()
 
 	protomap, ok := s.protocols[p]
 	if !ok {
