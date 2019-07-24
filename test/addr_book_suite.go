@@ -86,9 +86,13 @@ func testAddAddress(ab pstore.AddrBook) func(*testing.T) {
 			// after the initial TTL has expired, check that only the third address is present.
 			time.Sleep(1200 * time.Millisecond)
 			AssertAddressesEqual(t, addrs[2:], ab.Addrs(id))
+
+			// make sure we actually set the TTL
+			ab.UpdateAddrs(id, time.Hour, 0)
+			AssertAddressesEqual(t, nil, ab.Addrs(id))
 		})
 
-		t.Run("adding an existing address with an earlier expiration is noop", func(t *testing.T) {
+		t.Run("adding an existing address with an earlier expiration never reduces the expiration", func(t *testing.T) {
 			id := GeneratePeerIDs(1)[0]
 			addrs := GenerateAddrs(3)
 
@@ -101,6 +105,27 @@ func testAddAddress(ab pstore.AddrBook) func(*testing.T) {
 			// the modified one was not shortened).
 			time.Sleep(2100 * time.Millisecond)
 			AssertAddressesEqual(t, addrs, ab.Addrs(id))
+		})
+
+		t.Run("adding an existing address with an earlier expiration never reduces the TTL", func(t *testing.T) {
+			id := GeneratePeerIDs(1)[0]
+			addrs := GenerateAddrs(1)
+
+			ab.AddAddrs(id, addrs, 4*time.Second)
+			// 4 seconds left
+			time.Sleep(3 * time.Second)
+			// 1 second left
+			ab.AddAddrs(id, addrs, 3*time.Second)
+			// 3 seconds left
+			time.Sleep(2)
+			// 1 seconds left.
+
+			// We still have the address.
+			AssertAddressesEqual(t, addrs, ab.Addrs(id))
+
+			// The TTL wasn't reduced
+			ab.UpdateAddrs(id, 4*time.Second, 0)
+			AssertAddressesEqual(t, nil, ab.Addrs(id))
 		})
 	}
 }

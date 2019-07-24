@@ -347,11 +347,21 @@ Outer:
 		for _, have := range pr.Addrs {
 			if incoming.Equal(have.Addr) {
 				existed[i] = true
-				if mode == ttlExtend && have.Expiry > newExp {
-					// if we're only extending TTLs but the addr already has a longer one, we skip it.
-					continue Outer
+				switch mode {
+				case ttlOverride:
+					have.Ttl = int64(ttl)
+					have.Expiry = newExp
+				case ttlExtend:
+					if int64(ttl) > have.Ttl {
+						have.Ttl = int64(ttl)
+					}
+					if newExp > have.Expiry {
+						have.Expiry = newExp
+					}
+				default:
+					panic("BUG: unimplemented ttl mode")
 				}
-				have.Expiry = newExp
+
 				// we found the address, and addresses cannot be duplicate,
 				// so let's move on to the next.
 				continue Outer
