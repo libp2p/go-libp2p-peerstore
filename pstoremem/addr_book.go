@@ -132,7 +132,7 @@ func (mab *memoryAddrBook) AddAddr(p peer.ID, addr ma.Multiaddr, ttl time.Durati
 
 // AddAddrs gives memoryAddrBook addresses to use, with a given ttl
 // (time-to-live), after which the address is no longer valid.
-// If the manager has a longer TTL, the operation is a no-op for that address
+// This function never reduces the TTL or expiration of an address.
 func (mab *memoryAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
 	// if ttl is zero, exit. nothing to do.
 	if ttl <= 0 {
@@ -156,10 +156,19 @@ func (mab *memoryAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 		}
 		asBytes := addr.Bytes()
 		a, found := amap[string(asBytes)] // won't allocate.
-		if !found || exp.After(a.Expires) {
+		if !found {
+			// not found, save and announce it.
 			amap[string(asBytes)] = &expiringAddr{Addr: addr, Expires: exp, TTL: ttl}
-
 			mab.subManager.BroadcastAddr(p, addr)
+		} else {
+			// Update expiration/TTL independently.
+			// We never want to reduce either.
+			if ttl > a.TTL {
+				a.TTL = ttl
+			}
+			if exp.After(a.Expires) {
+				a.Expires = exp
+			}
 		}
 	}
 }
