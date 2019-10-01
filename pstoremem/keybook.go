@@ -69,6 +69,13 @@ func (mkb *memoryKeyBook) AddPubKey(p peer.ID, pk ic.PubKey) error {
 	return nil
 }
 
+func (mkb *memoryKeyBook) RemovePubKey(p peer.ID) error {
+	mkb.Lock()
+	delete(mkb.pks, p)
+	mkb.Unlock()
+	return nil
+}
+
 func (mkb *memoryKeyBook) PrivKey(p peer.ID) ic.PrivKey {
 	mkb.RLock()
 	sk := mkb.sks[p]
