@@ -87,6 +87,11 @@ func (kb *dsKeyBook) AddPubKey(p peer.ID, pk ic.PubKey) error {
 	return err
 }
 
+func (kb *dsKeyBook) RemovePubKey(p peer.ID) error {
+	key := kbBase.ChildString(base32.RawStdEncoding.EncodeToString([]byte(p))).Child(pubSuffix)
+	return kb.ds.Delete(key)
+}
+
 func (kb *dsKeyBook) PrivKey(p peer.ID) ic.PrivKey {
 	key := kbBase.ChildString(base32.RawStdEncoding.EncodeToString([]byte(p))).Child(privSuffix)
 	value, err := kb.ds.Get(key)

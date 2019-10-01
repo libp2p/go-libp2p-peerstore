@@ -287,7 +287,7 @@ func testBasicPeerstore(ps pstore.Peerstore) func(t *testing.T) {
 		addrs := getAddrs(t, 10)
 
 		for _, a := range addrs {
-			priv, _, _ := crypto.GenerateKeyPair(crypto.RSA, 512)
+			priv, _, _ := crypto.GenerateKeyPair(crypto.RSA, 2048)
 			p, _ := peer.IDFromPrivateKey(priv)
 			pids = append(pids, p)
 			ps.AddAddr(p, a, pstore.PermanentAddrTTL)
@@ -309,7 +309,7 @@ func testMetadata(ps pstore.Peerstore) func(t *testing.T) {
 	return func(t *testing.T) {
 		pids := make([]peer.ID, 10)
 		for i := range pids {
-			priv, _, _ := crypto.GenerateKeyPair(crypto.RSA, 512)
+			priv, _, _ := crypto.GenerateKeyPair(crypto.RSA, 2048)
 			p, _ := peer.IDFromPrivateKey(priv)
 			pids[i] = p
 		}
