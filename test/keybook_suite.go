@@ -41,9 +41,9 @@ func testKeybookPrivKey(kb pstore.KeyBook) func(t *testing.T) {
 			t.Error("expected peers to be empty on init")
 		}
 
-		priv, _, err := pt.RandTestKeyPair(ic.RSA, 512)
+		priv, _, err := pt.RandTestKeyPair(ic.RSA, 2048)
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 
 		id, err := peer.IDFromPrivateKey(priv)
@@ -76,14 +76,14 @@ func testKeyBookPubKey(kb pstore.KeyBook) func(t *testing.T) {
 			t.Error("expected peers to be empty on init")
 		}
 
-		_, pub, err := pt.RandTestKeyPair(ic.RSA, 512)
+		_, pub, err := pt.RandTestKeyPair(ic.RSA, 2048)
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 
 		id, err := peer.IDFromPublicKey(pub)
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 
 		if res := kb.PubKey(id); res != nil {
@@ -114,13 +114,22 @@ func testKeyBookPeers(kb pstore.KeyBook) func(t *testing.T) {
 		var peers peer.IDSlice
 		for i := 0; i < 10; i++ {
 			// Add a public key.
-			_, pub, _ := pt.RandTestKeyPair(ic.RSA, 512)
-			p1, _ := peer.IDFromPublicKey(pub)
+			_, pub, err := pt.RandTestKeyPair(ic.RSA, 2048)
+			if err != nil {
+				t.Fatal(err)
+			}
+			p1, err := peer.IDFromPublicKey(pub)
+			if err != nil {
+				t.Fatal(err)
+			}
 			kb.AddPubKey(p1, pub)
 
 			// Add a private key.
-			priv, _, _ := pt.RandTestKeyPair(ic.RSA, 512)
-			p2, _ := peer.IDFromPrivateKey(priv)
+			priv, _, err := pt.RandTestKeyPair(ic.RSA, 2048)
+			p2, err := peer.IDFromPrivateKey(priv)
+			if err != nil {
+				t.Fatal(err)
+			}
 			kb.AddPrivKey(p2, priv)
 
 			peers = append(peers, []peer.ID{p1, p2}...)
@@ -192,14 +201,14 @@ func BenchmarkKeyBook(b *testing.B, factory KeyBookFactory) {
 
 func benchmarkPubKey(kb pstore.KeyBook) func(*testing.B) {
 	return func(b *testing.B) {
-		_, pub, err := pt.RandTestKeyPair(ic.RSA, 512)
+		_, pub, err := pt.RandTestKeyPair(ic.RSA, 2048)
 		if err != nil {
-			b.Error(err)
+			b.Fatal(err)
 		}
 
 		id, err := peer.IDFromPublicKey(pub)
 		if err != nil {
-			b.Error(err)
+			b.Fatal(err)
 		}
 
 		err = kb.AddPubKey(id, pub)
@@ -216,14 +225,14 @@ func benchmarkPubKey(kb pstore.KeyBook) func(*testing.B) {
 
 func benchmarkAddPubKey(kb pstore.KeyBook) func(*testing.B) {
 	return func(b *testing.B) {
-		_, pub, err := pt.RandTestKeyPair(ic.RSA, 512)
+		_, pub, err := pt.RandTestKeyPair(ic.RSA, 2048)
 		if err != nil {
-			b.Error(err)
+			b.Fatal(err)
 		}
 
 		id, err := peer.IDFromPublicKey(pub)
 		if err != nil {
-			b.Error(err)
+			b.Fatal(err)
 		}
 
 		b.ResetTimer()
@@ -235,14 +244,14 @@ func benchmarkAddPubKey(kb pstore.KeyBook) func(*testing.B) {
 
 func benchmarkPrivKey(kb pstore.KeyBook) func(*testing.B) {
 	return func(b *testing.B) {
-		priv, _, err := pt.RandTestKeyPair(ic.RSA, 512)
+		priv, _, err := pt.RandTestKeyPair(ic.RSA, 2048)
 		if err != nil {
-			b.Error(err)
+			b.Fatal(err)
 		}
 
 		id, err := peer.IDFromPrivateKey(priv)
 		if err != nil {
-			b.Error(err)
+			b.Fatal(err)
 		}
 
 		err = kb.AddPrivKey(id, priv)
@@ -259,14 +268,14 @@ func benchmarkPrivKey(kb pstore.KeyBook) func(*testing.B) {
 
 func benchmarkAddPrivKey(kb pstore.KeyBook) func(*testing.B) {
 	return func(b *testing.B) {
-		priv, _, err := pt.RandTestKeyPair(ic.RSA, 512)
+		priv, _, err := pt.RandTestKeyPair(ic.RSA, 2048)
 		if err != nil {
-			b.Error(err)
+			b.Fatal(err)
 		}
 
 		id, err := peer.IDFromPrivateKey(priv)
 		if err != nil {
-			b.Error(err)
+			b.Fatal(err)
 		}
 
 		b.ResetTimer()
@@ -279,14 +288,14 @@ func benchmarkAddPrivKey(kb pstore.KeyBook) func(*testing.B) {
 func benchmarkPeersWithKeys(kb pstore.KeyBook) func(*testing.B) {
 	return func(b *testing.B) {
 		for i := 0; i < 10; i++ {
-			priv, pub, err := pt.RandTestKeyPair(ic.RSA, 512)
+			priv, pub, err := pt.RandTestKeyPair(ic.RSA, 2048)
 			if err != nil {
-				b.Error(err)
+				b.Fatal(err)
 			}
 
 			id, err := peer.IDFromPublicKey(pub)
 			if err != nil {
-				b.Error(err)
+				b.Fatal(err)
 			}
 
 			err = kb.AddPubKey(id, pub)
