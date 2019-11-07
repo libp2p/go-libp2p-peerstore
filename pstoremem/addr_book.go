@@ -7,11 +7,13 @@ import (
 	"time"
 
 	logging "github.com/ipfs/go-log"
-	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/routing"
 	ma "github.com/multiformats/go-multiaddr"
 
 	pstore "github.com/libp2p/go-libp2p-core/peerstore"
-	addr "github.com/libp2p/go-libp2p-peerstore/addr"
+	"github.com/libp2p/go-libp2p-peerstore/addr"
 )
 
 var log = logging.Logger("peerstore")
@@ -20,6 +22,7 @@ type expiringAddr struct {
 	Addr    ma.Multiaddr
 	TTL     time.Duration
 	Expires time.Time
+	Certified bool
 }
 
 func (e *expiringAddr) ExpiredBy(t time.Time) bool {
@@ -44,6 +47,7 @@ func (s *addrSegments) get(p peer.ID) *addrSegment {
 // memoryAddrBook manages addresses.
 type memoryAddrBook struct {
 	segments addrSegments
+	peerStateSeq map[peer.ID]uint64
 
 	ctx    context.Context
 	cancel func()
@@ -134,6 +138,29 @@ func (mab *memoryAddrBook) AddAddr(p peer.ID, addr ma.Multiaddr, ttl time.Durati
 // (time-to-live), after which the address is no longer valid.
 // This function never reduces the TTL or expiration of an address.
 func (mab *memoryAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
+	mab.addAddrs(p, addrs, ttl, false)
+}
+
+func (mab *memoryAddrBook) AddCertifiedAddrs(envelope *crypto.SignedEnvelope, ttl time.Duration) error {
+	state, err := routing.RoutingStateFromEnvelope(envelope)
+	if err != nil {
+		return err
+	}
+
+	// ensure seq is greater than last received
+	lastSeq, found := mab.peerStateSeq[state.PeerID]
+	if found && lastSeq >= state.Seq {
+		// TODO: should this be an error?
+		return nil
+	}
+	mab.peerStateSeq[state.PeerID] = state.Seq
+	// TODO: remove addresses from previous RoutingStates (new state should completely replace old)
+
+	mab.addAddrs(state.PeerID, state.Multiaddrs(), ttl, true)
+	return nil
+}
+
+func (mab *memoryAddrBook) addAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration, certified bool) {
 	// if ttl is zero, exit. nothing to do.
 	if ttl <= 0 {
 		return
@@ -158,7 +185,7 @@ func (mab *memoryAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 		a, found := amap[string(asBytes)] // won't allocate.
 		if !found {
 			// not found, save and announce it.
-			amap[string(asBytes)] = &expiringAddr{Addr: addr, Expires: exp, TTL: ttl}
+			amap[string(asBytes)] = &expiringAddr{Addr: addr, Expires: exp, TTL: ttl, Certified: certified}
 			mab.subManager.BroadcastAddr(p, addr)
 		} else {
 			// Update expiration/TTL independently.
@@ -231,8 +258,18 @@ func (mab *memoryAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL t
 	}
 }
 
-// Addresses returns all known (and valid) addresses for a given
+// Addrs returns all known (and valid) addresses for a given peer
 func (mab *memoryAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
+	return mab.addrs(p, true)
+}
+
+// CertifiedAddrs returns all known (and valid) addressed that have been
+// certified by the given peer.
+func (mab *memoryAddrBook) CertifiedAddrs(p peer.ID) []ma.Multiaddr {
+	return mab.addrs(p, false)
+}
+
+func (mab *memoryAddrBook) addrs(p peer.ID, includeUncertified bool) []ma.Multiaddr {
 	s := mab.segments.get(p)
 	s.RLock()
 	defer s.RUnlock()
@@ -245,7 +282,10 @@ func (mab *memoryAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
 	now := time.Now()
 	good := make([]ma.Multiaddr, 0, len(amap))
 	for _, m := range amap {
-		if !m.ExpiredBy(now) {
+		if m.ExpiredBy(now) {
+			continue
+		}
+		if includeUncertified || m.Certified {
 			good = append(good, m.Addr)
 		}
 	}

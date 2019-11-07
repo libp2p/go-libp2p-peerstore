@@ -3,20 +3,22 @@ package pstoreds
 import (
 	"context"
 	"fmt"
+	"github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p-core/routing"
 	"sort"
 	"sync"
 	"time"
 
 	ds "github.com/ipfs/go-datastore"
-	query "github.com/ipfs/go-datastore/query"
+	"github.com/ipfs/go-datastore/query"
 	logging "github.com/ipfs/go-log"
 
-	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/peer"
 	pstore "github.com/libp2p/go-libp2p-core/peerstore"
 	pb "github.com/libp2p/go-libp2p-peerstore/pb"
-	pstoremem "github.com/libp2p/go-libp2p-peerstore/pstoremem"
+	"github.com/libp2p/go-libp2p-peerstore/pstoremem"
 
-	lru "github.com/hashicorp/golang-lru"
+	"github.com/hashicorp/golang-lru"
 	b32 "github.com/multiformats/go-base32"
 	ma "github.com/multiformats/go-multiaddr"
 )
@@ -240,7 +242,35 @@ func (ab *dsAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 		return
 	}
 	addrs = cleanAddrs(addrs)
-	ab.setAddrs(p, addrs, ttl, ttlExtend)
+	ab.setAddrs(p, addrs, ttl, ttlExtend, false)
+}
+
+func (ab *dsAddrBook) AddCertifiedAddrs(envelope *crypto.SignedEnvelope, ttl time.Duration) error {
+	state, err := routing.RoutingStateFromEnvelope(envelope)
+	if err != nil {
+		return err
+	}
+
+	// ensure that the seq number from envelope is >= any previously received seq no
+	pr, err := ab.loadRecord(state.PeerID, true, false)
+	if err != nil {
+		return err
+	}
+	if pr.PeerStateSeq >= state.Seq {
+		// TODO: should this be an error?
+		return nil
+	}
+	pr.PeerStateSeq = state.Seq
+	pr.dirty = true
+	err = pr.flush(ab.ds)
+	if err != nil {
+		return err
+	}
+
+	// TODO: remove addresses from previous RoutingStates (new state should completely replace old)
+
+	addrs := cleanAddrs(state.Multiaddrs())
+	return ab.setAddrs(state.PeerID, addrs, ttl, ttlExtend, true)
 }
 
 // SetAddr will add or update the TTL of an address in the AddrBook.
@@ -255,7 +285,7 @@ func (ab *dsAddrBook) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 		ab.deleteAddrs(p, addrs)
 		return
 	}
-	ab.setAddrs(p, addrs, ttl, ttlOverride)
+	ab.setAddrs(p, addrs, ttl, ttlOverride, false)
 }
 
 // UpdateAddrs will update any addresses for a given peer and TTL combination to
@@ -286,6 +316,16 @@ func (ab *dsAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.D
 
 // Addrs returns all of the non-expired addresses for a given peer.
 func (ab *dsAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
+	return ab.addrs(p, true)
+}
+
+// CertifiedAddrs returns all of the non-expired address that have been
+// certified by the given peer.
+func (ab *dsAddrBook) CertifiedAddrs(p peer.ID) []ma.Multiaddr {
+	return ab.addrs(p, false)
+}
+
+func (ab *dsAddrBook) addrs(p peer.ID, includeUncertified bool) []ma.Multiaddr {
 	pr, err := ab.loadRecord(p, true, true)
 	if err != nil {
 		log.Warning("failed to load peerstore entry for peer %v while querying addrs, err: %v", p, err)
@@ -297,7 +337,9 @@ func (ab *dsAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
 
 	addrs := make([]ma.Multiaddr, 0, len(pr.Addrs))
 	for _, a := range pr.Addrs {
-		addrs = append(addrs, a.Addr)
+		if includeUncertified || a.Certified {
+			addrs = append(addrs, a.Addr)
+		}
 	}
 	return addrs
 }
@@ -330,7 +372,7 @@ func (ab *dsAddrBook) ClearAddrs(p peer.ID) {
 	}
 }
 
-func (ab *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration, mode ttlWriteMode) (err error) {
+func (ab *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration, mode ttlWriteMode, certified bool) (err error) {
 	pr, err := ab.loadRecord(p, true, false)
 	if err != nil {
 		return fmt.Errorf("failed to load peerstore entry for peer %v while setting addrs, err: %v", p, err)
@@ -380,6 +422,7 @@ Outer:
 			Addr:   &pb.ProtoAddr{Multiaddr: addr},
 			Ttl:    int64(ttl),
 			Expiry: newExp,
+			Certified: certified,
 		}
 		added = append(added, entry)
 		// note: there's a minor chance that writing the record will fail, in which case we would've broadcast

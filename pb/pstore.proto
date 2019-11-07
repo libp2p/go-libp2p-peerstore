@@ -23,5 +23,12 @@ message AddrBookRecord {
 
 		// The original TTL of this address.
 		int64 ttl = 3;
+
+		// Whether this address was certified by the addressed peer.
+		bool certified = 4;
 	}
+
+	// Tracks the last seen sequence counter for peer state records used to
+	// add certified addresses.
+	uint64 peerStateSeq = 3;
 }
