@@ -69,9 +69,11 @@ func NewAddrBook() pstore.AddrBook {
 			}
 			return ret
 		}(),
-		subManager: NewAddrSubManager(),
-		ctx:        ctx,
-		cancel:     cancel,
+		subManager:          NewAddrSubManager(),
+		ctx:                 ctx,
+		cancel:              cancel,
+		signedRoutingStates: make(map[peer.ID]*crypto.SignedEnvelope),
+		peerStateSeq:        make(map[peer.ID]uint64),
 	}
 
 	go ab.background()
@@ -232,7 +234,12 @@ func (mab *memoryAddrBook) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 		// re-set all of them for new ttl.
 		aBytes := addr.Bytes()
 		if ttl > 0 {
-			amap[string(aBytes)] = &expiringAddr{Addr: addr, Expires: exp, TTL: ttl}
+			certified := false
+			existing := amap[string(aBytes)]
+			if existing != nil {
+				certified = existing.Certified
+			}
+			amap[string(aBytes)] = &expiringAddr{Addr: addr, Expires: exp, TTL: ttl, Certified: certified}
 			mab.subManager.BroadcastAddr(p, addr)
 		} else {
 			delete(amap, string(aBytes))

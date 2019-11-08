@@ -252,32 +252,46 @@ func (ab *dsAddrBook) AddCertifiedAddrs(envelope *crypto.SignedEnvelope, ttl tim
 	}
 
 	// ensure that the seq number from envelope is >= any previously received seq no
-	pr, err := ab.loadRecord(state.PeerID, true, false)
-	if err != nil {
-		return err
-	}
-	if pr.RoutingStateSeq >= state.Seq {
+	if ab.latestRoutingStateSeq(state.PeerID) >= state.Seq {
 		// TODO: should this be an error?
 		return nil
 	}
 
+	addrs := cleanAddrs(state.Multiaddrs())
+	err = ab.setAddrs(state.PeerID, addrs, ttl, ttlExtend, true)
+	if err != nil {
+		return err
+	}
+
+	return ab.storeRoutingState(state.PeerID, state.Seq, envelope)
+}
+
+func (ab *dsAddrBook) latestRoutingStateSeq(p peer.ID) uint64 {
+	pr, err := ab.loadRecord(p, true, false)
+	if err != nil {
+		return 0
+	}
+	return pr.RoutingStateSeq
+}
+
+func (ab *dsAddrBook) storeRoutingState(p peer.ID, seq uint64, envelope *crypto.SignedEnvelope) error {
+	// reload record and add routing state
+	// this has to be done after we add the addresses, since if
+	// we try to flush a datastore record with no addresses,
+	// it will just get deleted
 	envelopeBytes, err := envelope.Marshal()
 	if err != nil {
 		return err
 	}
-
-	pr.RoutingStateSeq = state.Seq
-	pr.SignedRoutingRecord = envelopeBytes
-	pr.dirty = true
-	err = pr.flush(ab.ds)
+	pr, err := ab.loadRecord(p, true, false)
 	if err != nil {
 		return err
 	}
-
-	// TODO: remove addresses from previous RoutingStates (new state should completely replace old)
-
-	addrs := cleanAddrs(state.Multiaddrs())
-	return ab.setAddrs(state.PeerID, addrs, ttl, ttlExtend, true)
+	pr.RoutingStateSeq = seq
+	pr.SignedRoutingRecord = envelopeBytes
+	pr.dirty = true
+	err = pr.flush(ab.ds)
+	return err
 }
 
 func (ab *dsAddrBook) SignedRoutingState(p peer.ID) *crypto.SignedEnvelope {
