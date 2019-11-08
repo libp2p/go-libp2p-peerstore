@@ -443,9 +443,9 @@ Outer:
 		}
 		addr := addrs[i]
 		entry := &pb.AddrBookRecord_AddrEntry{
-			Addr:   &pb.ProtoAddr{Multiaddr: addr},
-			Ttl:    int64(ttl),
-			Expiry: newExp,
+			Addr:      &pb.ProtoAddr{Multiaddr: addr},
+			Ttl:       int64(ttl),
+			Expiry:    newExp,
 			Certified: certified,
 		}
 		added = append(added, entry)

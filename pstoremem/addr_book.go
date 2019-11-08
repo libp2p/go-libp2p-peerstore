@@ -19,9 +19,9 @@ import (
 var log = logging.Logger("peerstore")
 
 type expiringAddr struct {
-	Addr    ma.Multiaddr
-	TTL     time.Duration
-	Expires time.Time
+	Addr      ma.Multiaddr
+	TTL       time.Duration
+	Expires   time.Time
 	Certified bool
 }
 
@@ -49,7 +49,7 @@ type memoryAddrBook struct {
 	segments addrSegments
 
 	signedRoutingStates map[peer.ID]*crypto.SignedEnvelope
-	peerStateSeq map[peer.ID]uint64
+	peerStateSeq        map[peer.ID]uint64
 
 	ctx    context.Context
 	cancel func()
