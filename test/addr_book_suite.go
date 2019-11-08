@@ -1,6 +1,10 @@
 package test
 
 import (
+	"github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/routing"
+	"github.com/libp2p/go-libp2p-core/test"
 	"testing"
 	"time"
 
@@ -16,6 +20,7 @@ var addressBookSuite = map[string]func(book pstore.AddrBook) func(*testing.T){
 	"AddressesExpire":      testAddressesExpire,
 	"ClearWithIter":        testClearWithIterator,
 	"PeersWithAddresses":   testPeersWithAddrs,
+	"CertifiedAddresses":   testCertifiedAddresses,
 }
 
 type AddrBookFactory func() (pstore.AddrBook, func())
@@ -329,5 +334,45 @@ func testPeersWithAddrs(m pstore.AddrBook) func(t *testing.T) {
 				t.Fatal("expected to find 2 peers")
 			}
 		})
+	}
+}
+
+func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
+	return func(t *testing.T) {
+		priv, _, err := test.RandTestKeyPair(crypto.Ed25519, 256)
+		if err != nil {
+			t.Errorf("error generating testing keys: %v", err)
+		}
+
+		id, _ := peer.IDFromPrivateKey(priv)
+		allAddrs := GenerateAddrs(10)
+		certifiedAddrs := allAddrs[:5]
+		uncertifiedAddrs := allAddrs[5:]
+		info := peer.AddrInfo{ID: id, Addrs: certifiedAddrs}
+		envelope, err := routing.RoutingStateFromAddrInfo(&info).ToSignedEnvelope(priv)
+		if err != nil {
+			t.Errorf("error creating signed routing record: %v", err)
+		}
+
+		// add the signed record to addr book
+		err = m.AddCertifiedAddrs(envelope, time.Hour)
+		if err != nil {
+			t.Errorf("error adding signed routing record to addrbook: %v", err)
+		}
+
+		// add a few non-certified addrs
+		m.AddAddrs(id, uncertifiedAddrs, time.Hour)
+
+		// we should get only certified addrs back from CertifiedAddrs
+		AssertAddressesEqual(t, certifiedAddrs, m.CertifiedAddrs(id))
+
+		// we should get everything back from Addrs
+		AssertAddressesEqual(t, allAddrs, m.Addrs(id))
+
+		// we should be able to retrieve the original envelope
+		envelope2 := m.SignedRoutingState(id)
+		if envelope2 == nil || !envelope.Equals(envelope2) {
+			t.Error("unable to retrieve signed routing record from addrbook")
+		}
 	}
 }
