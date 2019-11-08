@@ -256,11 +256,18 @@ func (ab *dsAddrBook) AddCertifiedAddrs(envelope *crypto.SignedEnvelope, ttl tim
 	if err != nil {
 		return err
 	}
-	if pr.PeerStateSeq >= state.Seq {
+	if pr.RoutingStateSeq >= state.Seq {
 		// TODO: should this be an error?
 		return nil
 	}
-	pr.PeerStateSeq = state.Seq
+
+	envelopeBytes, err := envelope.Marshal()
+	if err != nil {
+		return err
+	}
+
+	pr.RoutingStateSeq = state.Seq
+	pr.SignedRoutingRecord = envelopeBytes
 	pr.dirty = true
 	err = pr.flush(ab.ds)
 	if err != nil {
@@ -271,6 +278,23 @@ func (ab *dsAddrBook) AddCertifiedAddrs(envelope *crypto.SignedEnvelope, ttl tim
 
 	addrs := cleanAddrs(state.Multiaddrs())
 	return ab.setAddrs(state.PeerID, addrs, ttl, ttlExtend, true)
+}
+
+func (ab *dsAddrBook) SignedRoutingState(p peer.ID) *crypto.SignedEnvelope {
+	pr, err := ab.loadRecord(p, true, false)
+	if err != nil {
+		log.Errorf("unable to load record for peer %s: %v", p.Pretty(), err)
+		return nil
+	}
+	if len(pr.SignedRoutingRecord) == 0 {
+		return nil
+	}
+	envelope, err := crypto.UnmarshalEnvelope(pr.SignedRoutingRecord)
+	if err != nil {
+		log.Errorf("unable to unmarshal stored signed routing record for peer %s: %v", p.Pretty(), err)
+		return nil
+	}
+	return envelope
 }
 
 // SetAddr will add or update the TTL of an address in the AddrBook.

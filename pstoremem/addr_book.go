@@ -47,6 +47,8 @@ func (s *addrSegments) get(p peer.ID) *addrSegment {
 // memoryAddrBook manages addresses.
 type memoryAddrBook struct {
 	segments addrSegments
+
+	signedRoutingStates map[peer.ID]*crypto.SignedEnvelope
 	peerStateSeq map[peer.ID]uint64
 
 	ctx    context.Context
@@ -154,6 +156,8 @@ func (mab *memoryAddrBook) AddCertifiedAddrs(envelope *crypto.SignedEnvelope, tt
 		return nil
 	}
 	mab.peerStateSeq[state.PeerID] = state.Seq
+	mab.signedRoutingStates[state.PeerID] = envelope
+
 	// TODO: remove addresses from previous RoutingStates (new state should completely replace old)
 
 	mab.addAddrs(state.PeerID, state.Multiaddrs(), ttl, true)
@@ -291,6 +295,10 @@ func (mab *memoryAddrBook) addrs(p peer.ID, includeUncertified bool) []ma.Multia
 	}
 
 	return good
+}
+
+func (mab *memoryAddrBook) SignedRoutingState(p peer.ID) *crypto.SignedEnvelope {
+	return mab.signedRoutingStates[p]
 }
 
 // ClearAddrs removes all previously stored addresses
