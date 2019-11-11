@@ -49,6 +49,11 @@ type addrsRecord struct {
 // marked for deletion, in which case we call ds.Delete. To be called within a lock.
 func (r *addrsRecord) flush(write ds.Write) (err error) {
 	key := addrBookBase.ChildString(b32.RawStdEncoding.EncodeToString([]byte(r.Id.ID)))
+
+	if len(r.SignedAddrs) == 0 {
+		r.CertifiedRecord = nil
+	}
+
 	if len(r.Addrs) == 0 && len(r.SignedAddrs) == 0 {
 		if err = write.Delete(key); err == nil {
 			r.dirty = false
@@ -291,7 +296,7 @@ func (ab *dsAddrBook) AddCertifiedAddrs(envelope *crypto.SignedEnvelope, ttl tim
 
 func (ab *dsAddrBook) latestRoutingStateSeq(p peer.ID) uint64 {
 	pr, err := ab.loadRecord(p, true, false)
-	if err != nil || pr.CertifiedRecord == nil {
+	if err != nil || pr.CertifiedRecord == nil || len(pr.CertifiedRecord.Raw) == 0 {
 		return 0
 	}
 	return pr.CertifiedRecord.Seq
@@ -325,7 +330,7 @@ func (ab *dsAddrBook) SignedRoutingState(p peer.ID) *crypto.SignedEnvelope {
 		log.Errorf("unable to load record for peer %s: %v", p.Pretty(), err)
 		return nil
 	}
-	if len(pr.CertifiedRecord.Raw) == 0 {
+	if pr.CertifiedRecord == nil || len(pr.CertifiedRecord.Raw) == 0 {
 		return nil
 	}
 	envelope, err := crypto.UnmarshalEnvelope(pr.CertifiedRecord.Raw)
@@ -400,13 +405,13 @@ func (ab *dsAddrBook) addrs(p peer.ID, includeUncertified bool) []ma.Multiaddr {
 	defer pr.RUnlock()
 
 	addrs := make([]ma.Multiaddr, 0, len(pr.Addrs))
+	for _, a := range pr.SignedAddrs {
+		addrs = append(addrs, a.Addr)
+	}
 	if includeUncertified {
 		for _, a := range pr.Addrs {
 			addrs = append(addrs, a.Addr)
 		}
-	}
-	for _, a := range pr.SignedAddrs {
-		addrs = append(addrs, a.Addr)
 	}
 	return addrs
 }
@@ -439,7 +444,7 @@ func (ab *dsAddrBook) ClearAddrs(p peer.ID) {
 	}
 }
 
-func (ab *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration, mode ttlWriteMode, certified bool) (err error) {
+func (ab *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration, mode ttlWriteMode, signed bool) (err error) {
 	pr, err := ab.loadRecord(p, true, false)
 	if err != nil {
 		return fmt.Errorf("failed to load peerstore entry for peer %v while setting addrs, err: %v", p, err)
@@ -452,7 +457,7 @@ func (ab *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 	existed := make([]bool, len(addrs)) // keeps track of which addrs we found.
 
 	var entryList *[]*pb.AddrBookRecord_AddrEntry
-	if certified {
+	if signed {
 		entryList = &pr.SignedAddrs
 	} else {
 		entryList = &pr.Addrs

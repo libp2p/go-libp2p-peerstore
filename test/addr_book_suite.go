@@ -374,5 +374,12 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 		if envelope2 == nil || !envelope.Equals(envelope2) {
 			t.Error("unable to retrieve signed routing record from addrbook")
 		}
+
+		// update TTL on signed addrs to -1 to remove them.
+		// the signed routing record should be deleted
+		m.UpdateAddrs(id, time.Hour, -1)
+		if m.SignedRoutingState(id) != nil {
+			t.Error("expected signed routing record to be removed when addresses expire")
+		}
 	}
 }
