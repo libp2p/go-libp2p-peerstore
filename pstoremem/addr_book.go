@@ -40,16 +40,98 @@ type addrSegment struct {
 	addrs map[peer.ID]map[string]*expiringAddr
 }
 
-func (s *addrSegments) get(p peer.ID) *addrSegment {
-	return s[byte(p[len(p)-1])]
+func (s *addrSegment) validAddrs(p peer.ID) []ma.Multiaddr {
+	s.RLock()
+	defer s.RUnlock()
+
+	amap, found := s.addrs[p]
+	if !found {
+		return nil
+	}
+
+	now := time.Now()
+	good := make([]ma.Multiaddr, 0, len(amap))
+	for _, m := range amap {
+		if !m.ExpiredBy(now) {
+			good = append(good, m.Addr)
+		}
+	}
+
+	return good
+}
+
+func (s *addrSegment) updateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.Duration) {
+	s.Lock()
+	defer s.Unlock()
+
+	amap, found := s.addrs[p]
+	if !found {
+		return
+	}
+
+	exp := time.Now().Add(newTTL)
+	for k, addr := range amap {
+		if oldTTL == addr.TTL {
+			addr.TTL = newTTL
+			addr.Expires = exp
+			amap[k] = addr
+		}
+	}
+}
+
+func (segments *addrSegments) get(p peer.ID) *addrSegment {
+	return segments[byte(p[len(p)-1])]
+}
+
+func (segments *addrSegments) gc() {
+	now := time.Now()
+	for _, s := range segments {
+		s.Lock()
+		for p, amap := range s.addrs {
+			for k, addr := range amap {
+				if addr.ExpiredBy(now) {
+					delete(amap, k)
+				}
+			}
+			if len(amap) == 0 {
+				delete(s.addrs, p)
+			}
+		}
+		s.Unlock()
+	}
+}
+
+func (segments *addrSegments) peersWithAddrs() peer.IDSlice {
+	var pids peer.IDSlice
+	for _, s := range segments {
+		s.RLock()
+		for pid, _ := range s.addrs {
+			pids = append(pids, pid)
+		}
+		s.RUnlock()
+	}
+	return pids
+}
+
+func (segments *addrSegments) clear(p peer.ID) {
+	s := segments.get(p)
+	s.Lock()
+	defer s.Unlock()
+
+	delete(s.addrs, p)
+}
+
+type certifiedRecord struct {
+	Seq      uint64
+	Envelope *crypto.SignedEnvelope
 }
 
 // memoryAddrBook manages addresses.
 type memoryAddrBook struct {
-	segments addrSegments
+	segments       addrSegments
+	signedSegments addrSegments
 
-	signedRoutingStates map[peer.ID]*crypto.SignedEnvelope
-	peerStateSeq        map[peer.ID]uint64
+	signedRoutingStates map[peer.ID]*certifiedRecord
 
 	ctx    context.Context
 	cancel func()
@@ -62,18 +144,20 @@ var _ pstore.AddrBook = (*memoryAddrBook)(nil)
 func NewAddrBook() pstore.AddrBook {
 	ctx, cancel := context.WithCancel(context.Background())
 
+	makeSegments := func() (ret addrSegments) {
+		for i, _ := range ret {
+			ret[i] = &addrSegment{addrs: make(map[peer.ID]map[string]*expiringAddr)}
+		}
+		return ret
+	}
+
 	ab := &memoryAddrBook{
-		segments: func() (ret addrSegments) {
-			for i, _ := range ret {
-				ret[i] = &addrSegment{addrs: make(map[peer.ID]map[string]*expiringAddr)}
-			}
-			return ret
-		}(),
+		segments:            makeSegments(),
+		signedSegments:      makeSegments(),
 		subManager:          NewAddrSubManager(),
 		ctx:                 ctx,
 		cancel:              cancel,
-		signedRoutingStates: make(map[peer.ID]*crypto.SignedEnvelope),
-		peerStateSeq:        make(map[peer.ID]uint64),
+		signedRoutingStates: make(map[peer.ID]*certifiedRecord),
 	}
 
 	go ab.background()
@@ -103,34 +187,18 @@ func (mab *memoryAddrBook) Close() error {
 
 // gc garbage collects the in-memory address book.
 func (mab *memoryAddrBook) gc() {
-	now := time.Now()
-	for _, s := range mab.segments {
-		s.Lock()
-		for p, amap := range s.addrs {
-			for k, addr := range amap {
-				if addr.ExpiredBy(now) {
-					delete(amap, k)
-				}
-			}
-			if len(amap) == 0 {
-				delete(s.addrs, p)
-			}
-		}
-		s.Unlock()
-	}
+	mab.segments.gc()
+	mab.signedSegments.gc()
 
+	for _, p := range mab.signedSegments.peersWithAddrs() {
+		if len(mab.CertifiedAddrs(p)) == 0 {
+			delete(mab.signedRoutingStates, p)
+		}
+	}
 }
 
 func (mab *memoryAddrBook) PeersWithAddrs() peer.IDSlice {
-	var pids peer.IDSlice
-	for _, s := range mab.segments {
-		s.RLock()
-		for pid, _ := range s.addrs {
-			pids = append(pids, pid)
-		}
-		s.RUnlock()
-	}
-	return pids
+	return append(mab.signedSegments.peersWithAddrs(), mab.segments.peersWithAddrs()...)
 }
 
 // AddAddr calls AddAddrs(p, []ma.Multiaddr{addr}, ttl)
@@ -152,27 +220,28 @@ func (mab *memoryAddrBook) AddCertifiedAddrs(envelope *crypto.SignedEnvelope, tt
 	}
 
 	// ensure seq is greater than last received
-	lastSeq, found := mab.peerStateSeq[state.PeerID]
-	if found && lastSeq >= state.Seq {
+	lastState, found := mab.signedRoutingStates[state.PeerID]
+	if found && lastState.Seq >= state.Seq {
 		// TODO: should this be an error?
 		return nil
 	}
-	mab.peerStateSeq[state.PeerID] = state.Seq
-	mab.signedRoutingStates[state.PeerID] = envelope
-
-	// TODO: remove addresses from previous RoutingStates (new state should completely replace old)
-
+	mab.signedRoutingStates[state.PeerID] = &certifiedRecord{Seq: state.Seq, Envelope: envelope}
 	mab.addAddrs(state.PeerID, state.Multiaddrs(), ttl, true)
 	return nil
 }
 
-func (mab *memoryAddrBook) addAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration, certified bool) {
+func (mab *memoryAddrBook) addAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration, signed bool) {
 	// if ttl is zero, exit. nothing to do.
 	if ttl <= 0 {
 		return
 	}
 
-	s := mab.segments.get(p)
+	var s *addrSegment
+	if signed {
+		s = mab.signedSegments.get(p)
+	} else {
+		s = mab.segments.get(p)
+	}
 	s.Lock()
 	defer s.Unlock()
 
@@ -191,7 +260,7 @@ func (mab *memoryAddrBook) addAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 		a, found := amap[string(asBytes)] // won't allocate.
 		if !found {
 			// not found, save and announce it.
-			amap[string(asBytes)] = &expiringAddr{Addr: addr, Expires: exp, TTL: ttl, Certified: certified}
+			amap[string(asBytes)] = &expiringAddr{Addr: addr, Expires: exp, TTL: ttl}
 			mab.subManager.BroadcastAddr(p, addr)
 		} else {
 			// Update expiration/TTL independently.
@@ -234,12 +303,7 @@ func (mab *memoryAddrBook) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 		// re-set all of them for new ttl.
 		aBytes := addr.Bytes()
 		if ttl > 0 {
-			certified := false
-			existing := amap[string(aBytes)]
-			if existing != nil {
-				certified = existing.Certified
-			}
-			amap[string(aBytes)] = &expiringAddr{Addr: addr, Expires: exp, TTL: ttl, Certified: certified}
+			amap[string(aBytes)] = &expiringAddr{Addr: addr, Expires: exp, TTL: ttl}
 			mab.subManager.BroadcastAddr(p, addr)
 		} else {
 			delete(amap, string(aBytes))
@@ -250,71 +314,41 @@ func (mab *memoryAddrBook) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 // UpdateAddrs updates the addresses associated with the given peer that have
 // the given oldTTL to have the given newTTL.
 func (mab *memoryAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.Duration) {
-	s := mab.segments.get(p)
-	s.Lock()
-	defer s.Unlock()
+	mab.segments.get(p).updateAddrs(p, oldTTL, newTTL)
+	mab.signedSegments.get(p).updateAddrs(p, oldTTL, newTTL)
 
-	amap, found := s.addrs[p]
-	if !found {
-		return
-	}
-
-	exp := time.Now().Add(newTTL)
-	for k, addr := range amap {
-		if oldTTL == addr.TTL {
-			addr.TTL = newTTL
-			addr.Expires = exp
-			amap[k] = addr
-		}
+	// updating may have caused all our certified addrs to expire.
+	// if so, remove the signed record we sourced them from.
+	if len(mab.CertifiedAddrs(p)) == 0 {
+		delete(mab.signedRoutingStates, p)
 	}
 }
 
 // Addrs returns all known (and valid) addresses for a given peer
 func (mab *memoryAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
-	return mab.addrs(p, true)
+	return append(
+		mab.signedSegments.get(p).validAddrs(p),
+		mab.segments.get(p).validAddrs(p)...)
 }
 
 // CertifiedAddrs returns all known (and valid) addressed that have been
 // certified by the given peer.
 func (mab *memoryAddrBook) CertifiedAddrs(p peer.ID) []ma.Multiaddr {
-	return mab.addrs(p, false)
-}
-
-func (mab *memoryAddrBook) addrs(p peer.ID, includeUncertified bool) []ma.Multiaddr {
-	s := mab.segments.get(p)
-	s.RLock()
-	defer s.RUnlock()
-
-	amap, found := s.addrs[p]
-	if !found {
-		return nil
-	}
-
-	now := time.Now()
-	good := make([]ma.Multiaddr, 0, len(amap))
-	for _, m := range amap {
-		if m.ExpiredBy(now) {
-			continue
-		}
-		if includeUncertified || m.Certified {
-			good = append(good, m.Addr)
-		}
-	}
-
-	return good
+	return mab.signedSegments.get(p).validAddrs(p)
 }
 
 func (mab *memoryAddrBook) SignedRoutingState(p peer.ID) *crypto.SignedEnvelope {
-	return mab.signedRoutingStates[p]
+	r := mab.signedRoutingStates[p]
+	if r != nil {
+		return r.Envelope
+	}
+	return nil
 }
 
 // ClearAddrs removes all previously stored addresses
 func (mab *memoryAddrBook) ClearAddrs(p peer.ID) {
-	s := mab.segments.get(p)
-	s.Lock()
-	defer s.Unlock()
-
-	delete(s.addrs, p)
+	mab.segments.clear(p)
+	mab.signedSegments.clear(p)
 }
 
 // AddrStream returns a channel on which all new addresses discovered for a

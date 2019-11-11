@@ -28,11 +28,10 @@ type AddrBookRecord struct {
 	Id *ProtoPeerID `protobuf:"bytes,1,opt,name=id,proto3,customtype=ProtoPeerID" json:"id,omitempty"`
 	// The multiaddresses. This is a sorted list where element 0 expires the soonest.
 	Addrs []*AddrBookRecord_AddrEntry `protobuf:"bytes,2,rep,name=addrs,proto3" json:"addrs,omitempty"`
-	// The Seq counter value from the most recent RoutingState record for this peer.
-	RoutingStateSeq uint64 `protobuf:"varint,3,opt,name=routingStateSeq,proto3" json:"routingStateSeq,omitempty"`
-	// A serialized SignedEnvelope containing the most recent RoutingState record.
-	// TODO: import the SignedEnvelope type instead
-	SignedRoutingRecord []byte `protobuf:"bytes,4,opt,name=signedRoutingRecord,proto3" json:"signedRoutingRecord,omitempty"`
+	// Multiaddresses that were sourced from a signed RoutingState record.
+	SignedAddrs []*AddrBookRecord_AddrEntry `protobuf:"bytes,3,rep,name=signedAddrs,proto3" json:"signedAddrs,omitempty"`
+	// The most recently received signed RoutingState record.
+	CertifiedRecord *AddrBookRecord_CertifiedRecord `protobuf:"bytes,4,opt,name=certifiedRecord,proto3" json:"certifiedRecord,omitempty"`
 }
 
 func (m *AddrBookRecord) Reset()         { *m = AddrBookRecord{} }
@@ -75,16 +74,16 @@ func (m *AddrBookRecord) GetAddrs() []*AddrBookRecord_AddrEntry {
 	return nil
 }
 
-func (m *AddrBookRecord) GetRoutingStateSeq() uint64 {
+func (m *AddrBookRecord) GetSignedAddrs() []*AddrBookRecord_AddrEntry {
 	if m != nil {
-		return m.RoutingStateSeq
+		return m.SignedAddrs
 	}
-	return 0
+	return nil
 }
 
-func (m *AddrBookRecord) GetSignedRoutingRecord() []byte {
+func (m *AddrBookRecord) GetCertifiedRecord() *AddrBookRecord_CertifiedRecord {
 	if m != nil {
-		return m.SignedRoutingRecord
+		return m.CertifiedRecord
 	}
 	return nil
 }
@@ -96,8 +95,6 @@ type AddrBookRecord_AddrEntry struct {
 	Expiry int64 `protobuf:"varint,2,opt,name=expiry,proto3" json:"expiry,omitempty"`
 	// The original TTL of this address.
 	Ttl int64 `protobuf:"varint,3,opt,name=ttl,proto3" json:"ttl,omitempty"`
-	// Whether this address was certified by the addressed peer.
-	Certified bool `protobuf:"varint,4,opt,name=certified,proto3" json:"certified,omitempty"`
 }
 
 func (m *AddrBookRecord_AddrEntry) Reset()         { *m = AddrBookRecord_AddrEntry{} }
@@ -147,42 +144,93 @@ func (m *AddrBookRecord_AddrEntry) GetTtl() int64 {
 	return 0
 }
 
-func (m *AddrBookRecord_AddrEntry) GetCertified() bool {
-	if m != nil {
-		return m.Certified
+// CertifiedRecord contains a serialized RoutingState record used to
+// populate the signedAddrs list.
+type AddrBookRecord_CertifiedRecord struct {
+	// The Seq counter from the RoutingState record
+	Seq uint64 `protobuf:"varint,1,opt,name=seq,proto3" json:"seq,omitempty"`
+	// The serialized bytes of the SignedEnvelope containing the RoutingState record.
+	Raw []byte `protobuf:"bytes,2,opt,name=raw,proto3" json:"raw,omitempty"`
+}
+
+func (m *AddrBookRecord_CertifiedRecord) Reset()         { *m = AddrBookRecord_CertifiedRecord{} }
+func (m *AddrBookRecord_CertifiedRecord) String() string { return proto.CompactTextString(m) }
+func (*AddrBookRecord_CertifiedRecord) ProtoMessage()    {}
+func (*AddrBookRecord_CertifiedRecord) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f96873690e08a98f, []int{0, 1}
+}
+func (m *AddrBookRecord_CertifiedRecord) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *AddrBookRecord_CertifiedRecord) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_AddrBookRecord_CertifiedRecord.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
 	}
-	return false
+}
+func (m *AddrBookRecord_CertifiedRecord) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_AddrBookRecord_CertifiedRecord.Merge(m, src)
+}
+func (m *AddrBookRecord_CertifiedRecord) XXX_Size() int {
+	return m.Size()
+}
+func (m *AddrBookRecord_CertifiedRecord) XXX_DiscardUnknown() {
+	xxx_messageInfo_AddrBookRecord_CertifiedRecord.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_AddrBookRecord_CertifiedRecord proto.InternalMessageInfo
+
+func (m *AddrBookRecord_CertifiedRecord) GetSeq() uint64 {
+	if m != nil {
+		return m.Seq
+	}
+	return 0
+}
+
+func (m *AddrBookRecord_CertifiedRecord) GetRaw() []byte {
+	if m != nil {
+		return m.Raw
+	}
+	return nil
 }
 
 func init() {
 	proto.RegisterType((*AddrBookRecord)(nil), "pstore.pb.AddrBookRecord")
 	proto.RegisterType((*AddrBookRecord_AddrEntry)(nil), "pstore.pb.AddrBookRecord.AddrEntry")
+	proto.RegisterType((*AddrBookRecord_CertifiedRecord)(nil), "pstore.pb.AddrBookRecord.CertifiedRecord")
 }
 
 func init() { proto.RegisterFile("pstore.proto", fileDescriptor_f96873690e08a98f) }
 
 var fileDescriptor_f96873690e08a98f = []byte{
-	// 318 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0x50, 0x31, 0x4f, 0xf3, 0x30,
-	0x10, 0x8d, 0x93, 0x7c, 0xd5, 0x17, 0xb7, 0x50, 0x64, 0x24, 0x14, 0x55, 0xc8, 0x09, 0xb0, 0x64,
-	0x21, 0x45, 0x30, 0x31, 0x12, 0xc1, 0xc0, 0x56, 0xb9, 0xbf, 0xa0, 0x89, 0xdd, 0x60, 0x01, 0x71,
-	0x70, 0x1c, 0x44, 0xff, 0x05, 0x3f, 0xa9, 0x23, 0x63, 0x47, 0xd4, 0xa1, 0x82, 0xe4, 0x4f, 0x30,
-	0xa2, 0x38, 0xa5, 0x08, 0xc4, 0x76, 0xef, 0xde, 0xbb, 0x7b, 0xef, 0x0e, 0xf6, 0xf2, 0x42, 0x09,
-	0xc9, 0xc2, 0x5c, 0x0a, 0x25, 0x90, 0xf3, 0x85, 0xe2, 0xc1, 0x71, 0xca, 0xd5, 0x4d, 0x19, 0x87,
-	0x89, 0xb8, 0x1f, 0xa6, 0x22, 0x15, 0x43, 0xad, 0x88, 0xcb, 0xa9, 0x46, 0x1a, 0xe8, 0xaa, 0x9d,
-	0x3c, 0x9c, 0x9b, 0x70, 0xfb, 0x82, 0x52, 0x19, 0x09, 0x71, 0x4b, 0x58, 0x22, 0x24, 0x45, 0x1e,
-	0x34, 0x39, 0x75, 0x81, 0x0f, 0x82, 0x5e, 0xd4, 0x5f, 0xae, 0xbc, 0xee, 0xa8, 0x51, 0x8e, 0x18,
-	0x93, 0xd7, 0x97, 0xc4, 0xe4, 0x14, 0x9d, 0xc3, 0x7f, 0x13, 0x4a, 0x65, 0xe1, 0x9a, 0xbe, 0x15,
-	0x74, 0x4f, 0x8f, 0xc2, 0x8d, 0x7b, 0xf8, 0x73, 0x95, 0x86, 0x57, 0x99, 0x92, 0x33, 0xd2, 0x4e,
-	0xa0, 0x00, 0xf6, 0xa5, 0x28, 0x15, 0xcf, 0xd2, 0xb1, 0x9a, 0x28, 0x36, 0x66, 0x0f, 0xae, 0xe5,
-	0x83, 0xc0, 0x26, 0xbf, 0xdb, 0xe8, 0x04, 0xee, 0x16, 0x3c, 0xcd, 0x18, 0x25, 0x2d, 0xd1, 0x6e,
-	0x74, 0xed, 0x26, 0x16, 0xf9, 0x8b, 0x1a, 0x3c, 0x42, 0x67, 0xe3, 0x87, 0x0e, 0xa0, 0xdd, 0x38,
-	0xae, 0xcf, 0xd8, 0x5a, 0xae, 0x3c, 0x47, 0x9f, 0xd1, 0x28, 0x88, 0xa6, 0xd0, 0x1e, 0xec, 0xb0,
-	0xa7, 0x9c, 0xcb, 0x99, 0x6b, 0xfa, 0x20, 0xb0, 0xc8, 0x1a, 0xa1, 0x1d, 0x68, 0x29, 0x75, 0xa7,
-	0x73, 0x59, 0xa4, 0x29, 0xd1, 0x3e, 0x74, 0x12, 0x26, 0x15, 0x9f, 0x72, 0xd6, 0x26, 0xf8, 0x4f,
-	0xbe, 0x1b, 0x91, 0xff, 0xf1, 0x8e, 0xc1, 0xbc, 0xc2, 0xe0, 0xa5, 0xc2, 0x60, 0x51, 0x61, 0xf0,
-	0x56, 0x61, 0xf0, 0x5c, 0x63, 0x63, 0x51, 0x63, 0xe3, 0xb5, 0xc6, 0x46, 0xdc, 0xd1, 0xbf, 0x3e,
-	0xfb, 0x0c, 0x00, 0x00, 0xff, 0xff, 0xbd, 0x79, 0x1e, 0x1b, 0xb5, 0x01, 0x00, 0x00,
+	// 331 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x91, 0xb1, 0x4f, 0xc2, 0x40,
+	0x14, 0xc6, 0xb9, 0x16, 0x49, 0xb8, 0xa2, 0x98, 0x1b, 0x4c, 0xc3, 0x70, 0x54, 0x5d, 0xea, 0x60,
+	0x49, 0x30, 0x0e, 0x8e, 0xa0, 0x0c, 0x6e, 0xe4, 0x5c, 0x5c, 0x29, 0x77, 0xd4, 0x8b, 0xca, 0xe1,
+	0xf5, 0x88, 0xf2, 0x5f, 0xb8, 0xfa, 0xdf, 0x38, 0x3a, 0x32, 0x1a, 0x06, 0xa2, 0xe5, 0x9f, 0x70,
+	0x34, 0xf7, 0x8a, 0x44, 0x48, 0x4c, 0xdc, 0xbe, 0xef, 0xf5, 0xfb, 0x7e, 0xaf, 0x79, 0x87, 0x2b,
+	0xa3, 0xd4, 0x28, 0x2d, 0xa2, 0x91, 0x56, 0x46, 0x91, 0xf2, 0x8f, 0x8b, 0x6b, 0xc7, 0x89, 0x34,
+	0x37, 0xe3, 0x38, 0xea, 0xab, 0xfb, 0x46, 0xa2, 0x12, 0xd5, 0x80, 0x44, 0x3c, 0x1e, 0x80, 0x03,
+	0x03, 0x2a, 0x6f, 0x1e, 0xbc, 0xb8, 0x78, 0xa7, 0xc5, 0xb9, 0x6e, 0x2b, 0x75, 0xcb, 0x44, 0x5f,
+	0x69, 0x4e, 0xea, 0xd8, 0x91, 0xdc, 0x47, 0x01, 0x0a, 0x2b, 0xed, 0xea, 0x6c, 0x5e, 0xf7, 0xba,
+	0x36, 0xd9, 0x15, 0x42, 0x5f, 0x5e, 0x30, 0x47, 0x72, 0x72, 0x86, 0xb7, 0x7a, 0x9c, 0xeb, 0xd4,
+	0x77, 0x02, 0x37, 0xf4, 0x9a, 0x87, 0xd1, 0x6a, 0x7b, 0xb4, 0x8e, 0x02, 0xdb, 0x19, 0x1a, 0x3d,
+	0x61, 0x79, 0x83, 0x74, 0xb0, 0x97, 0xca, 0x64, 0x28, 0x78, 0x0b, 0x00, 0xee, 0xff, 0x01, 0xbf,
+	0x7b, 0xe4, 0x0a, 0x57, 0xfb, 0x42, 0x1b, 0x39, 0x90, 0x82, 0xe7, 0x49, 0xbf, 0x18, 0xa0, 0xd0,
+	0x6b, 0x1e, 0xfd, 0x8d, 0x3a, 0x5f, 0x2f, 0xb0, 0x4d, 0x42, 0xed, 0x1a, 0x97, 0x57, 0xeb, 0xc8,
+	0x3e, 0x2e, 0xda, 0x3f, 0x5e, 0x9e, 0x61, 0x7b, 0x36, 0xaf, 0x97, 0xe1, 0x0c, 0x36, 0xc1, 0xe0,
+	0x13, 0xd9, 0xc3, 0x25, 0xf1, 0x34, 0x92, 0x7a, 0xe2, 0x3b, 0x01, 0x0a, 0x5d, 0xb6, 0x74, 0x64,
+	0x17, 0xbb, 0xc6, 0xdc, 0xf9, 0x2e, 0x0c, 0xad, 0xac, 0x9d, 0xe2, 0xea, 0xc6, 0x76, 0x1b, 0x4a,
+	0xc5, 0x03, 0xe0, 0x8b, 0xcc, 0x4a, 0x3b, 0xd1, 0xbd, 0x47, 0x60, 0x55, 0x98, 0x95, 0xed, 0xe0,
+	0xeb, 0x93, 0xa2, 0xd7, 0x8c, 0xa2, 0xb7, 0x8c, 0xa2, 0x69, 0x46, 0xd1, 0x47, 0x46, 0xd1, 0xf3,
+	0x82, 0x16, 0xa6, 0x0b, 0x5a, 0x78, 0x5f, 0xd0, 0x42, 0x5c, 0x82, 0x47, 0x3c, 0xf9, 0x0e, 0x00,
+	0x00, 0xff, 0xff, 0x26, 0xc5, 0x77, 0x15, 0x0e, 0x02, 0x00, 0x00,
 }
 
 func (m *AddrBookRecord) Marshal() (dAtA []byte, err error) {
@@ -222,16 +270,27 @@ func (m *AddrBookRecord) MarshalTo(dAtA []byte) (int, error) {
 			i += n
 		}
 	}
-	if m.RoutingStateSeq != 0 {
-		dAtA[i] = 0x18
-		i++
-		i = encodeVarintPstore(dAtA, i, uint64(m.RoutingStateSeq))
+	if len(m.SignedAddrs) > 0 {
+		for _, msg := range m.SignedAddrs {
+			dAtA[i] = 0x1a
+			i++
+			i = encodeVarintPstore(dAtA, i, uint64(msg.Size()))
+			n, err := msg.MarshalTo(dAtA[i:])
+			if err != nil {
+				return 0, err
+			}
+			i += n
+		}
 	}
-	if len(m.SignedRoutingRecord) > 0 {
+	if m.CertifiedRecord != nil {
 		dAtA[i] = 0x22
 		i++
-		i = encodeVarintPstore(dAtA, i, uint64(len(m.SignedRoutingRecord)))
-		i += copy(dAtA[i:], m.SignedRoutingRecord)
+		i = encodeVarintPstore(dAtA, i, uint64(m.CertifiedRecord.Size()))
+		n2, err := m.CertifiedRecord.MarshalTo(dAtA[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n2
 	}
 	return i, nil
 }
@@ -255,11 +314,11 @@ func (m *AddrBookRecord_AddrEntry) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0xa
 		i++
 		i = encodeVarintPstore(dAtA, i, uint64(m.Addr.Size()))
-		n2, err := m.Addr.MarshalTo(dAtA[i:])
+		n3, err := m.Addr.MarshalTo(dAtA[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n2
+		i += n3
 	}
 	if m.Expiry != 0 {
 		dAtA[i] = 0x10
@@ -271,15 +330,34 @@ func (m *AddrBookRecord_AddrEntry) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintPstore(dAtA, i, uint64(m.Ttl))
 	}
-	if m.Certified {
-		dAtA[i] = 0x20
+	return i, nil
+}
+
+func (m *AddrBookRecord_CertifiedRecord) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *AddrBookRecord_CertifiedRecord) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if m.Seq != 0 {
+		dAtA[i] = 0x8
 		i++
-		if m.Certified {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
+		i = encodeVarintPstore(dAtA, i, uint64(m.Seq))
+	}
+	if len(m.Raw) > 0 {
+		dAtA[i] = 0x12
 		i++
+		i = encodeVarintPstore(dAtA, i, uint64(len(m.Raw)))
+		i += copy(dAtA[i:], m.Raw)
 	}
 	return i, nil
 }
@@ -303,11 +381,15 @@ func NewPopulatedAddrBookRecord(r randyPstore, easy bool) *AddrBookRecord {
 			this.Addrs[i] = NewPopulatedAddrBookRecord_AddrEntry(r, easy)
 		}
 	}
-	this.RoutingStateSeq = uint64(uint64(r.Uint32()))
-	v2 := r.Intn(100)
-	this.SignedRoutingRecord = make([]byte, v2)
-	for i := 0; i < v2; i++ {
-		this.SignedRoutingRecord[i] = byte(r.Intn(256))
+	if r.Intn(10) != 0 {
+		v2 := r.Intn(5)
+		this.SignedAddrs = make([]*AddrBookRecord_AddrEntry, v2)
+		for i := 0; i < v2; i++ {
+			this.SignedAddrs[i] = NewPopulatedAddrBookRecord_AddrEntry(r, easy)
+		}
+	}
+	if r.Intn(10) != 0 {
+		this.CertifiedRecord = NewPopulatedAddrBookRecord_CertifiedRecord(r, easy)
 	}
 	if !easy && r.Intn(10) != 0 {
 	}
@@ -325,7 +407,19 @@ func NewPopulatedAddrBookRecord_AddrEntry(r randyPstore, easy bool) *AddrBookRec
 	if r.Intn(2) == 0 {
 		this.Ttl *= -1
 	}
-	this.Certified = bool(bool(r.Intn(2) == 0))
+	if !easy && r.Intn(10) != 0 {
+	}
+	return this
+}
+
+func NewPopulatedAddrBookRecord_CertifiedRecord(r randyPstore, easy bool) *AddrBookRecord_CertifiedRecord {
+	this := &AddrBookRecord_CertifiedRecord{}
+	this.Seq = uint64(uint64(r.Uint32()))
+	v3 := r.Intn(100)
+	this.Raw = make([]byte, v3)
+	for i := 0; i < v3; i++ {
+		this.Raw[i] = byte(r.Intn(256))
+	}
 	if !easy && r.Intn(10) != 0 {
 	}
 	return this
@@ -350,9 +444,9 @@ func randUTF8RunePstore(r randyPstore) rune {
 	return rune(ru + 61)
 }
 func randStringPstore(r randyPstore) string {
-	v3 := r.Intn(100)
-	tmps := make([]rune, v3)
-	for i := 0; i < v3; i++ {
+	v4 := r.Intn(100)
+	tmps := make([]rune, v4)
+	for i := 0; i < v4; i++ {
 		tmps[i] = randUTF8RunePstore(r)
 	}
 	return string(tmps)
@@ -374,11 +468,11 @@ func randFieldPstore(dAtA []byte, r randyPstore, fieldNumber int, wire int) []by
 	switch wire {
 	case 0:
 		dAtA = encodeVarintPopulatePstore(dAtA, uint64(key))
-		v4 := r.Int63()
+		v5 := r.Int63()
 		if r.Intn(2) == 0 {
-			v4 *= -1
+			v5 *= -1
 		}
-		dAtA = encodeVarintPopulatePstore(dAtA, uint64(v4))
+		dAtA = encodeVarintPopulatePstore(dAtA, uint64(v5))
 	case 1:
 		dAtA = encodeVarintPopulatePstore(dAtA, uint64(key))
 		dAtA = append(dAtA, byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256)))
@@ -419,11 +513,14 @@ func (m *AddrBookRecord) Size() (n int) {
 			n += 1 + l + sovPstore(uint64(l))
 		}
 	}
-	if m.RoutingStateSeq != 0 {
-		n += 1 + sovPstore(uint64(m.RoutingStateSeq))
+	if len(m.SignedAddrs) > 0 {
+		for _, e := range m.SignedAddrs {
+			l = e.Size()
+			n += 1 + l + sovPstore(uint64(l))
+		}
 	}
-	l = len(m.SignedRoutingRecord)
-	if l > 0 {
+	if m.CertifiedRecord != nil {
+		l = m.CertifiedRecord.Size()
 		n += 1 + l + sovPstore(uint64(l))
 	}
 	return n
@@ -445,8 +542,21 @@ func (m *AddrBookRecord_AddrEntry) Size() (n int) {
 	if m.Ttl != 0 {
 		n += 1 + sovPstore(uint64(m.Ttl))
 	}
-	if m.Certified {
-		n += 2
+	return n
+}
+
+func (m *AddrBookRecord_CertifiedRecord) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Seq != 0 {
+		n += 1 + sovPstore(uint64(m.Seq))
+	}
+	l = len(m.Raw)
+	if l > 0 {
+		n += 1 + l + sovPstore(uint64(l))
 	}
 	return n
 }
@@ -563,29 +673,10 @@ func (m *AddrBookRecord) Unmarshal(dAtA []byte) error {
 			}
 			iNdEx = postIndex
 		case 3:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field RoutingStateSeq", wireType)
-			}
-			m.RoutingStateSeq = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowPstore
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.RoutingStateSeq |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-		case 4:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field SignedRoutingRecord", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field SignedAddrs", wireType)
 			}
-			var byteLen int
+			var msglen int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowPstore
@@ -595,24 +686,60 @@ func (m *AddrBookRecord) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				byteLen |= int(b&0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			if byteLen < 0 {
+			if msglen < 0 {
 				return ErrInvalidLengthPstore
 			}
-			postIndex := iNdEx + byteLen
+			postIndex := iNdEx + msglen
 			if postIndex < 0 {
 				return ErrInvalidLengthPstore
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.SignedRoutingRecord = append(m.SignedRoutingRecord[:0], dAtA[iNdEx:postIndex]...)
-			if m.SignedRoutingRecord == nil {
-				m.SignedRoutingRecord = []byte{}
+			m.SignedAddrs = append(m.SignedAddrs, &AddrBookRecord_AddrEntry{})
+			if err := m.SignedAddrs[len(m.SignedAddrs)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field CertifiedRecord", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPstore
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthPstore
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthPstore
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.CertifiedRecord == nil {
+				m.CertifiedRecord = &AddrBookRecord_CertifiedRecord{}
+			}
+			if err := m.CertifiedRecord.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -741,11 +868,64 @@ func (m *AddrBookRecord_AddrEntry) Unmarshal(dAtA []byte) error {
 					break
 				}
 			}
-		case 4:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Certified", wireType)
+		default:
+			iNdEx = preIndex
+			skippy, err := skipPstore(dAtA[iNdEx:])
+			if err != nil {
+				return err
 			}
-			var v int
+			if skippy < 0 {
+				return ErrInvalidLengthPstore
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthPstore
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *AddrBookRecord_CertifiedRecord) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowPstore
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: CertifiedRecord: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: CertifiedRecord: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Seq", wireType)
+			}
+			m.Seq = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowPstore
@@ -755,12 +935,45 @@ func (m *AddrBookRecord_AddrEntry) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= int(b&0x7F) << shift
+				m.Seq |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			m.Certified = bool(v != 0)
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Raw", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPstore
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthPstore
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthPstore
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Raw = append(m.Raw[:0], dAtA[iNdEx:postIndex]...)
+			if m.Raw == nil {
+				m.Raw = []byte{}
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipPstore(dAtA[iNdEx:])

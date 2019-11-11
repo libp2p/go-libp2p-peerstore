@@ -14,6 +14,12 @@ message AddrBookRecord {
 	// The multiaddresses. This is a sorted list where element 0 expires the soonest.
 	repeated AddrEntry addrs = 2;
 
+	// Multiaddresses that were sourced from a signed RoutingState record.
+	repeated AddrEntry signedAddrs = 3;
+
+	// The most recently received signed RoutingState record.
+	CertifiedRecord certifiedRecord = 4;
+
 	// AddrEntry represents a single multiaddress.
 	message AddrEntry {
 		bytes addr = 1 [(gogoproto.customtype) = "ProtoAddr"];
@@ -23,15 +29,15 @@ message AddrBookRecord {
 
 		// The original TTL of this address.
 		int64 ttl = 3;
-
-		// Whether this address was certified by the addressed peer.
-		bool certified = 4;
 	}
 
-	// The Seq counter value from the most recent RoutingState record for this peer.
-	uint64 routingStateSeq = 3;
+	// CertifiedRecord contains a serialized RoutingState record used to
+	// populate the signedAddrs list.
+	message CertifiedRecord {
+		// The Seq counter from the RoutingState record
+		uint64 seq = 1;
 
-	// A serialized SignedEnvelope containing the most recent RoutingState record.
-	// TODO: import the SignedEnvelope type instead
-	bytes signedRoutingRecord = 4;
+		// The serialized bytes of the SignedEnvelope containing the RoutingState record.
+		bytes raw = 2;
+	}
 }

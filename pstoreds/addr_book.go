@@ -49,7 +49,7 @@ type addrsRecord struct {
 // marked for deletion, in which case we call ds.Delete. To be called within a lock.
 func (r *addrsRecord) flush(write ds.Write) (err error) {
 	key := addrBookBase.ChildString(b32.RawStdEncoding.EncodeToString([]byte(r.Id.ID)))
-	if len(r.Addrs) == 0 {
+	if len(r.Addrs) == 0 && len(r.SignedAddrs) == 0 {
 		if err = write.Delete(key); err == nil {
 			r.dirty = false
 		}
@@ -85,37 +85,60 @@ func (r *addrsRecord) flush(write ds.Write) (err error) {
 // If the return value is true, the caller should perform a flush immediately to sync the record with the store.
 func (r *addrsRecord) clean() (chgd bool) {
 	now := time.Now().Unix()
-	if !r.dirty && len(r.Addrs) > 0 && r.Addrs[0].Expiry > now {
+	addrsLen := len(r.Addrs)
+	signedAddrsLen := len(r.SignedAddrs)
+
+	if !r.dirty && !r.hasExpiredAddrs(now) {
 		// record is not dirty, and we have no expired entries to purge.
 		return false
 	}
 
-	if len(r.Addrs) == 0 {
+	if addrsLen == 0 && signedAddrsLen == 0 {
 		// this is a ghost record; let's signal it has to be written.
 		// flush() will take care of doing the deletion.
 		return true
 	}
 
-	if r.dirty && len(r.Addrs) > 1 {
-		// the record has been modified, so it may need resorting.
-		// we keep addresses sorted by expiration, where 0 is the soonest expiring.
+	if r.dirty && addrsLen > 1 {
 		sort.Slice(r.Addrs, func(i, j int) bool {
 			return r.Addrs[i].Expiry < r.Addrs[j].Expiry
 		})
 	}
 
+	if r.dirty && signedAddrsLen > 1 {
+		sort.Slice(r.Addrs, func(i, j int) bool {
+			return r.Addrs[i].Expiry < r.Addrs[j].Expiry
+		})
+	}
+
+	r.Addrs = removeExpired(r.Addrs, now)
+	r.SignedAddrs = removeExpired(r.SignedAddrs, now)
+
+	return r.dirty || len(r.Addrs) != addrsLen || len(r.SignedAddrs) != signedAddrsLen
+}
+
+func (r *addrsRecord) hasExpiredAddrs(now int64) bool {
+	if len(r.Addrs) > 0 && r.Addrs[0].Expiry <= now {
+		return true
+	}
+	if len(r.SignedAddrs) > 0 && r.SignedAddrs[0].Expiry <= now {
+		return true
+	}
+	return false
+}
+
+func removeExpired(entries []*pb.AddrBookRecord_AddrEntry, now int64) []*pb.AddrBookRecord_AddrEntry {
 	// since addresses are sorted by expiration, we find the first
 	// survivor and split the slice on its index.
 	pivot := -1
-	for i, addr := range r.Addrs {
+	for i, addr := range entries {
 		if addr.Expiry > now {
 			break
 		}
 		pivot = i
 	}
 
-	r.Addrs = r.Addrs[pivot+1:]
-	return r.dirty || pivot >= 0
+	return entries[pivot+1:]
 }
 
 // dsAddrBook is an address book backed by a Datastore with a GC procedure to purge expired entries. It uses an
@@ -268,10 +291,10 @@ func (ab *dsAddrBook) AddCertifiedAddrs(envelope *crypto.SignedEnvelope, ttl tim
 
 func (ab *dsAddrBook) latestRoutingStateSeq(p peer.ID) uint64 {
 	pr, err := ab.loadRecord(p, true, false)
-	if err != nil {
+	if err != nil || pr.CertifiedRecord == nil {
 		return 0
 	}
-	return pr.RoutingStateSeq
+	return pr.CertifiedRecord.Seq
 }
 
 func (ab *dsAddrBook) storeRoutingState(p peer.ID, seq uint64, envelope *crypto.SignedEnvelope) error {
@@ -287,8 +310,10 @@ func (ab *dsAddrBook) storeRoutingState(p peer.ID, seq uint64, envelope *crypto.
 	if err != nil {
 		return err
 	}
-	pr.RoutingStateSeq = seq
-	pr.SignedRoutingRecord = envelopeBytes
+	pr.CertifiedRecord = &pb.AddrBookRecord_CertifiedRecord{
+		Seq: seq,
+		Raw: envelopeBytes,
+	}
 	pr.dirty = true
 	err = pr.flush(ab.ds)
 	return err
@@ -300,10 +325,10 @@ func (ab *dsAddrBook) SignedRoutingState(p peer.ID) *crypto.SignedEnvelope {
 		log.Errorf("unable to load record for peer %s: %v", p.Pretty(), err)
 		return nil
 	}
-	if len(pr.SignedRoutingRecord) == 0 {
+	if len(pr.CertifiedRecord.Raw) == 0 {
 		return nil
 	}
-	envelope, err := crypto.UnmarshalEnvelope(pr.SignedRoutingRecord)
+	envelope, err := crypto.UnmarshalEnvelope(pr.CertifiedRecord.Raw)
 	if err != nil {
 		log.Errorf("unable to unmarshal stored signed routing record for peer %s: %v", p.Pretty(), err)
 		return nil
@@ -339,7 +364,8 @@ func (ab *dsAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.D
 	defer pr.Unlock()
 
 	newExp := time.Now().Add(newTTL).Unix()
-	for _, entry := range pr.Addrs {
+	allAddrs := append(pr.Addrs, pr.SignedAddrs...)
+	for _, entry := range allAddrs {
 		if entry.Ttl != int64(oldTTL) {
 			continue
 		}
@@ -374,10 +400,13 @@ func (ab *dsAddrBook) addrs(p peer.ID, includeUncertified bool) []ma.Multiaddr {
 	defer pr.RUnlock()
 
 	addrs := make([]ma.Multiaddr, 0, len(pr.Addrs))
-	for _, a := range pr.Addrs {
-		if includeUncertified || a.Certified {
+	if includeUncertified {
+		for _, a := range pr.Addrs {
 			addrs = append(addrs, a.Addr)
 		}
+	}
+	for _, a := range pr.SignedAddrs {
+		addrs = append(addrs, a.Addr)
 	}
 	return addrs
 }
@@ -422,9 +451,16 @@ func (ab *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 	newExp := time.Now().Add(ttl).Unix()
 	existed := make([]bool, len(addrs)) // keeps track of which addrs we found.
 
+	var entryList *[]*pb.AddrBookRecord_AddrEntry
+	if certified {
+		entryList = &pr.SignedAddrs
+	} else {
+		entryList = &pr.Addrs
+	}
+
 Outer:
 	for i, incoming := range addrs {
-		for _, have := range pr.Addrs {
+		for _, have := range *entryList {
 			if incoming.Equal(have.Addr) {
 				existed[i] = true
 				switch mode {
@@ -457,10 +493,9 @@ Outer:
 		}
 		addr := addrs[i]
 		entry := &pb.AddrBookRecord_AddrEntry{
-			Addr:      &pb.ProtoAddr{Multiaddr: addr},
-			Ttl:       int64(ttl),
-			Expiry:    newExp,
-			Certified: certified,
+			Addr:   &pb.ProtoAddr{Multiaddr: addr},
+			Ttl:    int64(ttl),
+			Expiry: newExp,
 		}
 		added = append(added, entry)
 		// note: there's a minor chance that writing the record will fail, in which case we would've broadcast
@@ -468,7 +503,7 @@ Outer:
 		ab.subsManager.BroadcastAddr(p, addr)
 	}
 
-	pr.Addrs = append(pr.Addrs, added...)
+	*entryList = append(*entryList, added...)
 	pr.dirty = true
 	pr.clean()
 	return pr.flush(ab.ds)
