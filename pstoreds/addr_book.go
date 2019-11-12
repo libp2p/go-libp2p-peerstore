@@ -273,6 +273,8 @@ func (ab *dsAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 	ab.setAddrs(p, addrs, ttl, ttlExtend, false)
 }
 
+// AddCertifiedAddrs adds addresses from a routing.RoutingState record
+// contained in the given SignedEnvelope.
 func (ab *dsAddrBook) AddCertifiedAddrs(envelope *crypto.SignedEnvelope, ttl time.Duration) error {
 	state, err := routing.RoutingStateFromEnvelope(envelope)
 	if err != nil {
@@ -454,20 +456,9 @@ func (ab *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 	defer pr.Unlock()
 
 	newExp := time.Now().Add(ttl).Unix()
-	existed := make([]bool, len(addrs)) // keeps track of which addrs we found.
-
-	var entryList *[]*pb.AddrBookRecord_AddrEntry
-	if signed {
-		entryList = &pr.SignedAddrs
-	} else {
-		entryList = &pr.Addrs
-	}
-
-Outer:
-	for i, incoming := range addrs {
-		for _, have := range *entryList {
+	updateExisting := func(entryList []*pb.AddrBookRecord_AddrEntry, incoming ma.Multiaddr) *pb.AddrBookRecord_AddrEntry {
+		for _, have := range entryList {
 			if incoming.Equal(have.Addr) {
-				existed[i] = true
 				switch mode {
 				case ttlOverride:
 					have.Ttl = int64(ttl)
@@ -483,35 +474,116 @@ Outer:
 					panic("BUG: unimplemented ttl mode")
 				}
 
-				// we found the address, and addresses cannot be duplicate,
-				// so let's move on to the next.
-				continue Outer
+				return have
 			}
 		}
+		return nil
 	}
 
-	// add addresses we didn't hold.
+	removeFromUnsigned := make([]ma.Multiaddr, 0)
 	var added []*pb.AddrBookRecord_AddrEntry
-	for i, e := range existed {
-		if e {
-			continue
+
+	for _, incoming := range addrs {
+		existingUnsigned := updateExisting(pr.Addrs, incoming)
+
+		// we always check if the incoming addr is already in the
+		// signed addr list, even if we're not adding it from a
+		// signed source. if it does exist, we update its TTL and
+		// make sure it gets removed from the unsigned addr list
+		existingSigned := updateExisting(pr.SignedAddrs, incoming)
+		if signed || existingSigned != nil {
+			removeFromUnsigned = append(removeFromUnsigned, incoming)
 		}
-		addr := addrs[i]
-		entry := &pb.AddrBookRecord_AddrEntry{
-			Addr:   &pb.ProtoAddr{Multiaddr: addr},
-			Ttl:    int64(ttl),
-			Expiry: newExp,
+
+		// if we're adding a signed addr that already existed in the
+		// unsigned set, we move the existing unsigned entry over
+		// with the updated TTL, but we don't broadcast it as new
+		if signed && existingSigned == nil && existingUnsigned != nil {
+			added = append(added, existingUnsigned)
 		}
-		added = append(added, entry)
-		// note: there's a minor chance that writing the record will fail, in which case we would've broadcast
-		// the addresses without persisting them. This is very unlikely and not much of an issue.
-		ab.subsManager.BroadcastAddr(p, addr)
+
+		// new addr, add & broadcast
+		if existingUnsigned == nil && existingSigned == nil {
+			entry := &pb.AddrBookRecord_AddrEntry{
+				Addr:   &pb.ProtoAddr{Multiaddr: incoming},
+				Ttl:    int64(ttl),
+				Expiry: newExp,
+			}
+			added = append(added, entry)
+
+			// note: there's a minor chance that writing the record will fail, in which case we would've broadcast
+			// the addresses without persisting them. This is very unlikely and not much of an issue.
+			ab.subsManager.BroadcastAddr(p, incoming)
+		}
 	}
 
-	*entryList = append(*entryList, added...)
+	if signed {
+		pr.SignedAddrs = append(pr.SignedAddrs, added...)
+	} else {
+		pr.Addrs = append(pr.Addrs, added...)
+	}
+
+	pr.Addrs = deleteInPlace(pr.Addrs, removeFromUnsigned)
+
 	pr.dirty = true
 	pr.clean()
 	return pr.flush(ab.ds)
+}
+
+// deduplicateAddrs makes sure an address is only in the signed or unsigned addr list.
+// if in both, keeps the signed addr & sets the TTL to whichever is greater
+// Note! the caller MUST lock the addrsRecord before calling this
+// TODO: refactor setAddrs & do this inline to avoid this extra nested loop
+func deduplicateAddrs(pr *addrsRecord) {
+	if len(pr.SignedAddrs) == 0 {
+		return
+	}
+
+	keepers := make([]*pb.AddrBookRecord_AddrEntry, 0, len(pr.Addrs))
+	for _, unsigned := range pr.Addrs {
+		keepUnsigned := true
+		for _, signed := range pr.SignedAddrs {
+			if signed.Addr.Equal(unsigned.Addr) {
+				if unsigned.Expiry > signed.Expiry {
+					signed.Expiry = unsigned.Expiry
+				}
+				if unsigned.Ttl > signed.Ttl {
+					signed.Ttl = unsigned.Ttl
+				}
+				keepUnsigned = false
+			}
+		}
+		if keepUnsigned {
+			keepers = append(keepers, unsigned)
+		}
+	}
+
+	if len(keepers) != len(pr.Addrs) {
+		pr.Addrs = keepers
+		pr.dirty = true
+	}
+}
+
+// deletes addresses in place, avoiding copies until we encounter the first deletion.
+// does not preserve order, but entries are re-sorted before flushing to disk anyway.
+func deleteInPlace(s []*pb.AddrBookRecord_AddrEntry, addrs []ma.Multiaddr) []*pb.AddrBookRecord_AddrEntry {
+	if s == nil || len(addrs) == 0 {
+		return s
+	}
+	survived := len(s)
+	for i, addr := range s {
+		for _, del := range addrs {
+			if !addr.Addr.Equal(del) {
+				continue
+			}
+			survived--
+			s[i] = s[survived]
+		}
+	}
+	if survived < 0 {
+		survived = 0
+	}
+	return s[:survived]
 }
 
 func (ab *dsAddrBook) deleteAddrs(p peer.ID, addrs []ma.Multiaddr) (err error) {
@@ -527,20 +599,8 @@ func (ab *dsAddrBook) deleteAddrs(p peer.ID, addrs []ma.Multiaddr) (err error) {
 	pr.Lock()
 	defer pr.Unlock()
 
-	// deletes addresses in place, and avoiding copies until we encounter the first deletion.
-	survived := 0
-	for i, addr := range pr.Addrs {
-		for _, del := range addrs {
-			if addr.Addr.Equal(del) {
-				continue
-			}
-			if i != survived {
-				pr.Addrs[survived] = pr.Addrs[i]
-			}
-			survived++
-		}
-	}
-	pr.Addrs = pr.Addrs[:survived]
+	pr.Addrs = deleteInPlace(pr.Addrs, addrs)
+	pr.SignedAddrs = deleteInPlace(pr.SignedAddrs, addrs)
 
 	pr.dirty = true
 	pr.clean()

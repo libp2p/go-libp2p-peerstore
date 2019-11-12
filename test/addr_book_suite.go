@@ -375,6 +375,11 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 		// we should get everything back from Addrs
 		AssertAddressesEqual(t, allAddrs, m.Addrs(id))
 
+		// PeersWithAddrs should return a single peer
+		if len(m.PeersWithAddrs()) != 1 {
+			t.Errorf("expected PeersWithAddrs to return 1, got %d", len(m.PeersWithAddrs()))
+		}
+
 		// adding a previously certified address via AddAddrs should not result
 		// in duplicates
 		m.AddAddrs(id, certifiedAddrs, time.Hour)
@@ -391,7 +396,10 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 
 		// update TTL on signed addrs to -1 to remove them.
 		// the signed routing record should be deleted
-		m.UpdateAddrs(id, time.Hour, -1)
+		m.SetAddrs(id, certifiedAddrs, -1)
+		if len(m.CertifiedAddrs(id)) != 0 {
+			t.Error("expected zero certified addrs after setting TTL to -1")
+		}
 		if m.SignedRoutingState(id) != nil {
 			t.Error("expected signed routing record to be removed when addresses expire")
 		}

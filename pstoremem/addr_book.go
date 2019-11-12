@@ -19,10 +19,9 @@ import (
 var log = logging.Logger("peerstore")
 
 type expiringAddr struct {
-	Addr      ma.Multiaddr
-	TTL       time.Duration
-	Expires   time.Time
-	Certified bool
+	Addr    ma.Multiaddr
+	TTL     time.Duration
+	Expires time.Time
 }
 
 func (e *expiringAddr) ExpiredBy(t time.Time) bool {
@@ -38,6 +37,17 @@ type addrSegment struct {
 	// space unused. storing the *values* directly in the map will
 	// drastically increase the space waste. In our case, by 6x.
 	addrs map[peer.ID]map[string]*expiringAddr
+}
+
+// returns the address map for the given peer, creating it if it doesn't exist.
+// Note: the caller MUST hold the lock before calling!
+func (s *addrSegment) addrMap(p peer.ID) map[string]*expiringAddr {
+	m, found := s.addrs[p]
+	if !found {
+		m = make(map[string]*expiringAddr)
+		s.addrs[p] = m
+	}
+	return m
 }
 
 func (s *addrSegment) validAddrs(p peer.ID) []ma.Multiaddr {
@@ -105,8 +115,10 @@ func (segments *addrSegments) peersWithAddrs() peer.IDSlice {
 	var pids peer.IDSlice
 	for _, s := range segments {
 		s.RLock()
-		for pid, _ := range s.addrs {
-			pids = append(pids, pid)
+		for pid, amap := range s.addrs {
+			if amap != nil && len(amap) > 0 {
+				pids = append(pids, pid)
+			}
 		}
 		s.RUnlock()
 	}
@@ -190,6 +202,7 @@ func (mab *memoryAddrBook) gc() {
 	mab.segments.gc()
 	mab.signedSegments.gc()
 
+	// remove routing records for peers whose signed addrs have all been removed
 	for _, p := range mab.signedSegments.peersWithAddrs() {
 		if len(mab.CertifiedAddrs(p)) == 0 {
 			delete(mab.signedRoutingStates, p)
@@ -198,7 +211,19 @@ func (mab *memoryAddrBook) gc() {
 }
 
 func (mab *memoryAddrBook) PeersWithAddrs() peer.IDSlice {
-	return append(mab.signedSegments.peersWithAddrs(), mab.segments.peersWithAddrs()...)
+	// deduplicate, since the same peer could have both signed & unsigned addrs
+	s := peer.NewSet()
+	out := mab.signedSegments.peersWithAddrs()
+	for _, p := range out {
+		s.Add(p)
+	}
+	for _, p := range mab.segments.peersWithAddrs() {
+		if !s.Contains(p) {
+			out = append(out, p)
+		}
+	}
+
+	return out
 }
 
 // AddAddr calls AddAddrs(p, []ma.Multiaddr{addr}, ttl)
@@ -213,6 +238,8 @@ func (mab *memoryAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 	mab.addAddrs(p, addrs, ttl, false)
 }
 
+// AddCertifiedAddrs adds addresses from a routing.RoutingState record
+// contained in the given SignedEnvelope.
 func (mab *memoryAddrBook) AddCertifiedAddrs(envelope *crypto.SignedEnvelope, ttl time.Duration) error {
 	state, err := routing.RoutingStateFromEnvelope(envelope)
 	if err != nil {
@@ -236,41 +263,57 @@ func (mab *memoryAddrBook) addAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 		return
 	}
 
-	var s *addrSegment
-	if signed {
-		s = mab.signedSegments.get(p)
-	} else {
-		s = mab.segments.get(p)
-	}
+	s := mab.segments.get(p)
 	s.Lock()
 	defer s.Unlock()
+	amap := s.addrMap(p)
 
-	amap := s.addrs[p]
-	if amap == nil {
-		amap = make(map[string]*expiringAddr, len(addrs))
-		s.addrs[p] = amap
-	}
+	s = mab.signedSegments.get(p)
+	s.Lock()
+	defer s.Unlock()
+	signedAddrMap := s.addrMap(p)
+
 	exp := time.Now().Add(ttl)
+	maxTTLAndExp := func(a *expiringAddr, t time.Duration, e time.Time) (time.Duration, time.Time) {
+		if a == nil {
+			return t, e
+		}
+		if a.TTL > ttl {
+			t = a.TTL
+		}
+		if a.Expires.After(exp) {
+			e = a.Expires
+		}
+		return t, e
+	}
 	for _, addr := range addrs {
 		if addr == nil {
 			log.Warningf("was passed nil multiaddr for %s", p)
 			continue
 		}
-		asBytes := addr.Bytes()
-		a, found := amap[string(asBytes)] // won't allocate.
-		if !found {
-			// not found, save and announce it.
-			amap[string(asBytes)] = &expiringAddr{Addr: addr, Expires: exp, TTL: ttl}
-			mab.subManager.BroadcastAddr(p, addr)
+		k := string(addr.Bytes())
+
+		// find the highest TTL and Expiry time between
+		// existing records and function args
+		a, found := amap[k] // won't allocate.
+		b, foundSigned := signedAddrMap[k]
+		maxTTL, maxExp := maxTTLAndExp(a, ttl, exp)
+		maxTTL, maxExp = maxTTLAndExp(b, maxTTL, maxExp)
+
+		entry := &expiringAddr{Addr: addr, Expires: maxExp, TTL: maxTTL}
+
+		// if we're adding a signed addr, or if it was previously signed,
+		// make sure it's not also in the unsigned addr list.
+		if signed || foundSigned {
+			signedAddrMap[k] = entry
+			delete(amap, k)
 		} else {
-			// Update expiration/TTL independently.
-			// We never want to reduce either.
-			if ttl > a.TTL {
-				a.TTL = ttl
-			}
-			if exp.After(a.Expires) {
-				a.Expires = exp
-			}
+			amap[k] = entry
+		}
+
+		if !found && !foundSigned {
+			// not found, announce it.
+			mab.subManager.BroadcastAddr(p, addr)
 		}
 	}
 }
@@ -283,15 +326,19 @@ func (mab *memoryAddrBook) SetAddr(p peer.ID, addr ma.Multiaddr, ttl time.Durati
 // SetAddrs sets the ttl on addresses. This clears any TTL there previously.
 // This is used when we receive the best estimate of the validity of an address.
 func (mab *memoryAddrBook) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
+	mab.setAddrs(p, addrs, ttl)
+}
+
+func (mab *memoryAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
 	s := mab.segments.get(p)
 	s.Lock()
 	defer s.Unlock()
+	signedSegment := mab.signedSegments.get(p)
+	signedSegment.Lock()
+	defer signedSegment.Unlock()
 
-	amap := s.addrs[p]
-	if amap == nil {
-		amap = make(map[string]*expiringAddr, len(addrs))
-		s.addrs[p] = amap
-	}
+	amap := s.addrMap(p)
+	signedAddrMap := signedSegment.addrMap(p)
 
 	exp := time.Now().Add(ttl)
 	for _, addr := range addrs {
@@ -299,15 +346,29 @@ func (mab *memoryAddrBook) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 			log.Warningf("was passed nil multiaddr for %s", p)
 			continue
 		}
+		aBytes := addr.Bytes()
+		key := string(aBytes)
+
+		// if the addr is in the signed addr set, update the ttl
+		// and ensure it's not in the unsigned set. otherwise,
+		// add to or update the unsigned set
+		mapToUpdate := amap
+		if _, signedExists := signedAddrMap[key]; signedExists {
+			mapToUpdate = signedAddrMap
+			delete(amap, key)
+		}
 
 		// re-set all of them for new ttl.
-		aBytes := addr.Bytes()
 		if ttl > 0 {
-			amap[string(aBytes)] = &expiringAddr{Addr: addr, Expires: exp, TTL: ttl}
+			mapToUpdate[key] = &expiringAddr{Addr: addr, Expires: exp, TTL: ttl}
 			mab.subManager.BroadcastAddr(p, addr)
 		} else {
-			delete(amap, string(aBytes))
+			delete(mapToUpdate, key)
 		}
+	}
+
+	if len(signedAddrMap) == 0 {
+		delete(mab.signedRoutingStates, p)
 	}
 }
 
