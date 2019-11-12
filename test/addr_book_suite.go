@@ -173,6 +173,12 @@ func testSetNegativeTTLClears(m pstore.AddrBook) func(t *testing.T) {
 		survivors = append(survivors[0:74], survivors[75:]...)
 
 		AssertAddressesEqual(t, survivors, m.Addrs(id))
+
+		// remove _all_ the addresses
+		m.SetAddrs(id, survivors, -1)
+		if len(m.Addrs(id)) != 0 {
+			t.Error("expected empty address list after clearing all addresses")
+		}
 	}
 }
 
@@ -368,6 +374,14 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 
 		// we should get everything back from Addrs
 		AssertAddressesEqual(t, allAddrs, m.Addrs(id))
+
+		// adding a previously certified address via AddAddrs should not result
+		// in duplicates
+		m.AddAddrs(id, certifiedAddrs, time.Hour)
+		AssertAddressesEqual(t, allAddrs, m.Addrs(id))
+
+		// and they should still be considered certified
+		AssertAddressesEqual(t, certifiedAddrs, m.CertifiedAddrs(id))
 
 		// we should be able to retrieve the original envelope
 		envelope2 := m.SignedRoutingState(id)
