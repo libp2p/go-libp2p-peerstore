@@ -578,11 +578,11 @@ Outer:
 				continue
 			}
 			survived--
-			s[i] = s[survived]
 			// if there are no survivors, bail out
 			if survived == 0 {
 				break Outer
 			}
+			s[i] = s[survived]
 			// we've already dealt with s[i], move to the next
 			continue Outer
 		}
