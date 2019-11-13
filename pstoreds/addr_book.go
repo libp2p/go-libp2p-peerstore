@@ -571,6 +571,7 @@ func deleteInPlace(s []*pb.AddrBookRecord_AddrEntry, addrs []ma.Multiaddr) []*pb
 		return s
 	}
 	survived := len(s)
+Outer:
 	for i, addr := range s {
 		for _, del := range addrs {
 			if !addr.Addr.Equal(del) {
@@ -578,10 +579,13 @@ func deleteInPlace(s []*pb.AddrBookRecord_AddrEntry, addrs []ma.Multiaddr) []*pb
 			}
 			survived--
 			s[i] = s[survived]
+			// if there are no survivors, bail out
+			if survived == 0 {
+				break Outer
+			}
+			// we've already dealt with s[i], move to the next
+			continue Outer
 		}
-	}
-	if survived < 0 {
-		survived = 0
 	}
 	return s[:survived]
 }

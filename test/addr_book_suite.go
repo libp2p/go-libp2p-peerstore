@@ -5,6 +5,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/routing"
 	"github.com/libp2p/go-libp2p-core/test"
+	"github.com/multiformats/go-multiaddr"
 	"testing"
 	"time"
 
@@ -178,6 +179,24 @@ func testSetNegativeTTLClears(m pstore.AddrBook) func(t *testing.T) {
 		m.SetAddrs(id, survivors, -1)
 		if len(m.Addrs(id)) != 0 {
 			t.Error("expected empty address list after clearing all addresses")
+		}
+
+		// add half, but try to remove more than we added
+		m.SetAddrs(id, addrs[:50], time.Hour)
+		m.SetAddrs(id, addrs, -1)
+		if len(m.Addrs(id)) != 0 {
+			t.Error("expected empty address list after clearing all addresses")
+		}
+
+		// try to remove the same addr multiple times
+		m.SetAddrs(id, addrs[:5], time.Hour)
+		repeated := make([]multiaddr.Multiaddr, 10)
+		for i := 0; i < len(repeated); i++ {
+			repeated[i] = addrs[0]
+		}
+		m.SetAddrs(id, repeated, -1)
+		if len(m.Addrs(id)) != 4 {
+			t.Errorf("expected 4 addrs after removing one, got %d", len(m.Addrs(id)))
 		}
 	}
 }
