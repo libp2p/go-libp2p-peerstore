@@ -133,7 +133,7 @@ func (segments *addrSegments) clear(p peer.ID) {
 }
 
 type certifiedRecord struct {
-	Seq      uint64
+	Seq           uint64
 	EnvelopeBytes []byte
 }
 

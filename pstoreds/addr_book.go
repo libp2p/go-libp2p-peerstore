@@ -321,7 +321,7 @@ func (ab *dsAddrBook) storeRoutingState(p peer.ID, seq uint64, envelopeBytes []b
 	return err
 }
 
-func (ab *dsAddrBook) SignedRoutingState(p peer.ID)[]byte {
+func (ab *dsAddrBook) SignedRoutingState(p peer.ID) []byte {
 	return ab.SignedRoutingStates(p)[p]
 }
 
