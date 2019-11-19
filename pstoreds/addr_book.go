@@ -532,40 +532,6 @@ func (ab *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 	return pr.flush(ab.ds)
 }
 
-// deduplicateAddrs makes sure an address is only in the signed or unsigned addr list.
-// if in both, keeps the signed addr & sets the TTL to whichever is greater
-// Note! the caller MUST lock the addrsRecord before calling this
-// TODO: refactor setAddrs & do this inline to avoid this extra nested loop
-func deduplicateAddrs(pr *addrsRecord) {
-	if len(pr.SignedAddrs) == 0 {
-		return
-	}
-
-	keepers := make([]*pb.AddrBookRecord_AddrEntry, 0, len(pr.Addrs))
-	for _, unsigned := range pr.Addrs {
-		keepUnsigned := true
-		for _, signed := range pr.SignedAddrs {
-			if signed.Addr.Equal(unsigned.Addr) {
-				if unsigned.Expiry > signed.Expiry {
-					signed.Expiry = unsigned.Expiry
-				}
-				if unsigned.Ttl > signed.Ttl {
-					signed.Ttl = unsigned.Ttl
-				}
-				keepUnsigned = false
-			}
-		}
-		if keepUnsigned {
-			keepers = append(keepers, unsigned)
-		}
-	}
-
-	if len(keepers) != len(pr.Addrs) {
-		pr.Addrs = keepers
-		pr.dirty = true
-	}
-}
-
 // deletes addresses in place, avoiding copies until we encounter the first deletion.
 // does not preserve order, but entries are re-sorted before flushing to disk anyway.
 func deleteInPlace(s []*pb.AddrBookRecord_AddrEntry, addrs []ma.Multiaddr) []*pb.AddrBookRecord_AddrEntry {
