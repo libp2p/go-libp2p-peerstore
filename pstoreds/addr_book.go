@@ -321,10 +321,18 @@ func (ab *dsAddrBook) storeRoutingState(p peer.ID, seq uint64, envelopeBytes []b
 	return err
 }
 
+// SignedRoutingState returns a signed RoutingState record for the
+// given peer id, if one exists in the peerstore. The record is
+// returned as a byte slice containing a serialized SignedEnvelope.
+// Returns nil if no routing state exists for the peer.
 func (ab *dsAddrBook) SignedRoutingState(p peer.ID) []byte {
 	return ab.SignedRoutingStates(p)[p]
 }
 
+// SignedRoutingStates returns signed RoutingState records for each of
+// the given peer ids, if one exists in the peerstore.
+// Returns a map of peer ids to serialized SignedEnvelope messages. If
+// no routing state exists for a peer, their map entry will be nil.
 func (ab *dsAddrBook) SignedRoutingStates(peers ...peer.ID) map[peer.ID][]byte {
 	out := make(map[peer.ID][]byte, len(peers))
 	for _, p := range peers {
