@@ -478,7 +478,7 @@ func (ab *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 		return nil
 	}
 
-	removeFromUnsigned := make([]ma.Multiaddr, 0)
+	var removeFromUnsigned []ma.Multiaddr
 	var added []*pb.AddrBookRecord_AddrEntry
 
 	for _, incoming := range addrs {
@@ -489,6 +489,9 @@ func (ab *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 		// signed source. if it does exist, we update its TTL and
 		// make sure it gets removed from the unsigned addr list
 		existingSigned := updateExisting(pr.SignedAddrs, incoming)
+		if existingSigned != nil {
+			added = append(added, existingSigned)
+		}
 		if signed || existingSigned != nil {
 			removeFromUnsigned = append(removeFromUnsigned, incoming)
 		}
@@ -516,7 +519,8 @@ func (ab *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 	}
 
 	if signed {
-		pr.SignedAddrs = append(pr.SignedAddrs, added...)
+		// when adding signed addrs, we want to keep _only_ the incoming addrs
+		pr.SignedAddrs = added
 	} else {
 		pr.Addrs = append(pr.Addrs, added...)
 	}

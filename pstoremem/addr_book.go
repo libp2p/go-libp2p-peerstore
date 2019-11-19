@@ -267,10 +267,17 @@ func (mab *memoryAddrBook) addAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 	defer s.Unlock()
 	amap := s.addrMap(p)
 
-	s = mab.signedSegments.get(p)
-	s.Lock()
-	defer s.Unlock()
-	signedAddrMap := s.addrMap(p)
+	signedSegment := mab.signedSegments.get(p)
+	signedSegment.Lock()
+	defer signedSegment.Unlock()
+	existingSignedAddrs := signedSegment.addrMap(p)
+
+	// if we're adding signed addresses, we want _only_ the new addrs
+	// to be in the final map, so we make a new map to contain them
+	signedAddrMap := existingSignedAddrs
+	if signed {
+		signedAddrMap = make(map[string]*expiringAddr, len(addrs))
+	}
 
 	exp := time.Now().Add(ttl)
 	maxTTLAndExp := func(a *expiringAddr, t time.Duration, e time.Time) (time.Duration, time.Time) {
@@ -295,7 +302,7 @@ func (mab *memoryAddrBook) addAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 		// find the highest TTL and Expiry time between
 		// existing records and function args
 		a, found := amap[k] // won't allocate.
-		b, foundSigned := signedAddrMap[k]
+		b, foundSigned := existingSignedAddrs[k]
 		maxTTL, maxExp := maxTTLAndExp(a, ttl, exp)
 		maxTTL, maxExp = maxTTLAndExp(b, maxTTL, maxExp)
 
@@ -315,6 +322,10 @@ func (mab *memoryAddrBook) addAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 			mab.subManager.BroadcastAddr(p, addr)
 		}
 	}
+
+	// replace existing signed addrs with new ones
+	// this is a noop if we're adding unsigned addrs
+	signedSegment.addrs[p] = signedAddrMap
 }
 
 // SetAddr calls mgr.SetAddrs(p, addr, ttl)

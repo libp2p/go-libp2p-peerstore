@@ -415,6 +415,18 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 			t.Error("unable to retrieve signed routing record from addrbook")
 		}
 
+		// Adding a new envelope should clear existing certified addresses.
+		// Only the newly-added ones should remain
+		certifiedAddrs = certifiedAddrs[:3]
+		info = peer.AddrInfo{ID: id, Addrs: certifiedAddrs}
+		envelope, err = routing.RoutingStateFromAddrInfo(&info).ToSignedEnvelope(priv)
+		test.AssertNilError(t, err)
+		envelopeBytes, err = envelope.Marshal()
+		test.AssertNilError(t, err)
+		err = m.AddCertifiedAddrs(envelopeBytes, time.Hour)
+		test.AssertNilError(t, err)
+		AssertAddressesEqual(t, certifiedAddrs, m.CertifiedAddrs(id))
+
 		// update TTL on signed addrs to -1 to remove them.
 		// the signed routing record should be deleted
 		m.SetAddrs(id, certifiedAddrs, -1)
