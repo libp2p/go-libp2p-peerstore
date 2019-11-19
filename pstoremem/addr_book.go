@@ -7,7 +7,6 @@ import (
 	"time"
 
 	logging "github.com/ipfs/go-log"
-	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/routing"
 	ma "github.com/multiformats/go-multiaddr"
@@ -135,7 +134,7 @@ func (segments *addrSegments) clear(p peer.ID) {
 
 type certifiedRecord struct {
 	Seq      uint64
-	Envelope *crypto.SignedEnvelope
+	EnvelopeBytes []byte
 }
 
 // memoryAddrBook manages addresses.
@@ -240,8 +239,8 @@ func (mab *memoryAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 
 // AddCertifiedAddrs adds addresses from a routing.RoutingState record
 // contained in the given SignedEnvelope.
-func (mab *memoryAddrBook) AddCertifiedAddrs(envelope *crypto.SignedEnvelope, ttl time.Duration) error {
-	state, err := routing.RoutingStateFromEnvelope(envelope)
+func (mab *memoryAddrBook) AddCertifiedAddrs(envelopeBytes []byte, ttl time.Duration) error {
+	state, err := routing.RoutingStateFromEnvelope(envelopeBytes)
 	if err != nil {
 		return err
 	}
@@ -252,7 +251,7 @@ func (mab *memoryAddrBook) AddCertifiedAddrs(envelope *crypto.SignedEnvelope, tt
 		// TODO: should this be an error?
 		return nil
 	}
-	mab.signedRoutingStates[state.PeerID] = &certifiedRecord{Seq: state.Seq, Envelope: envelope}
+	mab.signedRoutingStates[state.PeerID] = &certifiedRecord{Seq: state.Seq, EnvelopeBytes: envelopeBytes}
 	mab.addAddrs(state.PeerID, state.Multiaddrs(), ttl, true)
 	return nil
 }
@@ -398,12 +397,18 @@ func (mab *memoryAddrBook) CertifiedAddrs(p peer.ID) []ma.Multiaddr {
 	return mab.signedSegments.get(p).validAddrs(p)
 }
 
-func (mab *memoryAddrBook) SignedRoutingState(p peer.ID) *crypto.SignedEnvelope {
-	r := mab.signedRoutingStates[p]
-	if r != nil {
-		return r.Envelope
+func (mab *memoryAddrBook) SignedRoutingState(p peer.ID) []byte {
+	return mab.SignedRoutingStates(p)[p]
+}
+
+func (mab *memoryAddrBook) SignedRoutingStates(peers ...peer.ID) map[peer.ID][]byte {
+	out := make(map[peer.ID][]byte, len(peers))
+	for _, p := range peers {
+		if r, ok := mab.signedRoutingStates[p]; ok {
+			out[p] = r.EnvelopeBytes
+		}
 	}
-	return nil
+	return out
 }
 
 // ClearAddrs removes all previously stored addresses

@@ -378,9 +378,10 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 		if err != nil {
 			t.Errorf("error creating signed routing record: %v", err)
 		}
+		envelopeBytes, err := envelope.Marshal()
 
 		// add the signed record to addr book
-		err = m.AddCertifiedAddrs(envelope, time.Hour)
+		err = m.AddCertifiedAddrs(envelopeBytes, time.Hour)
 		if err != nil {
 			t.Errorf("error adding signed routing record to addrbook: %v", err)
 		}
@@ -408,8 +409,9 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 		AssertAddressesEqual(t, certifiedAddrs, m.CertifiedAddrs(id))
 
 		// we should be able to retrieve the original envelope
-		envelope2 := m.SignedRoutingState(id)
-		if envelope2 == nil || !envelope.Equals(envelope2) {
+		envelopeBytes2 := m.SignedRoutingState(id)
+		envelope2, err := crypto.OpenEnvelope(envelopeBytes2, routing.StateEnvelopeDomain)
+		if envelope2 == nil || !envelope.Equal(envelope2) {
 			t.Error("unable to retrieve signed routing record from addrbook")
 		}
 

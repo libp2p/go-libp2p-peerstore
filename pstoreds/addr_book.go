@@ -3,7 +3,6 @@ package pstoreds
 import (
 	"context"
 	"fmt"
-	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/routing"
 	"sort"
 	"sync"
@@ -275,8 +274,8 @@ func (ab *dsAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 
 // AddCertifiedAddrs adds addresses from a routing.RoutingState record
 // contained in the given SignedEnvelope.
-func (ab *dsAddrBook) AddCertifiedAddrs(envelope *crypto.SignedEnvelope, ttl time.Duration) error {
-	state, err := routing.RoutingStateFromEnvelope(envelope)
+func (ab *dsAddrBook) AddCertifiedAddrs(envelopeBytes []byte, ttl time.Duration) error {
+	state, err := routing.RoutingStateFromEnvelope(envelopeBytes)
 	if err != nil {
 		return err
 	}
@@ -293,7 +292,7 @@ func (ab *dsAddrBook) AddCertifiedAddrs(envelope *crypto.SignedEnvelope, ttl tim
 		return err
 	}
 
-	return ab.storeRoutingState(state.PeerID, state.Seq, envelope)
+	return ab.storeRoutingState(state.PeerID, state.Seq, envelopeBytes)
 }
 
 func (ab *dsAddrBook) latestRoutingStateSeq(p peer.ID) uint64 {
@@ -304,15 +303,11 @@ func (ab *dsAddrBook) latestRoutingStateSeq(p peer.ID) uint64 {
 	return pr.CertifiedRecord.Seq
 }
 
-func (ab *dsAddrBook) storeRoutingState(p peer.ID, seq uint64, envelope *crypto.SignedEnvelope) error {
+func (ab *dsAddrBook) storeRoutingState(p peer.ID, seq uint64, envelopeBytes []byte) error {
 	// reload record and add routing state
 	// this has to be done after we add the addresses, since if
 	// we try to flush a datastore record with no addresses,
 	// it will just get deleted
-	envelopeBytes, err := envelope.Marshal()
-	if err != nil {
-		return err
-	}
 	pr, err := ab.loadRecord(p, true, false)
 	if err != nil {
 		return err
@@ -326,21 +321,24 @@ func (ab *dsAddrBook) storeRoutingState(p peer.ID, seq uint64, envelope *crypto.
 	return err
 }
 
-func (ab *dsAddrBook) SignedRoutingState(p peer.ID) *crypto.SignedEnvelope {
-	pr, err := ab.loadRecord(p, true, false)
-	if err != nil {
-		log.Errorf("unable to load record for peer %s: %v", p.Pretty(), err)
-		return nil
+func (ab *dsAddrBook) SignedRoutingState(p peer.ID)[]byte {
+	return ab.SignedRoutingStates(p)[p]
+}
+
+func (ab *dsAddrBook) SignedRoutingStates(peers ...peer.ID) map[peer.ID][]byte {
+	out := make(map[peer.ID][]byte, len(peers))
+	for _, p := range peers {
+		pr, err := ab.loadRecord(p, true, false)
+		if err != nil {
+			log.Errorf("unable to load record for peer %s: %v", p.Pretty(), err)
+			continue
+		}
+		if pr.CertifiedRecord == nil || len(pr.CertifiedRecord.Raw) == 0 {
+			continue
+		}
+		out[p] = pr.CertifiedRecord.Raw
 	}
-	if pr.CertifiedRecord == nil || len(pr.CertifiedRecord.Raw) == 0 {
-		return nil
-	}
-	envelope, err := crypto.UnmarshalEnvelope(pr.CertifiedRecord.Raw)
-	if err != nil {
-		log.Errorf("unable to unmarshal stored signed routing record for peer %s: %v", p.Pretty(), err)
-		return nil
-	}
-	return envelope
+	return out
 }
 
 // SetAddr will add or update the TTL of an address in the AddrBook.
