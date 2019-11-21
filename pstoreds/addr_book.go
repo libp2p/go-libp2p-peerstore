@@ -274,25 +274,20 @@ func (ab *dsAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 
 // AddCertifiedAddrs adds addresses from a routing.RoutingState record
 // contained in the given SignedEnvelope.
-func (ab *dsAddrBook) AddCertifiedAddrs(envelopeBytes []byte, ttl time.Duration) error {
-	state, err := routing.RoutingStateFromEnvelope(envelopeBytes)
-	if err != nil {
-		return err
-	}
-
+func (ab *dsAddrBook) AddCertifiedAddrs(state *routing.SignedRoutingState, ttl time.Duration) error {
 	// ensure that the seq number from envelope is >= any previously received seq no
 	if ab.latestRoutingStateSeq(state.PeerID) >= state.Seq {
 		// TODO: should this be an error?
 		return nil
 	}
 
-	addrs := cleanAddrs(state.Multiaddrs())
-	err = ab.setAddrs(state.PeerID, addrs, ttl, ttlExtend, true)
+	addrs := cleanAddrs(state.Addrs)
+	err := ab.setAddrs(state.PeerID, addrs, ttl, ttlExtend, true)
 	if err != nil {
 		return err
 	}
 
-	return ab.storeRoutingState(state.PeerID, state.Seq, envelopeBytes)
+	return ab.storeRoutingState(state.PeerID, state)
 }
 
 func (ab *dsAddrBook) latestRoutingStateSeq(p peer.ID) uint64 {
@@ -303,7 +298,11 @@ func (ab *dsAddrBook) latestRoutingStateSeq(p peer.ID) uint64 {
 	return pr.CertifiedRecord.Seq
 }
 
-func (ab *dsAddrBook) storeRoutingState(p peer.ID, seq uint64, envelopeBytes []byte) error {
+func (ab *dsAddrBook) storeRoutingState(p peer.ID, state *routing.SignedRoutingState) error {
+	envelopeBytes, err := state.Marshal()
+	if err != nil {
+		return err
+	}
 	// reload record and add routing state
 	// this has to be done after we add the addresses, since if
 	// we try to flush a datastore record with no addresses,
@@ -313,7 +312,7 @@ func (ab *dsAddrBook) storeRoutingState(p peer.ID, seq uint64, envelopeBytes []b
 		return err
 	}
 	pr.CertifiedRecord = &pb.AddrBookRecord_CertifiedRecord{
-		Seq: seq,
+		Seq: state.Seq,
 		Raw: envelopeBytes,
 	}
 	pr.dirty = true
@@ -322,31 +321,22 @@ func (ab *dsAddrBook) storeRoutingState(p peer.ID, seq uint64, envelopeBytes []b
 }
 
 // SignedRoutingState returns a signed RoutingState record for the
-// given peer id, if one exists in the peerstore. The record is
-// returned as a byte slice containing a serialized SignedEnvelope.
-// Returns nil if no routing state exists for the peer.
-func (ab *dsAddrBook) SignedRoutingState(p peer.ID) []byte {
-	return ab.SignedRoutingStates(p)[p]
-}
-
-// SignedRoutingStates returns signed RoutingState records for each of
-// the given peer ids, if one exists in the peerstore.
-// Returns a map of peer ids to serialized SignedEnvelope messages. If
-// no routing state exists for a peer, their map entry will be nil.
-func (ab *dsAddrBook) SignedRoutingStates(peers ...peer.ID) map[peer.ID][]byte {
-	out := make(map[peer.ID][]byte, len(peers))
-	for _, p := range peers {
-		pr, err := ab.loadRecord(p, true, false)
-		if err != nil {
-			log.Errorf("unable to load record for peer %s: %v", p.Pretty(), err)
-			continue
-		}
-		if pr.CertifiedRecord == nil || len(pr.CertifiedRecord.Raw) == 0 {
-			continue
-		}
-		out[p] = pr.CertifiedRecord.Raw
+// given peer id, if one exists in the peerstore.
+func (ab *dsAddrBook) SignedRoutingState(p peer.ID) *routing.SignedRoutingState {
+	pr, err := ab.loadRecord(p, true, false)
+	if err != nil {
+		log.Errorf("unable to load record for peer %s: %v", p.Pretty(), err)
+		return nil
 	}
-	return out
+	if pr.CertifiedRecord == nil || len(pr.CertifiedRecord.Raw) == 0 {
+		return nil
+	}
+	state, err := routing.UnmarshalSignedRoutingState(pr.CertifiedRecord.Raw)
+	if err != nil {
+		log.Errorf("error unmarshaling stored SignedRoutingState record for peer %s: %v", p.Pretty(), err)
+		return nil
+	}
+	return state
 }
 
 // SetAddr will add or update the TTL of an address in the AddrBook.

@@ -373,15 +373,13 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 		allAddrs := GenerateAddrs(10)
 		certifiedAddrs := allAddrs[:5]
 		uncertifiedAddrs := allAddrs[5:]
-		info := peer.AddrInfo{ID: id, Addrs: certifiedAddrs}
-		envelope, err := routing.RoutingStateFromAddrInfo(&info).ToSignedEnvelope(priv)
+		signedState, err := routing.MakeSignedRoutingState(priv, certifiedAddrs)
 		if err != nil {
 			t.Errorf("error creating signed routing record: %v", err)
 		}
-		envelopeBytes, err := envelope.Marshal()
 
 		// add the signed record to addr book
-		err = m.AddCertifiedAddrs(envelopeBytes, time.Hour)
+		err = m.AddCertifiedAddrs(signedState, time.Hour)
 		if err != nil {
 			t.Errorf("error adding signed routing record to addrbook: %v", err)
 		}
@@ -408,22 +406,18 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 		// and they should still be considered certified
 		AssertAddressesEqual(t, certifiedAddrs, m.CertifiedAddrs(id))
 
-		// we should be able to retrieve the original envelope
-		envelopeBytes2 := m.SignedRoutingState(id)
-		envelope2, err := crypto.OpenEnvelope(envelopeBytes2, routing.StateEnvelopeDomain)
-		if envelope2 == nil || !envelope.Equal(envelope2) {
+		// we should be able to retrieve the signed state
+		state2 := m.SignedRoutingState(id)
+		if state2 == nil || !signedState.Equal(state2) {
 			t.Error("unable to retrieve signed routing record from addrbook")
 		}
 
 		// Adding a new envelope should clear existing certified addresses.
 		// Only the newly-added ones should remain
 		certifiedAddrs = certifiedAddrs[:3]
-		info = peer.AddrInfo{ID: id, Addrs: certifiedAddrs}
-		envelope, err = routing.RoutingStateFromAddrInfo(&info).ToSignedEnvelope(priv)
+		signedState, err = routing.MakeSignedRoutingState(priv, certifiedAddrs)
 		test.AssertNilError(t, err)
-		envelopeBytes, err = envelope.Marshal()
-		test.AssertNilError(t, err)
-		err = m.AddCertifiedAddrs(envelopeBytes, time.Hour)
+		err = m.AddCertifiedAddrs(signedState, time.Hour)
 		test.AssertNilError(t, err)
 		AssertAddressesEqual(t, certifiedAddrs, m.CertifiedAddrs(id))
 

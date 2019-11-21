@@ -132,17 +132,12 @@ func (segments *addrSegments) clear(p peer.ID) {
 	delete(s.addrs, p)
 }
 
-type certifiedRecord struct {
-	Seq           uint64
-	EnvelopeBytes []byte
-}
-
 // memoryAddrBook manages addresses.
 type memoryAddrBook struct {
 	segments       addrSegments
 	signedSegments addrSegments
 
-	signedRoutingStates map[peer.ID]*certifiedRecord
+	signedRoutingStates map[peer.ID]*routing.SignedRoutingState
 
 	ctx    context.Context
 	cancel func()
@@ -168,7 +163,7 @@ func NewAddrBook() pstore.AddrBook {
 		subManager:          NewAddrSubManager(),
 		ctx:                 ctx,
 		cancel:              cancel,
-		signedRoutingStates: make(map[peer.ID]*certifiedRecord),
+		signedRoutingStates: make(map[peer.ID]*routing.SignedRoutingState),
 	}
 
 	go ab.background()
@@ -239,20 +234,15 @@ func (mab *memoryAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 
 // AddCertifiedAddrs adds addresses from a routing.RoutingState record
 // contained in the given SignedEnvelope.
-func (mab *memoryAddrBook) AddCertifiedAddrs(envelopeBytes []byte, ttl time.Duration) error {
-	state, err := routing.RoutingStateFromEnvelope(envelopeBytes)
-	if err != nil {
-		return err
-	}
-
+func (mab *memoryAddrBook) AddCertifiedAddrs(state *routing.SignedRoutingState, ttl time.Duration) error {
 	// ensure seq is greater than last received
 	lastState, found := mab.signedRoutingStates[state.PeerID]
 	if found && lastState.Seq >= state.Seq {
 		// TODO: should this be an error?
 		return nil
 	}
-	mab.signedRoutingStates[state.PeerID] = &certifiedRecord{Seq: state.Seq, EnvelopeBytes: envelopeBytes}
-	mab.addAddrs(state.PeerID, state.Multiaddrs(), ttl, true)
+	mab.signedRoutingStates[state.PeerID] = state
+	mab.addAddrs(state.PeerID, state.Addrs, ttl, true)
 	return nil
 }
 
@@ -408,26 +398,10 @@ func (mab *memoryAddrBook) CertifiedAddrs(p peer.ID) []ma.Multiaddr {
 	return mab.signedSegments.get(p).validAddrs(p)
 }
 
-// SignedRoutingState returns a signed RoutingState record for the
-// given peer id, if one exists in the peerstore. The record is
-// returned as a byte slice containing a serialized SignedEnvelope.
-// Returns nil if no routing state exists for the peer.
-func (mab *memoryAddrBook) SignedRoutingState(p peer.ID) []byte {
-	return mab.SignedRoutingStates(p)[p]
-}
-
-// SignedRoutingStates returns signed RoutingState records for each of
-// the given peer ids, if one exists in the peerstore.
-// Returns a map of peer ids to serialized SignedEnvelope messages. If
-// no routing state exists for a peer, their map entry will be nil.
-func (mab *memoryAddrBook) SignedRoutingStates(peers ...peer.ID) map[peer.ID][]byte {
-	out := make(map[peer.ID][]byte, len(peers))
-	for _, p := range peers {
-		if r, ok := mab.signedRoutingStates[p]; ok {
-			out[p] = r.EnvelopeBytes
-		}
-	}
-	return out
+// SignedRoutingState returns a SignedRoutingState record for the
+// given peer id, if one exists in the peerstore.
+func (mab *memoryAddrBook) SignedRoutingState(p peer.ID) *routing.SignedRoutingState {
+	return mab.signedRoutingStates[p]
 }
 
 // ClearAddrs removes all previously stored addresses
