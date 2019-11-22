@@ -38,6 +38,8 @@ type addrSegment struct {
 	addrs map[peer.ID]map[string]*expiringAddr
 
 	signedAddrs map[peer.ID]map[string]*expiringAddr
+
+	signedRoutingStates map[peer.ID]*routing.SignedRoutingState
 }
 
 func (segments *addrSegments) get(p peer.ID) *addrSegment {
@@ -47,8 +49,6 @@ func (segments *addrSegments) get(p peer.ID) *addrSegment {
 // memoryAddrBook manages addresses.
 type memoryAddrBook struct {
 	segments addrSegments
-
-	signedRoutingStates map[peer.ID]*routing.SignedRoutingState
 
 	ctx    context.Context
 	cancel func()
@@ -65,15 +65,15 @@ func NewAddrBook() pstore.AddrBook {
 		segments: func() (ret addrSegments) {
 			for i, _ := range ret {
 				ret[i] = &addrSegment{
-					addrs:       make(map[peer.ID]map[string]*expiringAddr),
-					signedAddrs: make(map[peer.ID]map[string]*expiringAddr)}
+					addrs:               make(map[peer.ID]map[string]*expiringAddr),
+					signedAddrs:         make(map[peer.ID]map[string]*expiringAddr),
+					signedRoutingStates: make(map[peer.ID]*routing.SignedRoutingState)}
 			}
 			return ret
 		}(),
-		subManager:          NewAddrSubManager(),
-		ctx:                 ctx,
-		cancel:              cancel,
-		signedRoutingStates: make(map[peer.ID]*routing.SignedRoutingState),
+		subManager: NewAddrSubManager(),
+		ctx:        ctx,
+		cancel:     cancel,
 	}
 
 	go ab.background()
@@ -125,7 +125,7 @@ func (mab *memoryAddrBook) gc() {
 		collected := collect(s.signedAddrs)
 		// remove routing records for peers whose signed addrs have all been removed
 		for _, p := range collected {
-			delete(mab.signedRoutingStates, p)
+			delete(s.signedRoutingStates, p)
 		}
 		s.Unlock()
 	}
@@ -167,12 +167,15 @@ func (mab *memoryAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 // contained in the given SignedEnvelope.
 func (mab *memoryAddrBook) AddCertifiedAddrs(state *routing.SignedRoutingState, ttl time.Duration) error {
 	// ensure seq is greater than last received
-	lastState, found := mab.signedRoutingStates[state.PeerID]
+	s := mab.segments.get(state.PeerID)
+	s.Lock()
+	lastState, found := s.signedRoutingStates[state.PeerID]
 	if found && lastState.Seq >= state.Seq {
 		// TODO: should this be an error?
 		return nil
 	}
-	mab.signedRoutingStates[state.PeerID] = state
+	s.signedRoutingStates[state.PeerID] = state
+	s.Unlock()
 	mab.addAddrs(state.PeerID, state.Addrs, ttl, true)
 	return nil
 }
@@ -305,7 +308,7 @@ func (mab *memoryAddrBook) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 
 	// if we've expired all the signed addresses for a peer, remove their signed routing state record
 	if len(signedAddrMap) == 0 {
-		delete(mab.signedRoutingStates, p)
+		delete(s.signedRoutingStates, p)
 	}
 }
 
@@ -335,7 +338,7 @@ func (mab *memoryAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL t
 		// updating may have caused all our certified addrs to expire.
 		// if so, remove the signed record we sourced them from.
 		if len(signedAddrMap) == 0 {
-			delete(mab.signedRoutingStates, p)
+			delete(s.signedRoutingStates, p)
 		}
 	}
 }
@@ -379,7 +382,10 @@ func validAddrs(amap map[string]*expiringAddr) []ma.Multiaddr {
 // SignedRoutingState returns a SignedRoutingState record for the
 // given peer id, if one exists in the peerstore.
 func (mab *memoryAddrBook) SignedRoutingState(p peer.ID) *routing.SignedRoutingState {
-	return mab.signedRoutingStates[p]
+	s := mab.segments.get(p)
+	s.RLock()
+	defer s.RUnlock()
+	return s.signedRoutingStates[p]
 }
 
 // ClearAddrs removes all previously stored addresses
@@ -390,6 +396,7 @@ func (mab *memoryAddrBook) ClearAddrs(p peer.ID) {
 
 	delete(s.addrs, p)
 	delete(s.signedAddrs, p)
+	delete(s.signedRoutingStates, p)
 }
 
 // AddrStream returns a channel on which all new addresses discovered for a
