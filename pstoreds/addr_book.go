@@ -162,6 +162,7 @@ type dsAddrBook struct {
 }
 
 var _ pstore.AddrBook = (*dsAddrBook)(nil)
+var _ pstore.CertifiedAddrBook = (*dsAddrBook)(nil)
 
 // NewAddrBook initializes a new datastore-backed address book. It serves as a drop-in replacement for pstoremem
 // (memory-backed peerstore), and works with any datastore implementing the ds.Batching interface.
@@ -277,7 +278,6 @@ func (ab *dsAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 func (ab *dsAddrBook) AddCertifiedAddrs(state *routing.SignedRoutingState, ttl time.Duration) error {
 	// ensure that the seq number from envelope is >= any previously received seq no
 	if ab.latestRoutingStateSeq(state.PeerID) >= state.Seq {
-		// TODO: should this be an error?
 		return nil
 	}
 
@@ -383,16 +383,6 @@ func (ab *dsAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.D
 
 // Addrs returns all of the non-expired addresses for a given peer.
 func (ab *dsAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
-	return ab.addrs(p, true)
-}
-
-// CertifiedAddrs returns all of the non-expired address that have been
-// certified by the given peer.
-func (ab *dsAddrBook) CertifiedAddrs(p peer.ID) []ma.Multiaddr {
-	return ab.addrs(p, false)
-}
-
-func (ab *dsAddrBook) addrs(p peer.ID, includeUncertified bool) []ma.Multiaddr {
 	pr, err := ab.loadRecord(p, true, true)
 	if err != nil {
 		log.Warning("failed to load peerstore entry for peer %v while querying addrs, err: %v", p, err)
@@ -402,14 +392,12 @@ func (ab *dsAddrBook) addrs(p peer.ID, includeUncertified bool) []ma.Multiaddr {
 	pr.RLock()
 	defer pr.RUnlock()
 
-	addrs := make([]ma.Multiaddr, 0, len(pr.Addrs))
+	var addrs []ma.Multiaddr
 	for _, a := range pr.SignedAddrs {
 		addrs = append(addrs, a.Addr)
 	}
-	if includeUncertified {
-		for _, a := range pr.Addrs {
-			addrs = append(addrs, a.Addr)
-		}
+	for _, a := range pr.Addrs {
+		addrs = append(addrs, a.Addr)
 	}
 	return addrs
 }
@@ -476,7 +464,6 @@ func (ab *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 		return nil
 	}
 
-	var removeFromUnsigned []ma.Multiaddr
 	var added []*pb.AddrBookRecord_AddrEntry
 
 	for _, incoming := range addrs {
@@ -484,14 +471,10 @@ func (ab *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 
 		// we always check if the incoming addr is already in the
 		// signed addr list, even if we're not adding it from a
-		// signed source. if it does exist, we update its TTL and
-		// make sure it gets removed from the unsigned addr list
+		// signed source. if it does exist, we update its TTL
 		existingSigned := updateExisting(pr.SignedAddrs, incoming)
 		if existingSigned != nil {
 			added = append(added, existingSigned)
-		}
-		if signed || existingSigned != nil {
-			removeFromUnsigned = append(removeFromUnsigned, incoming)
 		}
 
 		// if we're adding a signed addr that already existed in the
@@ -519,11 +502,16 @@ func (ab *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 	if signed {
 		// when adding signed addrs, we want to keep _only_ the incoming addrs
 		pr.SignedAddrs = added
+		pr.Addrs = make([]*pb.AddrBookRecord_AddrEntry, 0)
 	} else {
-		pr.Addrs = append(pr.Addrs, added...)
+		// if the incoming addrs are unsigned, we only keep them if
+		// no signed addrs exist for the peer
+		if len(pr.SignedAddrs) == 0 {
+			pr.Addrs = append(pr.Addrs, added...)
+		} else {
+			pr.Addrs = make([]*pb.AddrBookRecord_AddrEntry, 0)
+		}
 	}
-
-	pr.Addrs = deleteInPlace(pr.Addrs, removeFromUnsigned)
 
 	pr.dirty = true
 	pr.clean()
@@ -562,7 +550,7 @@ func (ab *dsAddrBook) deleteAddrs(p peer.ID, addrs []ma.Multiaddr) (err error) {
 		return fmt.Errorf("failed to load peerstore entry for peer %v while deleting addrs, err: %v", p, err)
 	}
 
-	if pr.Addrs == nil {
+	if pr.Addrs == nil && pr.SignedAddrs == nil {
 		return nil
 	}
 
