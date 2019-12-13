@@ -364,6 +364,8 @@ func testPeersWithAddrs(m pstore.AddrBook) func(t *testing.T) {
 
 func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 	return func(t *testing.T) {
+		cab := m.(pstore.CertifiedAddrBook)
+
 		priv, _, err := test.RandTestKeyPair(crypto.Ed25519, 256)
 		if err != nil {
 			t.Errorf("error generating testing keys: %v", err)
@@ -378,36 +380,32 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 			t.Errorf("error creating signed routing record: %v", err)
 		}
 
+		// add a few non-certified addrs
+		m.AddAddrs(id, uncertifiedAddrs, time.Hour)
+
+		// make sure they're present
+		AssertAddressesEqual(t, uncertifiedAddrs, m.Addrs(id))
+
 		// add the signed record to addr book
-		err = m.AddCertifiedAddrs(signedState, time.Hour)
+		err = cab.AddCertifiedAddrs(signedState, time.Hour)
 		if err != nil {
 			t.Errorf("error adding signed routing record to addrbook: %v", err)
 		}
 
-		// add a few non-certified addrs
-		m.AddAddrs(id, uncertifiedAddrs, time.Hour)
-
-		// we should get only certified addrs back from CertifiedAddrs
-		AssertAddressesEqual(t, certifiedAddrs, m.CertifiedAddrs(id))
-
-		// we should get everything back from Addrs
-		AssertAddressesEqual(t, allAddrs, m.Addrs(id))
+		// the non-certified addrs should be gone & we should get only certified addrs back from Addrs
+		AssertAddressesEqual(t, certifiedAddrs, m.Addrs(id))
 
 		// PeersWithAddrs should return a single peer
 		if len(m.PeersWithAddrs()) != 1 {
 			t.Errorf("expected PeersWithAddrs to return 1, got %d", len(m.PeersWithAddrs()))
 		}
 
-		// adding a previously certified address via AddAddrs should not result
-		// in duplicates
-		m.AddAddrs(id, certifiedAddrs, time.Hour)
-		AssertAddressesEqual(t, allAddrs, m.Addrs(id))
-
-		// and they should still be considered certified
-		AssertAddressesEqual(t, certifiedAddrs, m.CertifiedAddrs(id))
+		// once certified addrs exist, trying to add non-certified addrs should have no effect
+		m.AddAddrs(id, uncertifiedAddrs, time.Hour)
+		AssertAddressesEqual(t, certifiedAddrs, m.Addrs(id))
 
 		// we should be able to retrieve the signed state
-		state2 := m.SignedRoutingState(id)
+		state2 := cab.SignedRoutingState(id)
 		if state2 == nil || !signedState.Equal(state2) {
 			t.Error("unable to retrieve signed routing record from addrbook")
 		}
@@ -417,17 +415,17 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 		certifiedAddrs = certifiedAddrs[:3]
 		signedState, err = routing.MakeSignedRoutingState(priv, certifiedAddrs)
 		test.AssertNilError(t, err)
-		err = m.AddCertifiedAddrs(signedState, time.Hour)
+		err = cab.AddCertifiedAddrs(signedState, time.Hour)
 		test.AssertNilError(t, err)
-		AssertAddressesEqual(t, certifiedAddrs, m.CertifiedAddrs(id))
+		AssertAddressesEqual(t, certifiedAddrs, m.Addrs(id))
 
 		// update TTL on signed addrs to -1 to remove them.
 		// the signed routing record should be deleted
 		m.SetAddrs(id, certifiedAddrs, -1)
-		if len(m.CertifiedAddrs(id)) != 0 {
+		if len(m.Addrs(id)) != 0 {
 			t.Error("expected zero certified addrs after setting TTL to -1")
 		}
-		if m.SignedRoutingState(id) != nil {
+		if cab.SignedRoutingState(id) != nil {
 			t.Error("expected signed routing record to be removed when addresses expire")
 		}
 	}

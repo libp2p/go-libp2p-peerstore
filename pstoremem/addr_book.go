@@ -57,6 +57,7 @@ type memoryAddrBook struct {
 }
 
 var _ pstore.AddrBook = (*memoryAddrBook)(nil)
+var _ pstore.CertifiedAddrBook = (*memoryAddrBook)(nil)
 
 func NewAddrBook() pstore.AddrBook {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -171,11 +172,11 @@ func (mab *memoryAddrBook) AddCertifiedAddrs(state *routing.SignedRoutingState, 
 	s.Lock()
 	lastState, found := s.signedRoutingStates[state.PeerID]
 	if found && lastState.Seq >= state.Seq {
-		// TODO: should this be an error?
+		s.Unlock()
 		return nil
 	}
 	s.signedRoutingStates[state.PeerID] = state
-	s.Unlock()
+	s.Unlock() // need to release the lock, since addAddrs will try to take it
 	mab.addAddrs(state.PeerID, state.Addrs, ttl, true)
 	return nil
 }
@@ -189,10 +190,10 @@ func (mab *memoryAddrBook) addAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 	s := mab.segments.get(p)
 	s.Lock()
 	defer s.Unlock()
-	amap, ok := s.addrs[p]
+	existingUnsignedAddrs, ok := s.addrs[p]
 	if !ok {
-		amap = make(map[string]*expiringAddr)
-		s.addrs[p] = amap
+		existingUnsignedAddrs = make(map[string]*expiringAddr)
+		s.addrs[p] = existingUnsignedAddrs
 	}
 	existingSignedAddrs, ok := s.signedAddrs[p]
 	if !ok {
@@ -200,11 +201,18 @@ func (mab *memoryAddrBook) addAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 		s.signedAddrs[p] = existingSignedAddrs
 	}
 
+	// if we already have signed addrs, ignore attempts to add unsigned addrs
+	if !signed && len(existingSignedAddrs) != 0 {
+		return
+	}
+
 	// if we're adding signed addresses, we want _only_ the new addrs
 	// to be in the final map, so we make a new map to contain them
 	signedAddrMap := existingSignedAddrs
+	unsignedAddrMap := existingUnsignedAddrs
 	if signed {
 		signedAddrMap = make(map[string]*expiringAddr, len(addrs))
+		unsignedAddrMap = make(map[string]*expiringAddr, len(addrs))
 	}
 
 	exp := time.Now().Add(ttl)
@@ -229,7 +237,7 @@ func (mab *memoryAddrBook) addAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 
 		// find the highest TTL and Expiry time between
 		// existing records and function args
-		a, found := amap[k] // won't allocate.
+		a, found := existingUnsignedAddrs[k] // won't allocate.
 		b, foundSigned := existingSignedAddrs[k]
 		maxTTL, maxExp := maxTTLAndExp(a, ttl, exp)
 		maxTTL, maxExp = maxTTLAndExp(b, maxTTL, maxExp)
@@ -240,9 +248,9 @@ func (mab *memoryAddrBook) addAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 		// make sure it's not also in the unsigned addr list.
 		if signed || foundSigned {
 			signedAddrMap[k] = entry
-			delete(amap, k)
+			delete(existingUnsignedAddrs, k)
 		} else {
-			amap[k] = entry
+			existingUnsignedAddrs[k] = entry
 		}
 
 		if !found && !foundSigned {
@@ -254,6 +262,7 @@ func (mab *memoryAddrBook) addAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 	// replace existing signed addrs with new ones
 	// this is a noop if we're adding unsigned addrs
 	s.signedAddrs[p] = signedAddrMap
+	s.addrs[p] = unsignedAddrMap
 }
 
 // SetAddr calls mgr.SetAddrs(p, addr, ttl)
@@ -352,16 +361,6 @@ func (mab *memoryAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
 	return append(
 		validAddrs(s.signedAddrs[p]),
 		validAddrs(s.addrs[p])...)
-}
-
-// CertifiedAddrs returns all known (and valid) addressed that have been
-// certified by the given peer.
-func (mab *memoryAddrBook) CertifiedAddrs(p peer.ID) []ma.Multiaddr {
-	s := mab.segments.get(p)
-	s.RLock()
-	defer s.RUnlock()
-
-	return validAddrs(s.signedAddrs[p])
 }
 
 func validAddrs(amap map[string]*expiringAddr) []ma.Multiaddr {
