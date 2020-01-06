@@ -59,7 +59,7 @@ type memoryAddrBook struct {
 var _ pstore.AddrBook = (*memoryAddrBook)(nil)
 var _ pstore.CertifiedAddrBook = (*memoryAddrBook)(nil)
 
-func NewAddrBook() pstore.AddrBook {
+func NewAddrBook() *memoryAddrBook {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	ab := &memoryAddrBook{
