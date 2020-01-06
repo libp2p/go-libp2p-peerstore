@@ -2,6 +2,8 @@ package pstoreds
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"time"
 
 	base32 "github.com/multiformats/go-base32"
@@ -47,8 +49,17 @@ func DefaultOpts() Options {
 	}
 }
 
+type pstoreds struct {
+	peerstore.Metrics
+
+	dsKeyBook
+	dsAddrBook
+	dsProtoBook
+	dsPeerMetadata
+}
+
 // NewPeerstore creates a peerstore backed by the provided persistent datastore.
-func NewPeerstore(ctx context.Context, store ds.Batching, opts Options) (peerstore.Peerstore, error) {
+func NewPeerstore(ctx context.Context, store ds.Batching, opts Options) (*pstoreds, error) {
 	addrBook, err := NewAddrBook(ctx, store, opts)
 	if err != nil {
 		return nil, err
@@ -66,7 +77,13 @@ func NewPeerstore(ctx context.Context, store ds.Batching, opts Options) (peersto
 
 	protoBook := NewProtoBook(peerMetadata)
 
-	ps := pstore.NewPeerstore(keyBook, addrBook, protoBook, peerMetadata)
+	ps := &pstoreds{
+		Metrics:        pstore.NewMetrics(),
+		dsKeyBook:      *keyBook,
+		dsAddrBook:     *addrBook,
+		dsPeerMetadata: *peerMetadata,
+		dsProtoBook:    *protoBook,
+	}
 	return ps, nil
 }
 
@@ -102,4 +119,48 @@ func uniquePeerIds(ds ds.Datastore, prefix ds.Key, extractor func(result query.R
 		ids = append(ids, id)
 	}
 	return ids, nil
+}
+
+func (ps *pstoreds) Close() (err error) {
+	var errs []error
+	weakClose := func(name string, c interface{}) {
+		if cl, ok := c.(io.Closer); ok {
+			if err = cl.Close(); err != nil {
+				errs = append(errs, fmt.Errorf("%s error: %s", name, err))
+			}
+		}
+	}
+
+	weakClose("keybook", ps.dsKeyBook)
+	weakClose("addressbook", ps.dsAddrBook)
+	weakClose("protobook", ps.dsProtoBook)
+	weakClose("peermetadata", ps.dsPeerMetadata)
+
+	if len(errs) > 0 {
+		return fmt.Errorf("failed while closing peerstore; err(s): %q", errs)
+	}
+	return nil
+}
+
+func (ps *pstoreds) Peers() peer.IDSlice {
+	set := map[peer.ID]struct{}{}
+	for _, p := range ps.PeersWithKeys() {
+		set[p] = struct{}{}
+	}
+	for _, p := range ps.PeersWithAddrs() {
+		set[p] = struct{}{}
+	}
+
+	pps := make(peer.IDSlice, 0, len(set))
+	for p := range set {
+		pps = append(pps, p)
+	}
+	return pps
+}
+
+func (ps *pstoreds) PeerInfo(p peer.ID) peer.AddrInfo {
+	return peer.AddrInfo{
+		ID:    p,
+		Addrs: ps.dsAddrBook.Addrs(p),
+	}
 }
