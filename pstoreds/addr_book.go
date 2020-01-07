@@ -3,7 +3,7 @@ package pstoreds
 import (
 	"context"
 	"fmt"
-	"github.com/libp2p/go-libp2p-core/routing"
+	"github.com/libp2p/go-libp2p-core/record"
 	"sort"
 	"sync"
 	"time"
@@ -117,6 +117,10 @@ func (r *addrsRecord) clean() (chgd bool) {
 
 	r.Addrs = removeExpired(r.Addrs, now)
 	r.SignedAddrs = removeExpired(r.SignedAddrs, now)
+
+	if len(r.SignedAddrs) == 0 {
+		r.CertifiedRecord = nil
+	}
 
 	return r.dirty || len(r.Addrs) != addrsLen || len(r.SignedAddrs) != signedAddrsLen
 }
@@ -275,22 +279,26 @@ func (ab *dsAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 
 // AddCertifiedAddrs adds addresses from a routing.RoutingState record
 // contained in the given SignedEnvelope.
-func (ab *dsAddrBook) AddCertifiedAddrs(state *routing.SignedRoutingState, ttl time.Duration) error {
+func (ab *dsAddrBook) AddCertifiedAddrs(recordEnvelope *record.SignedEnvelope, ttl time.Duration) error {
+	rec, err := peer.PeerRecordFromSignedEnvelope(recordEnvelope)
+	if err != nil {
+		return err
+	}
 	// ensure that the seq number from envelope is >= any previously received seq no
-	if ab.latestRoutingStateSeq(state.PeerID) >= state.Seq {
+	if ab.latestPeerRecordSeq(rec.PeerID) >= recordEnvelope.Seq {
 		return nil
 	}
 
-	addrs := cleanAddrs(state.Addrs)
-	err := ab.setAddrs(state.PeerID, addrs, ttl, ttlExtend, true)
+	addrs := cleanAddrs(rec.Addrs)
+	err = ab.setAddrs(rec.PeerID, addrs, ttl, ttlExtend, true)
 	if err != nil {
 		return err
 	}
 
-	return ab.storeRoutingState(state.PeerID, state)
+	return ab.storeSignedPeerRecord(rec.PeerID, recordEnvelope)
 }
 
-func (ab *dsAddrBook) latestRoutingStateSeq(p peer.ID) uint64 {
+func (ab *dsAddrBook) latestPeerRecordSeq(p peer.ID) uint64 {
 	pr, err := ab.loadRecord(p, true, false)
 	if err != nil || pr.CertifiedRecord == nil || len(pr.CertifiedRecord.Raw) == 0 {
 		return 0
@@ -298,8 +306,8 @@ func (ab *dsAddrBook) latestRoutingStateSeq(p peer.ID) uint64 {
 	return pr.CertifiedRecord.Seq
 }
 
-func (ab *dsAddrBook) storeRoutingState(p peer.ID, state *routing.SignedRoutingState) error {
-	envelopeBytes, err := state.Marshal()
+func (ab *dsAddrBook) storeSignedPeerRecord(p peer.ID, envelope *record.SignedEnvelope) error {
+	envelopeBytes, err := envelope.Marshal()
 	if err != nil {
 		return err
 	}
@@ -312,7 +320,7 @@ func (ab *dsAddrBook) storeRoutingState(p peer.ID, state *routing.SignedRoutingS
 		return err
 	}
 	pr.CertifiedRecord = &pb.AddrBookRecord_CertifiedRecord{
-		Seq: state.Seq,
+		Seq: envelope.Seq,
 		Raw: envelopeBytes,
 	}
 	pr.dirty = true
@@ -320,9 +328,10 @@ func (ab *dsAddrBook) storeRoutingState(p peer.ID, state *routing.SignedRoutingS
 	return err
 }
 
-// SignedRoutingState returns a signed RoutingState record for the
-// given peer id, if one exists in the peerstore.
-func (ab *dsAddrBook) SignedRoutingState(p peer.ID) *routing.SignedRoutingState {
+// SignedPeerRecord returns a SignedEnvelope containing a PeerRecord for the
+// given peer id, if one exists.
+// Returns nil if no signed PeerRecord exists for the peer.
+func (ab *dsAddrBook) SignedPeerRecord(p peer.ID) *record.SignedEnvelope {
 	pr, err := ab.loadRecord(p, true, false)
 	if err != nil {
 		log.Errorf("unable to load record for peer %s: %v", p.Pretty(), err)
@@ -331,9 +340,9 @@ func (ab *dsAddrBook) SignedRoutingState(p peer.ID) *routing.SignedRoutingState 
 	if pr.CertifiedRecord == nil || len(pr.CertifiedRecord.Raw) == 0 {
 		return nil
 	}
-	state, err := routing.UnmarshalSignedRoutingState(pr.CertifiedRecord.Raw)
+	state, err := record.ConsumeEnvelope(pr.CertifiedRecord.Raw, peer.PeerRecordEnvelopeDomain)
 	if err != nil {
-		log.Errorf("error unmarshaling stored SignedRoutingState record for peer %s: %v", p.Pretty(), err)
+		log.Errorf("error unmarshaling stored signed peer record for peer %s: %v", p.Pretty(), err)
 		return nil
 	}
 	return state
