@@ -3,7 +3,6 @@ package test
 import (
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/routing"
 	"github.com/libp2p/go-libp2p-core/test"
 	"github.com/multiformats/go-multiaddr"
 	"testing"
@@ -375,7 +374,7 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 		allAddrs := GenerateAddrs(10)
 		certifiedAddrs := allAddrs[:5]
 		uncertifiedAddrs := allAddrs[5:]
-		signedState, err := routing.MakeSignedRoutingState(priv, certifiedAddrs)
+		signedRec, err := peer.NewPeerRecord(id, certifiedAddrs).Sign(priv)
 		if err != nil {
 			t.Errorf("error creating signed routing record: %v", err)
 		}
@@ -387,7 +386,7 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 		AssertAddressesEqual(t, uncertifiedAddrs, m.Addrs(id))
 
 		// add the signed record to addr book
-		err = cab.AddCertifiedAddrs(signedState, time.Hour)
+		err = cab.AddCertifiedAddrs(signedRec, time.Hour)
 		if err != nil {
 			t.Errorf("error adding signed routing record to addrbook: %v", err)
 		}
@@ -404,18 +403,18 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 		m.AddAddrs(id, uncertifiedAddrs, time.Hour)
 		AssertAddressesEqual(t, certifiedAddrs, m.Addrs(id))
 
-		// we should be able to retrieve the signed state
-		state2 := cab.SignedRoutingState(id)
-		if state2 == nil || !signedState.Equal(state2) {
+		// we should be able to retrieve the signed peer record
+		rec2 := cab.SignedPeerRecord(id)
+		if rec2 == nil || !signedRec.Equal(rec2) {
 			t.Error("unable to retrieve signed routing record from addrbook")
 		}
 
 		// Adding a new envelope should clear existing certified addresses.
 		// Only the newly-added ones should remain
 		certifiedAddrs = certifiedAddrs[:3]
-		signedState, err = routing.MakeSignedRoutingState(priv, certifiedAddrs)
+		signedRec, err = peer.NewPeerRecord(id, certifiedAddrs).Sign(priv)
 		test.AssertNilError(t, err)
-		err = cab.AddCertifiedAddrs(signedState, time.Hour)
+		err = cab.AddCertifiedAddrs(signedRec, time.Hour)
 		test.AssertNilError(t, err)
 		AssertAddressesEqual(t, certifiedAddrs, m.Addrs(id))
 
@@ -425,8 +424,18 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 		if len(m.Addrs(id)) != 0 {
 			t.Error("expected zero certified addrs after setting TTL to -1")
 		}
-		if cab.SignedRoutingState(id) != nil {
-			t.Error("expected signed routing record to be removed when addresses expire")
+		if cab.SignedPeerRecord(id) != nil {
+			t.Error("expected signed peer record to be removed when addresses expire")
+		}
+
+		// Test that natural TTL expiration clears signed peer records
+		err = cab.AddCertifiedAddrs(signedRec, time.Second)
+		test.AssertNilError(t, err)
+		AssertAddressesEqual(t, certifiedAddrs, m.Addrs(id))
+
+		time.Sleep(2 * time.Second)
+		if cab.SignedPeerRecord(id) != nil {
+			t.Error("expected signed peer record to be removed when addresses expire")
 		}
 	}
 }
