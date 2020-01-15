@@ -401,6 +401,7 @@ func (ab *dsAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
 	pr.RLock()
 	defer pr.RUnlock()
 
+    // TODO: presize this slice.
 	var addrs []ma.Multiaddr
 	for _, a := range pr.SignedAddrs {
 		addrs = append(addrs, a.Addr)
