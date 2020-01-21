@@ -277,15 +277,21 @@ func (ab *dsAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 	ab.setAddrs(p, addrs, ttl, ttlExtend, false)
 }
 
-// AddCertifiedAddrs adds addresses from a routing.RoutingState record
-// contained in the given SignedEnvelope.
-func (ab *dsAddrBook) AddCertifiedAddrs(recordEnvelope *record.SignedEnvelope, ttl time.Duration) error {
-	rec, err := peer.PeerRecordFromSignedEnvelope(recordEnvelope)
+// ProcessPeerRecord adds addresses from a signed peer.PeerRecord (contained in
+// a routing.Envelope), which will expire after the given TTL.
+// See https://godoc.org/github.com/libp2p/go-libp2p-core/peerstore#CertifiedAddrBook for more details.
+func (ab *dsAddrBook) ProcessPeerRecord(recordEnvelope *record.Envelope, ttl time.Duration) error {
+	r, err := recordEnvelope.Record()
 	if err != nil {
 		return err
 	}
+	rec, ok := r.(*peer.PeerRecord)
+	if !ok {
+		return fmt.Errorf("envelope did not contain PeerRecord")
+	}
+
 	// ensure that the seq number from envelope is >= any previously received seq no
-	if ab.latestPeerRecordSeq(rec.PeerID) >= recordEnvelope.Seq {
+	if ab.latestPeerRecordSeq(rec.PeerID) >= rec.Seq {
 		return nil
 	}
 
@@ -295,7 +301,7 @@ func (ab *dsAddrBook) AddCertifiedAddrs(recordEnvelope *record.SignedEnvelope, t
 		return err
 	}
 
-	return ab.storeSignedPeerRecord(rec.PeerID, recordEnvelope)
+	return ab.storeSignedPeerRecord(rec.PeerID, recordEnvelope, rec)
 }
 
 func (ab *dsAddrBook) latestPeerRecordSeq(p peer.ID) uint64 {
@@ -306,7 +312,7 @@ func (ab *dsAddrBook) latestPeerRecordSeq(p peer.ID) uint64 {
 	return pr.CertifiedRecord.Seq
 }
 
-func (ab *dsAddrBook) storeSignedPeerRecord(p peer.ID, envelope *record.SignedEnvelope) error {
+func (ab *dsAddrBook) storeSignedPeerRecord(p peer.ID, envelope *record.Envelope, rec *peer.PeerRecord) error {
 	envelopeBytes, err := envelope.Marshal()
 	if err != nil {
 		return err
@@ -320,7 +326,7 @@ func (ab *dsAddrBook) storeSignedPeerRecord(p peer.ID, envelope *record.SignedEn
 		return err
 	}
 	pr.CertifiedRecord = &pb.AddrBookRecord_CertifiedRecord{
-		Seq: envelope.Seq,
+		Seq: rec.Seq,
 		Raw: envelopeBytes,
 	}
 	pr.dirty = true
@@ -328,10 +334,10 @@ func (ab *dsAddrBook) storeSignedPeerRecord(p peer.ID, envelope *record.SignedEn
 	return err
 }
 
-// SignedPeerRecord returns a SignedEnvelope containing a PeerRecord for the
+// GetPeerRecord returns a record.Envelope containing a peer.PeerRecord for the
 // given peer id, if one exists.
 // Returns nil if no signed PeerRecord exists for the peer.
-func (ab *dsAddrBook) SignedPeerRecord(p peer.ID) *record.SignedEnvelope {
+func (ab *dsAddrBook) GetPeerRecord(p peer.ID) *record.Envelope {
 	pr, err := ab.loadRecord(p, true, false)
 	if err != nil {
 		log.Errorf("unable to load record for peer %s: %v", p.Pretty(), err)
@@ -340,7 +346,7 @@ func (ab *dsAddrBook) SignedPeerRecord(p peer.ID) *record.SignedEnvelope {
 	if pr.CertifiedRecord == nil || len(pr.CertifiedRecord.Raw) == 0 {
 		return nil
 	}
-	state, err := record.ConsumeEnvelope(pr.CertifiedRecord.Raw, peer.PeerRecordEnvelopeDomain)
+	state, _, err := record.ConsumeEnvelope(pr.CertifiedRecord.Raw, peer.PeerRecordEnvelopeDomain)
 	if err != nil {
 		log.Errorf("error unmarshaling stored signed peer record for peer %s: %v", p.Pretty(), err)
 		return nil

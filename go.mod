@@ -8,7 +8,7 @@ require (
 	github.com/ipfs/go-ds-leveldb v0.1.0
 	github.com/ipfs/go-log v0.0.1
 	github.com/libp2p/go-buffer-pool v0.0.2
-	github.com/libp2p/go-libp2p-core v0.3.1-0.20200107184944-460979ea35ac
+	github.com/libp2p/go-libp2p-core v0.3.1-0.20200121152518-5a523a102629
 	github.com/libp2p/go-msgio v0.0.4 // indirect
 	github.com/mailru/easyjson v0.7.0 // indirect
 	github.com/multiformats/go-base32 v0.0.3
@@ -19,9 +19,9 @@ require (
 	github.com/multiformats/go-varint v0.0.2 // indirect
 	github.com/pkg/errors v0.8.1
 	github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1
-	golang.org/x/crypto v0.0.0-20200109152110-61a87790db17 // indirect
-	golang.org/x/sys v0.0.0-20200107162124-548cf772de50 // indirect
-	golang.org/x/tools v0.0.0-20200110142700-428f1ab0ca03 // indirect
+	golang.org/x/crypto v0.0.0-20200117160349-530e935923ad // indirect
+	golang.org/x/sys v0.0.0-20200121082415-34d275377bf9 // indirect
+	golang.org/x/tools v0.0.0-20200121145236-13c74800b9d2 // indirect
 )
 
 go 1.13

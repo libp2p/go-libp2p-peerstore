@@ -2,16 +2,17 @@ package pstoremem
 
 import (
 	"context"
-	"github.com/libp2p/go-libp2p-core/record"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
 
 	logging "github.com/ipfs/go-log"
 	"github.com/libp2p/go-libp2p-core/peer"
+	pstore "github.com/libp2p/go-libp2p-core/peerstore"
+	"github.com/libp2p/go-libp2p-core/record"
 	ma "github.com/multiformats/go-multiaddr"
 
-	pstore "github.com/libp2p/go-libp2p-core/peerstore"
 	"github.com/libp2p/go-libp2p-peerstore/addr"
 )
 
@@ -27,6 +28,11 @@ func (e *expiringAddr) ExpiredBy(t time.Time) bool {
 	return t.After(e.Expires)
 }
 
+type peerRecordState struct {
+	Envelope *record.Envelope
+	Seq      uint64
+}
+
 type addrSegments [256]*addrSegment
 
 type addrSegment struct {
@@ -39,7 +45,7 @@ type addrSegment struct {
 
 	signedAddrs map[peer.ID]map[string]*expiringAddr
 
-	signedPeerRecords map[peer.ID]*record.SignedEnvelope
+	signedPeerRecords map[peer.ID]*peerRecordState
 }
 
 func (segments *addrSegments) get(p peer.ID) *addrSegment {
@@ -68,7 +74,7 @@ func NewAddrBook() *memoryAddrBook {
 				ret[i] = &addrSegment{
 					addrs:             make(map[peer.ID]map[string]*expiringAddr),
 					signedAddrs:       make(map[peer.ID]map[string]*expiringAddr),
-					signedPeerRecords: make(map[peer.ID]*record.SignedEnvelope)}
+					signedPeerRecords: make(map[peer.ID]*peerRecordState)}
 			}
 			return ret
 		}(),
@@ -164,21 +170,30 @@ func (mab *memoryAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 	mab.addAddrs(p, addrs, ttl, false)
 }
 
-// AddCertifiedAddrs adds addresses from a signed peer.PeerRecord contained in a SignedEnvelope.
-func (mab *memoryAddrBook) AddCertifiedAddrs(recordEnvelope *record.SignedEnvelope, ttl time.Duration) error {
-	rec, err := peer.PeerRecordFromSignedEnvelope(recordEnvelope)
+// ProcessPeerRecord adds addresses from a signed peer.PeerRecord (contained in
+// a routing.Envelope), which will expire after the given TTL.
+// See https://godoc.org/github.com/libp2p/go-libp2p-core/peerstore#CertifiedAddrBook for more details.
+func (mab *memoryAddrBook) ProcessPeerRecord(recordEnvelope *record.Envelope, ttl time.Duration) error {
+	r, err := recordEnvelope.Record()
 	if err != nil {
 		return err
+	}
+	rec, ok := r.(*peer.PeerRecord)
+	if !ok {
+		return fmt.Errorf("unable to process envelope: not a PeerRecord")
 	}
 	// ensure seq is greater than last received
 	s := mab.segments.get(rec.PeerID)
 	s.Lock()
 	lastState, found := s.signedPeerRecords[rec.PeerID]
-	if found && lastState.Seq >= recordEnvelope.Seq {
+	if found && lastState.Seq >= rec.Seq {
 		s.Unlock()
 		return nil
 	}
-	s.signedPeerRecords[rec.PeerID] = recordEnvelope
+	s.signedPeerRecords[rec.PeerID] = &peerRecordState{
+		Envelope: recordEnvelope,
+		Seq:      rec.Seq,
+	}
 	s.Unlock() // need to release the lock, since addAddrs will try to take it
 	mab.addAddrs(rec.PeerID, rec.Addrs, ttl, true)
 	return nil
@@ -386,10 +401,10 @@ func validAddrs(amap map[string]*expiringAddr) []ma.Multiaddr {
 	return good
 }
 
-// SignedPeerRecord returns a SignedEnvelope containing a PeerRecord for the
+// GetPeerRecord returns a Envelope containing a PeerRecord for the
 // given peer id, if one exists.
 // Returns nil if no signed PeerRecord exists for the peer.
-func (mab *memoryAddrBook) SignedPeerRecord(p peer.ID) *record.SignedEnvelope {
+func (mab *memoryAddrBook) GetPeerRecord(p peer.ID) *record.Envelope {
 	s := mab.segments.get(p)
 	s.RLock()
 	defer s.RUnlock()
@@ -401,7 +416,11 @@ func (mab *memoryAddrBook) SignedPeerRecord(p peer.ID) *record.SignedEnvelope {
 		return nil
 	}
 
-	return s.signedPeerRecords[p]
+	state := s.signedPeerRecords[p]
+	if state == nil {
+		return nil
+	}
+	return state.Envelope
 }
 
 // ClearAddrs removes all previously stored addresses

@@ -374,7 +374,10 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 		allAddrs := GenerateAddrs(10)
 		certifiedAddrs := allAddrs[:5]
 		uncertifiedAddrs := allAddrs[5:]
-		signedRec, err := peer.NewPeerRecord(id, certifiedAddrs).Sign(priv)
+		rec := peer.NewPeerRecord()
+		rec.PeerID = id
+		rec.Addrs = certifiedAddrs
+		signedRec, err := rec.Sign(priv)
 		if err != nil {
 			t.Errorf("error creating signed routing record: %v", err)
 		}
@@ -386,7 +389,7 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 		AssertAddressesEqual(t, uncertifiedAddrs, m.Addrs(id))
 
 		// add the signed record to addr book
-		err = cab.AddCertifiedAddrs(signedRec, time.Hour)
+		err = cab.ProcessPeerRecord(signedRec, time.Hour)
 		if err != nil {
 			t.Errorf("error adding signed routing record to addrbook: %v", err)
 		}
@@ -404,7 +407,7 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 		AssertAddressesEqual(t, certifiedAddrs, m.Addrs(id))
 
 		// we should be able to retrieve the signed peer record
-		rec2 := cab.SignedPeerRecord(id)
+		rec2 := cab.GetPeerRecord(id)
 		if rec2 == nil || !signedRec.Equal(rec2) {
 			t.Error("unable to retrieve signed routing record from addrbook")
 		}
@@ -412,9 +415,12 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 		// Adding a new envelope should clear existing certified addresses.
 		// Only the newly-added ones should remain
 		certifiedAddrs = certifiedAddrs[:3]
-		signedRec, err = peer.NewPeerRecord(id, certifiedAddrs).Sign(priv)
+		rec = peer.NewPeerRecord()
+		rec.PeerID = id
+		rec.Addrs = certifiedAddrs
+		signedRec, err = rec.Sign(priv)
 		test.AssertNilError(t, err)
-		err = cab.AddCertifiedAddrs(signedRec, time.Hour)
+		err = cab.ProcessPeerRecord(signedRec, time.Hour)
 		test.AssertNilError(t, err)
 		AssertAddressesEqual(t, certifiedAddrs, m.Addrs(id))
 
@@ -424,17 +430,17 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 		if len(m.Addrs(id)) != 0 {
 			t.Error("expected zero certified addrs after setting TTL to -1")
 		}
-		if cab.SignedPeerRecord(id) != nil {
+		if cab.GetPeerRecord(id) != nil {
 			t.Error("expected signed peer record to be removed when addresses expire")
 		}
 
 		// Test that natural TTL expiration clears signed peer records
-		err = cab.AddCertifiedAddrs(signedRec, time.Second)
+		err = cab.ProcessPeerRecord(signedRec, time.Second)
 		test.AssertNilError(t, err)
 		AssertAddressesEqual(t, certifiedAddrs, m.Addrs(id))
 
 		time.Sleep(2 * time.Second)
-		if cab.SignedPeerRecord(id) != nil {
+		if cab.GetPeerRecord(id) != nil {
 			t.Error("expected signed peer record to be removed when addresses expire")
 		}
 	}
