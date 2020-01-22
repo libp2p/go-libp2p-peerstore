@@ -411,7 +411,7 @@ func (ab *dsAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
 	if len(pr.Addrs) > size {
 		size = len(pr.Addrs)
 	}
-	addrs := make([]ma.Multiaddr, size)
+	addrs := make([]ma.Multiaddr, 0, size)
 	for _, a := range pr.SignedAddrs {
 		addrs = append(addrs, a.Addr)
 	}
