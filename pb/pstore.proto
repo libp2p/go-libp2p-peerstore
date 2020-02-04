@@ -14,8 +14,6 @@ message AddrBookRecord {
 	// The multiaddresses. This is a sorted list where element 0 expires the soonest.
 	repeated AddrEntry addrs = 2;
 
-	repeated AddrEntry signedAddrs = 3;
-
 	// The most recently received signed PeerRecord.
 	CertifiedRecord certifiedRecord = 4;
 

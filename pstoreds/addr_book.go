@@ -49,11 +49,7 @@ type addrsRecord struct {
 func (r *addrsRecord) flush(write ds.Write) (err error) {
 	key := addrBookBase.ChildString(b32.RawStdEncoding.EncodeToString([]byte(r.Id.ID)))
 
-	if len(r.SignedAddrs) == 0 {
-		r.CertifiedRecord = nil
-	}
-
-	if len(r.Addrs) == 0 && len(r.SignedAddrs) == 0 {
+	if len(r.Addrs) == 0 {
 		if err = write.Delete(key); err == nil {
 			r.dirty = false
 		}
@@ -90,14 +86,13 @@ func (r *addrsRecord) flush(write ds.Write) (err error) {
 func (r *addrsRecord) clean() (chgd bool) {
 	now := time.Now().Unix()
 	addrsLen := len(r.Addrs)
-	signedAddrsLen := len(r.SignedAddrs)
 
 	if !r.dirty && !r.hasExpiredAddrs(now) {
 		// record is not dirty, and we have no expired entries to purge.
 		return false
 	}
 
-	if addrsLen == 0 && signedAddrsLen == 0 {
+	if addrsLen == 0 {
 		// this is a ghost record; let's signal it has to be written.
 		// flush() will take care of doing the deletion.
 		return true
@@ -109,27 +104,13 @@ func (r *addrsRecord) clean() (chgd bool) {
 		})
 	}
 
-	if r.dirty && signedAddrsLen > 1 {
-		sort.Slice(r.Addrs, func(i, j int) bool {
-			return r.Addrs[i].Expiry < r.Addrs[j].Expiry
-		})
-	}
-
 	r.Addrs = removeExpired(r.Addrs, now)
-	r.SignedAddrs = removeExpired(r.SignedAddrs, now)
 
-	if len(r.SignedAddrs) == 0 {
-		r.CertifiedRecord = nil
-	}
-
-	return r.dirty || len(r.Addrs) != addrsLen || len(r.SignedAddrs) != signedAddrsLen
+	return r.dirty || len(r.Addrs) != addrsLen
 }
 
 func (r *addrsRecord) hasExpiredAddrs(now int64) bool {
 	if len(r.Addrs) > 0 && r.Addrs[0].Expiry <= now {
-		return true
-	}
-	if len(r.SignedAddrs) > 0 && r.SignedAddrs[0].Expiry <= now {
 		return true
 	}
 	return false
@@ -290,7 +271,7 @@ func (ab *dsAddrBook) ProcessPeerRecord(recordEnvelope *record.Envelope, ttl tim
 		return fmt.Errorf("envelope did not contain PeerRecord")
 	}
 
-	// ensure that the seq number from envelope is >= any previously received seq no
+	// ensure that the seq number from envelope is > any previously received seq no
 	if ab.latestPeerRecordSeq(rec.PeerID) >= rec.Seq {
 		return nil
 	}
@@ -306,7 +287,7 @@ func (ab *dsAddrBook) ProcessPeerRecord(recordEnvelope *record.Envelope, ttl tim
 
 func (ab *dsAddrBook) latestPeerRecordSeq(p peer.ID) uint64 {
 	pr, err := ab.loadRecord(p, true, false)
-	if err != nil || pr.CertifiedRecord == nil || len(pr.CertifiedRecord.Raw) == 0 {
+	if err != nil || len(pr.Addrs) == 0 || pr.CertifiedRecord == nil || len(pr.CertifiedRecord.Raw) == 0 {
 		return 0
 	}
 	return pr.CertifiedRecord.Seq
@@ -343,7 +324,7 @@ func (ab *dsAddrBook) GetPeerRecord(p peer.ID) *record.Envelope {
 		log.Errorf("unable to load record for peer %s: %v", p.Pretty(), err)
 		return nil
 	}
-	if pr.CertifiedRecord == nil || len(pr.CertifiedRecord.Raw) == 0 {
+	if pr.CertifiedRecord == nil || len(pr.CertifiedRecord.Raw) == 0 || len(pr.Addrs) == 0 {
 		return nil
 	}
 	state, _, err := record.ConsumeEnvelope(pr.CertifiedRecord.Raw, peer.PeerRecordEnvelopeDomain)
@@ -382,8 +363,7 @@ func (ab *dsAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.D
 	defer pr.Unlock()
 
 	newExp := time.Now().Add(newTTL).Unix()
-	allAddrs := append(pr.Addrs, pr.SignedAddrs...)
-	for _, entry := range allAddrs {
+	for _, entry := range pr.Addrs {
 		if entry.Ttl != int64(oldTTL) {
 			continue
 		}
@@ -407,16 +387,9 @@ func (ab *dsAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
 	pr.RLock()
 	defer pr.RUnlock()
 
-	size := len(pr.SignedAddrs)
-	if len(pr.Addrs) > size {
-		size = len(pr.Addrs)
-	}
-	addrs := make([]ma.Multiaddr, 0, size)
-	for _, a := range pr.SignedAddrs {
-		addrs = append(addrs, a.Addr)
-	}
-	for _, a := range pr.Addrs {
-		addrs = append(addrs, a.Addr)
+	addrs := make([]ma.Multiaddr, len(pr.Addrs))
+	for i, a := range pr.Addrs {
+		addrs[i] = a.Addr
 	}
 	return addrs
 }
@@ -458,6 +431,11 @@ func (ab *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 	pr.Lock()
 	defer pr.Unlock()
 
+	// if we have a signed PeerRecord, ignore attempts to add unsigned addrs
+	if !signed && pr.CertifiedRecord != nil {
+		return nil
+	}
+
 	newExp := time.Now().Add(ttl).Unix()
 	updateExisting := func(entryList []*pb.AddrBookRecord_AddrEntry, incoming ma.Multiaddr) *pb.AddrBookRecord_AddrEntry {
 		for _, have := range entryList {
@@ -483,34 +461,22 @@ func (ab *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 		return nil
 	}
 
-	var added []*pb.AddrBookRecord_AddrEntry
-
+	var entries []*pb.AddrBookRecord_AddrEntry
 	for _, incoming := range addrs {
-		existingUnsigned := updateExisting(pr.Addrs, incoming)
+		existingEntry := updateExisting(pr.Addrs, incoming)
 
-		// we always check if the incoming addr is already in the
-		// signed addr list, even if we're not adding it from a
-		// signed source. if it does exist, we update its TTL
-		existingSigned := updateExisting(pr.SignedAddrs, incoming)
-		if existingSigned != nil {
-			added = append(added, existingSigned)
-		}
-
-		// if we're adding a signed addr that already existed in the
-		// unsigned set, we move the existing unsigned entry over
-		// with the updated TTL, but we don't broadcast it as new
-		if signed && existingSigned == nil && existingUnsigned != nil {
-			added = append(added, existingUnsigned)
-		}
-
-		// new addr, add & broadcast
-		if existingUnsigned == nil && existingSigned == nil {
+		if existingEntry != nil {
+			if signed {
+				entries = append(entries, existingEntry)
+			}
+		} else {
+			// new addr, add & broadcast
 			entry := &pb.AddrBookRecord_AddrEntry{
 				Addr:   &pb.ProtoAddr{Multiaddr: incoming},
 				Ttl:    int64(ttl),
 				Expiry: newExp,
 			}
-			added = append(added, entry)
+			entries = append(entries, entry)
 
 			// note: there's a minor chance that writing the record will fail, in which case we would've broadcast
 			// the addresses without persisting them. This is very unlikely and not much of an issue.
@@ -520,16 +486,9 @@ func (ab *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 
 	if signed {
 		// when adding signed addrs, we want to keep _only_ the incoming addrs
-		pr.SignedAddrs = added
-		pr.Addrs = make([]*pb.AddrBookRecord_AddrEntry, 0)
+		pr.Addrs = entries
 	} else {
-		// if the incoming addrs are unsigned, we only keep them if
-		// no signed addrs exist for the peer
-		if len(pr.SignedAddrs) == 0 {
-			pr.Addrs = append(pr.Addrs, added...)
-		} else {
-			pr.Addrs = make([]*pb.AddrBookRecord_AddrEntry, 0)
-		}
+		pr.Addrs = append(pr.Addrs, entries...)
 	}
 
 	pr.dirty = true
@@ -569,7 +528,7 @@ func (ab *dsAddrBook) deleteAddrs(p peer.ID, addrs []ma.Multiaddr) (err error) {
 		return fmt.Errorf("failed to load peerstore entry for peer %v while deleting addrs, err: %v", p, err)
 	}
 
-	if pr.Addrs == nil && pr.SignedAddrs == nil {
+	if pr.Addrs == nil {
 		return nil
 	}
 
@@ -577,7 +536,6 @@ func (ab *dsAddrBook) deleteAddrs(p peer.ID, addrs []ma.Multiaddr) (err error) {
 	defer pr.Unlock()
 
 	pr.Addrs = deleteInPlace(pr.Addrs, addrs)
-	pr.SignedAddrs = deleteInPlace(pr.SignedAddrs, addrs)
 
 	pr.dirty = true
 	pr.clean()
