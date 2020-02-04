@@ -3,6 +3,7 @@ package test
 import (
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/record"
 	"github.com/libp2p/go-libp2p-core/test"
 	"github.com/multiformats/go-multiaddr"
 	"testing"
@@ -377,7 +378,7 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 		rec := peer.NewPeerRecord()
 		rec.PeerID = id
 		rec.Addrs = certifiedAddrs
-		signedRec, err := rec.Sign(priv)
+		signedRec, err := record.Seal(rec, priv)
 		if err != nil {
 			t.Errorf("error creating signed routing record: %v", err)
 		}
@@ -389,7 +390,7 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 		AssertAddressesEqual(t, uncertifiedAddrs, m.Addrs(id))
 
 		// add the signed record to addr book
-		err = cab.ProcessPeerRecord(signedRec, time.Hour)
+		_, err = cab.ConsumePeerRecord(signedRec, time.Hour)
 		if err != nil {
 			t.Errorf("error adding signed routing record to addrbook: %v", err)
 		}
@@ -400,6 +401,15 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 		// PeersWithAddrs should return a single peer
 		if len(m.PeersWithAddrs()) != 1 {
 			t.Errorf("expected PeersWithAddrs to return 1, got %d", len(m.PeersWithAddrs()))
+		}
+
+		// adding the same peer record again should result in the record being ignored
+		accepted, err := cab.ConsumePeerRecord(signedRec, time.Hour)
+		if accepted {
+			t.Error("Expected record with duplicate sequence number to be ignored")
+		}
+		if err != nil {
+			t.Errorf("Expected record with duplicate sequence number to be ignored without error, got err: %s", err)
 		}
 
 		// once certified addrs exist, trying to add non-certified addrs should have no effect
@@ -418,9 +428,9 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 		rec = peer.NewPeerRecord()
 		rec.PeerID = id
 		rec.Addrs = certifiedAddrs
-		signedRec, err = rec.Sign(priv)
+		signedRec, err = record.Seal(rec, priv)
 		test.AssertNilError(t, err)
-		err = cab.ProcessPeerRecord(signedRec, time.Hour)
+		_, err = cab.ConsumePeerRecord(signedRec, time.Hour)
 		test.AssertNilError(t, err)
 		AssertAddressesEqual(t, certifiedAddrs, m.Addrs(id))
 
@@ -435,7 +445,7 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 		}
 
 		// Test that natural TTL expiration clears signed peer records
-		err = cab.ProcessPeerRecord(signedRec, time.Second)
+		_, err = cab.ConsumePeerRecord(signedRec, time.Second)
 		test.AssertNilError(t, err)
 		AssertAddressesEqual(t, certifiedAddrs, m.Addrs(id))
 

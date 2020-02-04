@@ -162,17 +162,17 @@ func (mab *memoryAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 	mab.addAddrs(p, addrs, ttl, false)
 }
 
-// ProcessPeerRecord adds addresses from a signed peer.PeerRecord (contained in
+// ConsumePeerRecord adds addresses from a signed peer.PeerRecord (contained in
 // a record.Envelope), which will expire after the given TTL.
 // See https://godoc.org/github.com/libp2p/go-libp2p-core/peerstore#CertifiedAddrBook for more details.
-func (mab *memoryAddrBook) ProcessPeerRecord(recordEnvelope *record.Envelope, ttl time.Duration) error {
+func (mab *memoryAddrBook) ConsumePeerRecord(recordEnvelope *record.Envelope, ttl time.Duration) (bool, error) {
 	r, err := recordEnvelope.Record()
 	if err != nil {
-		return err
+		return false, err
 	}
 	rec, ok := r.(*peer.PeerRecord)
 	if !ok {
-		return fmt.Errorf("unable to process envelope: not a PeerRecord")
+		return false, fmt.Errorf("unable to process envelope: not a PeerRecord")
 	}
 	// ensure seq is greater than last received
 	s := mab.segments.get(rec.PeerID)
@@ -180,7 +180,7 @@ func (mab *memoryAddrBook) ProcessPeerRecord(recordEnvelope *record.Envelope, tt
 	lastState, found := s.signedPeerRecords[rec.PeerID]
 	if found && lastState.Seq >= rec.Seq {
 		s.Unlock()
-		return nil
+		return false, nil
 	}
 	s.signedPeerRecords[rec.PeerID] = &peerRecordState{
 		Envelope: recordEnvelope,
@@ -188,7 +188,7 @@ func (mab *memoryAddrBook) ProcessPeerRecord(recordEnvelope *record.Envelope, tt
 	}
 	s.Unlock() // need to release the lock, since addAddrs will try to take it
 	mab.addAddrs(rec.PeerID, rec.Addrs, ttl, true)
-	return nil
+	return true, nil
 }
 
 func (mab *memoryAddrBook) addAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration, signed bool) {

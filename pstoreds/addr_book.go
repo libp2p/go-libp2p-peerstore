@@ -258,31 +258,35 @@ func (ab *dsAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 	ab.setAddrs(p, addrs, ttl, ttlExtend, false)
 }
 
-// ProcessPeerRecord adds addresses from a signed peer.PeerRecord (contained in
+// ConsumePeerRecord adds addresses from a signed peer.PeerRecord (contained in
 // a routing.Envelope), which will expire after the given TTL.
 // See https://godoc.org/github.com/libp2p/go-libp2p-core/peerstore#CertifiedAddrBook for more details.
-func (ab *dsAddrBook) ProcessPeerRecord(recordEnvelope *record.Envelope, ttl time.Duration) error {
+func (ab *dsAddrBook) ConsumePeerRecord(recordEnvelope *record.Envelope, ttl time.Duration) (bool, error) {
 	r, err := recordEnvelope.Record()
 	if err != nil {
-		return err
+		return false, err
 	}
 	rec, ok := r.(*peer.PeerRecord)
 	if !ok {
-		return fmt.Errorf("envelope did not contain PeerRecord")
+		return false, fmt.Errorf("envelope did not contain PeerRecord")
 	}
 
 	// ensure that the seq number from envelope is > any previously received seq no
 	if ab.latestPeerRecordSeq(rec.PeerID) >= rec.Seq {
-		return nil
+		return false, nil
 	}
 
 	addrs := cleanAddrs(rec.Addrs)
 	err = ab.setAddrs(rec.PeerID, addrs, ttl, ttlExtend, true)
 	if err != nil {
-		return err
+		return false, err
 	}
 
-	return ab.storeSignedPeerRecord(rec.PeerID, recordEnvelope, rec)
+	err = ab.storeSignedPeerRecord(rec.PeerID, recordEnvelope, rec)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func (ab *dsAddrBook) latestPeerRecordSeq(p peer.ID) uint64 {
