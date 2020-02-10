@@ -15,7 +15,7 @@ message AddrBookRecord {
 	repeated AddrEntry addrs = 2;
 
 	// The most recently received signed PeerRecord.
-	CertifiedRecord certifiedRecord = 4;
+	CertifiedRecord certified_record = 3;
 
 	// AddrEntry represents a single multiaddress.
 	message AddrEntry {
