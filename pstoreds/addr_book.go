@@ -270,6 +270,9 @@ func (ab *dsAddrBook) ConsumePeerRecord(recordEnvelope *record.Envelope, ttl tim
 	if !ok {
 		return false, fmt.Errorf("envelope did not contain PeerRecord")
 	}
+	if !rec.PeerID.MatchesPublicKey(recordEnvelope.PublicKey) {
+		return false, fmt.Errorf("signing key does not match PeerID in PeerRecord")
+	}
 
 	// ensure that the seq number from envelope is > any previously received seq no
 	if ab.latestPeerRecordSeq(rec.PeerID) >= rec.Seq {

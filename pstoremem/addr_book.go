@@ -174,6 +174,10 @@ func (mab *memoryAddrBook) ConsumePeerRecord(recordEnvelope *record.Envelope, tt
 	if !ok {
 		return false, fmt.Errorf("unable to process envelope: not a PeerRecord")
 	}
+	if !rec.PeerID.MatchesPublicKey(recordEnvelope.PublicKey) {
+		return false, fmt.Errorf("signing key does not match PeerID in PeerRecord")
+	}
+
 	// ensure seq is greater than last received
 	s := mab.segments.get(rec.PeerID)
 	s.Lock()

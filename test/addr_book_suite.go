@@ -453,5 +453,16 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 		if cab.GetPeerRecord(id) != nil {
 			t.Error("expected signed peer record to be removed when addresses expire")
 		}
+
+		// adding a peer record that's signed with the wrong key should fail
+		priv2, _, err := test.RandTestKeyPair(crypto.Ed25519, 256)
+		test.AssertNilError(t, err)
+		env, err := record.Seal(rec, priv2)
+		test.AssertNilError(t, err)
+
+		accepted, err = cab.ConsumePeerRecord(env, time.Second)
+		if accepted || err == nil {
+			t.Error("expected adding a PeerRecord that's signed with the wrong key to fail")
+		}
 	}
 }
