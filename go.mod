@@ -5,7 +5,7 @@ require (
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/ipfs/go-datastore v0.4.1
 	github.com/ipfs/go-ds-badger v0.2.0
-	github.com/ipfs/go-ds-leveldb v0.4.0
+	github.com/ipfs/go-ds-leveldb v0.4.1
 	github.com/ipfs/go-log v0.0.1
 	github.com/libp2p/go-buffer-pool v0.0.2
 	github.com/libp2p/go-libp2p-core v0.3.0
