@@ -69,10 +69,13 @@ github.com/ipfs/go-datastore v0.3.0 h1:9au0tYi/+n7xeUnGHG6davnS8x9hWbOzP/388Vx3C
 github.com/ipfs/go-datastore v0.3.0/go.mod h1:w38XXW9kVFNp57Zj5knbKWM2T+KOZCGDRVNdgPHtbHw=
 github.com/ipfs/go-datastore v0.3.1 h1:SS1t869a6cctoSYmZXUk8eL6AzVXgASmKIWFNQkQ1jU=
 github.com/ipfs/go-datastore v0.3.1/go.mod h1:w38XXW9kVFNp57Zj5knbKWM2T+KOZCGDRVNdgPHtbHw=
+github.com/ipfs/go-datastore v0.4.0/go.mod h1:SX/xMIKoCszPqp+z9JhPYCmoOoXTvaa13XEbGtsFUhA=
 github.com/ipfs/go-datastore v0.4.1 h1:W4ZfzyhNi3xmuU5dQhjfuRn/wFuqEE1KnOmmQiOevEY=
 github.com/ipfs/go-datastore v0.4.1/go.mod h1:SX/xMIKoCszPqp+z9JhPYCmoOoXTvaa13XEbGtsFUhA=
 github.com/ipfs/go-ds-badger v0.2.0 h1:3h0U3L4o0v7LT2qyK5GScXH23DoYxat+VU2a4Ldt8yo=
 github.com/ipfs/go-ds-badger v0.2.0/go.mod h1:471n2X/Qtk8rRO1iuxcgdwmHJdWjDj9VRGhaP/tvoZw=
+github.com/ipfs/go-ds-badger v0.2.1 h1:RsC9DDlwFhFdfT+s2PeC8joxbSp2YMufK8w/RBOxKtk=
+github.com/ipfs/go-ds-badger v0.2.1/go.mod h1:Tx7l3aTph3FMFrRS838dcSJh+jjA7cX9DrGVwx/NOwE=
 github.com/ipfs/go-ds-leveldb v0.4.0 h1:l5RuxaIXDbCFqBonzGXGfMpCMBwrbJVrmqGTtqQKHaI=
 github.com/ipfs/go-ds-leveldb v0.4.0/go.mod h1:NX127692WYenEjmlzyZunFv+f8nrKbH1s9eIaRNnhzs=
 github.com/ipfs/go-ds-leveldb v0.4.1 h1:zaoLcP8zs4Aj9k8fA4cowyOyNBIvy9Dnt6hf7mHRY7s=
