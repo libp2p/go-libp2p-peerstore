@@ -3,7 +3,7 @@ module github.com/libp2p/go-libp2p-peerstore
 require (
 	github.com/gogo/protobuf v1.3.1
 	github.com/hashicorp/golang-lru v0.5.4
-	github.com/ipfs/go-datastore v0.4.1
+	github.com/ipfs/go-datastore v0.4.2
 	github.com/ipfs/go-ds-badger v0.2.1
 	github.com/ipfs/go-ds-leveldb v0.4.1
 	github.com/ipfs/go-log v0.0.1
