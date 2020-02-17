@@ -151,7 +151,7 @@ func (mab *memoryAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 	exp := time.Now().Add(ttl)
 	for _, addr := range addrs {
 		if addr == nil {
-			log.Warningf("was passed nil multiaddr for %s", p)
+			log.Warnf("was passed nil multiaddr for %s", p)
 			continue
 		}
 		asBytes := addr.Bytes()
@@ -194,7 +194,7 @@ func (mab *memoryAddrBook) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 	exp := time.Now().Add(ttl)
 	for _, addr := range addrs {
 		if addr == nil {
-			log.Warningf("was passed nil multiaddr for %s", p)
+			log.Warnf("was passed nil multiaddr for %s", p)
 			continue
 		}
 
