@@ -72,6 +72,8 @@ github.com/ipfs/go-datastore v0.3.1/go.mod h1:w38XXW9kVFNp57Zj5knbKWM2T+KOZCGDRV
 github.com/ipfs/go-datastore v0.4.0/go.mod h1:SX/xMIKoCszPqp+z9JhPYCmoOoXTvaa13XEbGtsFUhA=
 github.com/ipfs/go-datastore v0.4.1 h1:W4ZfzyhNi3xmuU5dQhjfuRn/wFuqEE1KnOmmQiOevEY=
 github.com/ipfs/go-datastore v0.4.1/go.mod h1:SX/xMIKoCszPqp+z9JhPYCmoOoXTvaa13XEbGtsFUhA=
+github.com/ipfs/go-datastore v0.4.2 h1:h8/n7WPzhp239kkLws+epN3Ic7YtcBPgcaXfEfdVDWM=
+github.com/ipfs/go-datastore v0.4.2/go.mod h1:SX/xMIKoCszPqp+z9JhPYCmoOoXTvaa13XEbGtsFUhA=
 github.com/ipfs/go-ds-badger v0.2.0 h1:3h0U3L4o0v7LT2qyK5GScXH23DoYxat+VU2a4Ldt8yo=
 github.com/ipfs/go-ds-badger v0.2.0/go.mod h1:471n2X/Qtk8rRO1iuxcgdwmHJdWjDj9VRGhaP/tvoZw=
 github.com/ipfs/go-ds-badger v0.2.1 h1:RsC9DDlwFhFdfT+s2PeC8joxbSp2YMufK8w/RBOxKtk=
