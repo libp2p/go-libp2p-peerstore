@@ -438,12 +438,16 @@ func (ab *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 	pr.Lock()
 	defer pr.Unlock()
 
-	// if we have a signed PeerRecord, ignore attempts to add unsigned addrs
-	if !signed && pr.CertifiedRecord != nil {
-		return nil
-	}
+	// // if we have a signed PeerRecord, ignore attempts to add unsigned addrs
+	// if !signed && pr.CertifiedRecord != nil {
+	// 	return nil
+	// }
 
 	newExp := time.Now().Add(ttl).Unix()
+	// TODO this is very inefficient O(m*n); we could build a map to use as an
+	// index, and test against it. That would turn it into O(m+n). This code
+	// will be refactored entirely anyway, and it's not being used by users
+	// (that we know of); so OK to keep it for now.
 	updateExisting := func(entryList []*pb.AddrBookRecord_AddrEntry, incoming ma.Multiaddr) *pb.AddrBookRecord_AddrEntry {
 		for _, have := range entryList {
 			if incoming.Equal(have.Addr) {
@@ -461,7 +465,6 @@ func (ab *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 				default:
 					panic("BUG: unimplemented ttl mode")
 				}
-
 				return have
 			}
 		}
@@ -472,11 +475,11 @@ func (ab *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 	for _, incoming := range addrs {
 		existingEntry := updateExisting(pr.Addrs, incoming)
 
-		if existingEntry != nil {
-			if signed {
-				entries = append(entries, existingEntry)
-			}
-		} else {
+		if existingEntry == nil {
+			// 	if signed {
+			// 		entries = append(entries, existingEntry)
+			// 	}
+			// } else {
 			// new addr, add & broadcast
 			entry := &pb.AddrBookRecord_AddrEntry{
 				Addr:   &pb.ProtoAddr{Multiaddr: incoming},
@@ -491,12 +494,12 @@ func (ab *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 		}
 	}
 
-	if signed {
-		// when adding signed addrs, we want to keep _only_ the incoming addrs
-		pr.Addrs = entries
-	} else {
-		pr.Addrs = append(pr.Addrs, entries...)
-	}
+	// if signed {
+	// 	// when adding signed addrs, we want to keep _only_ the incoming addrs
+	// 	pr.Addrs = entries
+	// } else {
+	pr.Addrs = append(pr.Addrs, entries...)
+	// }
 
 	pr.dirty = true
 	pr.clean()
