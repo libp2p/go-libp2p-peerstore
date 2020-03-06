@@ -387,7 +387,7 @@ func (ab *dsAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.D
 func (ab *dsAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
 	pr, err := ab.loadRecord(p, true, true)
 	if err != nil {
-		log.Warning("failed to load peerstore entry for peer %v while querying addrs, err: %v", p, err)
+		log.Warn("failed to load peerstore entry for peer %v while querying addrs, err: %v", p, err)
 		return nil
 	}
 
