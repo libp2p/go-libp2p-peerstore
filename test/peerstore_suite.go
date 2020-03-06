@@ -23,6 +23,7 @@ var peerstoreSuite = map[string]func(pstore.Peerstore) func(*testing.T){
 	"PeerstoreProtoStore":      testPeerstoreProtoStore,
 	"BasicPeerstore":           testBasicPeerstore,
 	"Metadata":                 testMetadata,
+	"CertifiedAddrBook":        testCertifiedAddrBook,
 }
 
 type PeerstoreFactory func() (pstore.Peerstore, func())
@@ -353,6 +354,15 @@ func testMetadata(ps pstore.Peerstore) func(t *testing.T) {
 				t.Errorf("expected %q, got %v", 1, v)
 				continue
 			}
+		}
+	}
+}
+
+func testCertifiedAddrBook(ps pstore.Peerstore) func(*testing.T) {
+	return func(t *testing.T) {
+		_, ok := ps.(pstore.CertifiedAddrBook)
+		if !ok {
+			t.Error("expected peerstore to implement CertifiedAddrBook interface")
 		}
 	}
 }

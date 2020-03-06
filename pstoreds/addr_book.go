@@ -3,20 +3,21 @@ package pstoreds
 import (
 	"context"
 	"fmt"
+	"github.com/libp2p/go-libp2p-core/record"
 	"sort"
 	"sync"
 	"time"
 
 	ds "github.com/ipfs/go-datastore"
-	query "github.com/ipfs/go-datastore/query"
+	"github.com/ipfs/go-datastore/query"
 	logging "github.com/ipfs/go-log"
 
-	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/peer"
 	pstore "github.com/libp2p/go-libp2p-core/peerstore"
 	pb "github.com/libp2p/go-libp2p-peerstore/pb"
-	pstoremem "github.com/libp2p/go-libp2p-peerstore/pstoremem"
+	"github.com/libp2p/go-libp2p-peerstore/pstoremem"
 
-	lru "github.com/hashicorp/golang-lru"
+	"github.com/hashicorp/golang-lru"
 	b32 "github.com/multiformats/go-base32"
 	ma "github.com/multiformats/go-multiaddr"
 )
@@ -47,6 +48,7 @@ type addrsRecord struct {
 // marked for deletion, in which case we call ds.Delete. To be called within a lock.
 func (r *addrsRecord) flush(write ds.Write) (err error) {
 	key := addrBookBase.ChildString(b32.RawStdEncoding.EncodeToString([]byte(r.Id.ID)))
+
 	if len(r.Addrs) == 0 {
 		if err = write.Delete(key); err == nil {
 			r.dirty = false
@@ -83,37 +85,49 @@ func (r *addrsRecord) flush(write ds.Write) (err error) {
 // If the return value is true, the caller should perform a flush immediately to sync the record with the store.
 func (r *addrsRecord) clean() (chgd bool) {
 	now := time.Now().Unix()
-	if !r.dirty && len(r.Addrs) > 0 && r.Addrs[0].Expiry > now {
+	addrsLen := len(r.Addrs)
+
+	if !r.dirty && !r.hasExpiredAddrs(now) {
 		// record is not dirty, and we have no expired entries to purge.
 		return false
 	}
 
-	if len(r.Addrs) == 0 {
+	if addrsLen == 0 {
 		// this is a ghost record; let's signal it has to be written.
 		// flush() will take care of doing the deletion.
 		return true
 	}
 
-	if r.dirty && len(r.Addrs) > 1 {
-		// the record has been modified, so it may need resorting.
-		// we keep addresses sorted by expiration, where 0 is the soonest expiring.
+	if r.dirty && addrsLen > 1 {
 		sort.Slice(r.Addrs, func(i, j int) bool {
 			return r.Addrs[i].Expiry < r.Addrs[j].Expiry
 		})
 	}
 
+	r.Addrs = removeExpired(r.Addrs, now)
+
+	return r.dirty || len(r.Addrs) != addrsLen
+}
+
+func (r *addrsRecord) hasExpiredAddrs(now int64) bool {
+	if len(r.Addrs) > 0 && r.Addrs[0].Expiry <= now {
+		return true
+	}
+	return false
+}
+
+func removeExpired(entries []*pb.AddrBookRecord_AddrEntry, now int64) []*pb.AddrBookRecord_AddrEntry {
 	// since addresses are sorted by expiration, we find the first
 	// survivor and split the slice on its index.
 	pivot := -1
-	for i, addr := range r.Addrs {
+	for i, addr := range entries {
 		if addr.Expiry > now {
 			break
 		}
 		pivot = i
 	}
 
-	r.Addrs = r.Addrs[pivot+1:]
-	return r.dirty || pivot >= 0
+	return entries[pivot+1:]
 }
 
 // dsAddrBook is an address book backed by a Datastore with a GC procedure to purge expired entries. It uses an
@@ -133,6 +147,7 @@ type dsAddrBook struct {
 }
 
 var _ pstore.AddrBook = (*dsAddrBook)(nil)
+var _ pstore.CertifiedAddrBook = (*dsAddrBook)(nil)
 
 // NewAddrBook initializes a new datastore-backed address book. It serves as a drop-in replacement for pstoremem
 // (memory-backed peerstore), and works with any datastore implementing the ds.Batching interface.
@@ -240,7 +255,91 @@ func (ab *dsAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 		return
 	}
 	addrs = cleanAddrs(addrs)
-	ab.setAddrs(p, addrs, ttl, ttlExtend)
+	ab.setAddrs(p, addrs, ttl, ttlExtend, false)
+}
+
+// ConsumePeerRecord adds addresses from a signed peer.PeerRecord (contained in
+// a record.Envelope), which will expire after the given TTL.
+// See https://godoc.org/github.com/libp2p/go-libp2p-core/peerstore#CertifiedAddrBook for more details.
+func (ab *dsAddrBook) ConsumePeerRecord(recordEnvelope *record.Envelope, ttl time.Duration) (bool, error) {
+	r, err := recordEnvelope.Record()
+	if err != nil {
+		return false, err
+	}
+	rec, ok := r.(*peer.PeerRecord)
+	if !ok {
+		return false, fmt.Errorf("envelope did not contain PeerRecord")
+	}
+	if !rec.PeerID.MatchesPublicKey(recordEnvelope.PublicKey) {
+		return false, fmt.Errorf("signing key does not match PeerID in PeerRecord")
+	}
+
+	// ensure that the seq number from envelope is > any previously received seq no
+	if ab.latestPeerRecordSeq(rec.PeerID) >= rec.Seq {
+		return false, nil
+	}
+
+	addrs := cleanAddrs(rec.Addrs)
+	err = ab.setAddrs(rec.PeerID, addrs, ttl, ttlExtend, true)
+	if err != nil {
+		return false, err
+	}
+
+	err = ab.storeSignedPeerRecord(rec.PeerID, recordEnvelope, rec)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (ab *dsAddrBook) latestPeerRecordSeq(p peer.ID) uint64 {
+	pr, err := ab.loadRecord(p, true, false)
+	if err != nil || len(pr.Addrs) == 0 || pr.CertifiedRecord == nil || len(pr.CertifiedRecord.Raw) == 0 {
+		return 0
+	}
+	return pr.CertifiedRecord.Seq
+}
+
+func (ab *dsAddrBook) storeSignedPeerRecord(p peer.ID, envelope *record.Envelope, rec *peer.PeerRecord) error {
+	envelopeBytes, err := envelope.Marshal()
+	if err != nil {
+		return err
+	}
+	// reload record and add routing state
+	// this has to be done after we add the addresses, since if
+	// we try to flush a datastore record with no addresses,
+	// it will just get deleted
+	pr, err := ab.loadRecord(p, true, false)
+	if err != nil {
+		return err
+	}
+	pr.CertifiedRecord = &pb.AddrBookRecord_CertifiedRecord{
+		Seq: rec.Seq,
+		Raw: envelopeBytes,
+	}
+	pr.dirty = true
+	err = pr.flush(ab.ds)
+	return err
+}
+
+// GetPeerRecord returns a record.Envelope containing a peer.PeerRecord for the
+// given peer id, if one exists.
+// Returns nil if no signed PeerRecord exists for the peer.
+func (ab *dsAddrBook) GetPeerRecord(p peer.ID) *record.Envelope {
+	pr, err := ab.loadRecord(p, true, false)
+	if err != nil {
+		log.Errorf("unable to load record for peer %s: %v", p.Pretty(), err)
+		return nil
+	}
+	if pr.CertifiedRecord == nil || len(pr.CertifiedRecord.Raw) == 0 || len(pr.Addrs) == 0 {
+		return nil
+	}
+	state, _, err := record.ConsumeEnvelope(pr.CertifiedRecord.Raw, peer.PeerRecordEnvelopeDomain)
+	if err != nil {
+		log.Errorf("error unmarshaling stored signed peer record for peer %s: %v", p.Pretty(), err)
+		return nil
+	}
+	return state
 }
 
 // SetAddr will add or update the TTL of an address in the AddrBook.
@@ -255,7 +354,7 @@ func (ab *dsAddrBook) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 		ab.deleteAddrs(p, addrs)
 		return
 	}
-	ab.setAddrs(p, addrs, ttl, ttlOverride)
+	ab.setAddrs(p, addrs, ttl, ttlOverride, false)
 }
 
 // UpdateAddrs will update any addresses for a given peer and TTL combination to
@@ -295,9 +394,9 @@ func (ab *dsAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
 	pr.RLock()
 	defer pr.RUnlock()
 
-	addrs := make([]ma.Multiaddr, 0, len(pr.Addrs))
-	for _, a := range pr.Addrs {
-		addrs = append(addrs, a.Addr)
+	addrs := make([]ma.Multiaddr, len(pr.Addrs))
+	for i, a := range pr.Addrs {
+		addrs[i] = a.Addr
 	}
 	return addrs
 }
@@ -330,7 +429,7 @@ func (ab *dsAddrBook) ClearAddrs(p peer.ID) {
 	}
 }
 
-func (ab *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration, mode ttlWriteMode) (err error) {
+func (ab *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration, mode ttlWriteMode, signed bool) (err error) {
 	pr, err := ab.loadRecord(p, true, false)
 	if err != nil {
 		return fmt.Errorf("failed to load peerstore entry for peer %v while setting addrs, err: %v", p, err)
@@ -339,14 +438,19 @@ func (ab *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 	pr.Lock()
 	defer pr.Unlock()
 
-	newExp := time.Now().Add(ttl).Unix()
-	existed := make([]bool, len(addrs)) // keeps track of which addrs we found.
+	// // if we have a signed PeerRecord, ignore attempts to add unsigned addrs
+	// if !signed && pr.CertifiedRecord != nil {
+	// 	return nil
+	// }
 
-Outer:
-	for i, incoming := range addrs {
-		for _, have := range pr.Addrs {
+	newExp := time.Now().Add(ttl).Unix()
+	// TODO this is very inefficient O(m*n); we could build a map to use as an
+	// index, and test against it. That would turn it into O(m+n). This code
+	// will be refactored entirely anyway, and it's not being used by users
+	// (that we know of); so OK to keep it for now.
+	updateExisting := func(entryList []*pb.AddrBookRecord_AddrEntry, incoming ma.Multiaddr) *pb.AddrBookRecord_AddrEntry {
+		for _, have := range entryList {
 			if incoming.Equal(have.Addr) {
-				existed[i] = true
 				switch mode {
 				case ttlOverride:
 					have.Ttl = int64(ttl)
@@ -361,36 +465,71 @@ Outer:
 				default:
 					panic("BUG: unimplemented ttl mode")
 				}
-
-				// we found the address, and addresses cannot be duplicate,
-				// so let's move on to the next.
-				continue Outer
+				return have
 			}
 		}
+		return nil
 	}
 
-	// add addresses we didn't hold.
-	var added []*pb.AddrBookRecord_AddrEntry
-	for i, e := range existed {
-		if e {
-			continue
+	var entries []*pb.AddrBookRecord_AddrEntry
+	for _, incoming := range addrs {
+		existingEntry := updateExisting(pr.Addrs, incoming)
+
+		if existingEntry == nil {
+			// 	if signed {
+			// 		entries = append(entries, existingEntry)
+			// 	}
+			// } else {
+			// new addr, add & broadcast
+			entry := &pb.AddrBookRecord_AddrEntry{
+				Addr:   &pb.ProtoAddr{Multiaddr: incoming},
+				Ttl:    int64(ttl),
+				Expiry: newExp,
+			}
+			entries = append(entries, entry)
+
+			// note: there's a minor chance that writing the record will fail, in which case we would've broadcast
+			// the addresses without persisting them. This is very unlikely and not much of an issue.
+			ab.subsManager.BroadcastAddr(p, incoming)
 		}
-		addr := addrs[i]
-		entry := &pb.AddrBookRecord_AddrEntry{
-			Addr:   &pb.ProtoAddr{Multiaddr: addr},
-			Ttl:    int64(ttl),
-			Expiry: newExp,
-		}
-		added = append(added, entry)
-		// note: there's a minor chance that writing the record will fail, in which case we would've broadcast
-		// the addresses without persisting them. This is very unlikely and not much of an issue.
-		ab.subsManager.BroadcastAddr(p, addr)
 	}
 
-	pr.Addrs = append(pr.Addrs, added...)
+	// if signed {
+	// 	// when adding signed addrs, we want to keep _only_ the incoming addrs
+	// 	pr.Addrs = entries
+	// } else {
+	pr.Addrs = append(pr.Addrs, entries...)
+	// }
+
 	pr.dirty = true
 	pr.clean()
 	return pr.flush(ab.ds)
+}
+
+// deletes addresses in place, avoiding copies until we encounter the first deletion.
+// does not preserve order, but entries are re-sorted before flushing to disk anyway.
+func deleteInPlace(s []*pb.AddrBookRecord_AddrEntry, addrs []ma.Multiaddr) []*pb.AddrBookRecord_AddrEntry {
+	if s == nil || len(addrs) == 0 {
+		return s
+	}
+	survived := len(s)
+Outer:
+	for i, addr := range s {
+		for _, del := range addrs {
+			if !addr.Addr.Equal(del) {
+				continue
+			}
+			survived--
+			// if there are no survivors, bail out
+			if survived == 0 {
+				break Outer
+			}
+			s[i] = s[survived]
+			// we've already dealt with s[i], move to the next
+			continue Outer
+		}
+	}
+	return s[:survived]
 }
 
 func (ab *dsAddrBook) deleteAddrs(p peer.ID, addrs []ma.Multiaddr) (err error) {
@@ -406,20 +545,7 @@ func (ab *dsAddrBook) deleteAddrs(p peer.ID, addrs []ma.Multiaddr) (err error) {
 	pr.Lock()
 	defer pr.Unlock()
 
-	// deletes addresses in place, and avoiding copies until we encounter the first deletion.
-	survived := 0
-	for i, addr := range pr.Addrs {
-		for _, del := range addrs {
-			if addr.Addr.Equal(del) {
-				continue
-			}
-			if i != survived {
-				pr.Addrs[survived] = pr.Addrs[i]
-			}
-			survived++
-		}
-	}
-	pr.Addrs = pr.Addrs[:survived]
+	pr.Addrs = deleteInPlace(pr.Addrs, addrs)
 
 	pr.dirty = true
 	pr.clean()

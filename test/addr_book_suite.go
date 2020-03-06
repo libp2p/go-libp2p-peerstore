@@ -1,6 +1,11 @@
 package test
 
 import (
+	"github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/record"
+	"github.com/libp2p/go-libp2p-core/test"
+	"github.com/multiformats/go-multiaddr"
 	"testing"
 	"time"
 
@@ -16,6 +21,7 @@ var addressBookSuite = map[string]func(book pstore.AddrBook) func(*testing.T){
 	"AddressesExpire":      testAddressesExpire,
 	"ClearWithIter":        testClearWithIterator,
 	"PeersWithAddresses":   testPeersWithAddrs,
+	"CertifiedAddresses":   testCertifiedAddresses,
 }
 
 type AddrBookFactory func() (pstore.AddrBook, func())
@@ -168,6 +174,30 @@ func testSetNegativeTTLClears(m pstore.AddrBook) func(t *testing.T) {
 		survivors = append(survivors[0:74], survivors[75:]...)
 
 		AssertAddressesEqual(t, survivors, m.Addrs(id))
+
+		// remove _all_ the addresses
+		m.SetAddrs(id, survivors, -1)
+		if len(m.Addrs(id)) != 0 {
+			t.Error("expected empty address list after clearing all addresses")
+		}
+
+		// add half, but try to remove more than we added
+		m.SetAddrs(id, addrs[:50], time.Hour)
+		m.SetAddrs(id, addrs, -1)
+		if len(m.Addrs(id)) != 0 {
+			t.Error("expected empty address list after clearing all addresses")
+		}
+
+		// try to remove the same addr multiple times
+		m.SetAddrs(id, addrs[:5], time.Hour)
+		repeated := make([]multiaddr.Multiaddr, 10)
+		for i := 0; i < len(repeated); i++ {
+			repeated[i] = addrs[0]
+		}
+		m.SetAddrs(id, repeated, -1)
+		if len(m.Addrs(id)) != 4 {
+			t.Errorf("expected 4 addrs after removing one, got %d", len(m.Addrs(id)))
+		}
 	}
 }
 
@@ -329,5 +359,115 @@ func testPeersWithAddrs(m pstore.AddrBook) func(t *testing.T) {
 				t.Fatal("expected to find 2 peers")
 			}
 		})
+	}
+}
+
+func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
+	return func(t *testing.T) {
+		cab := m.(pstore.CertifiedAddrBook)
+
+		priv, _, err := test.RandTestKeyPair(crypto.Ed25519, 256)
+		if err != nil {
+			t.Errorf("error generating testing keys: %v", err)
+		}
+
+		id, _ := peer.IDFromPrivateKey(priv)
+		allAddrs := GenerateAddrs(10)
+		certifiedAddrs := allAddrs[:5]
+		uncertifiedAddrs := allAddrs[5:]
+		rec := peer.NewPeerRecord()
+		rec.PeerID = id
+		rec.Addrs = certifiedAddrs
+		signedRec, err := record.Seal(rec, priv)
+		if err != nil {
+			t.Errorf("error creating signed routing record: %v", err)
+		}
+
+		// add a few non-certified addrs
+		m.AddAddrs(id, uncertifiedAddrs, time.Hour)
+
+		// make sure they're present
+		AssertAddressesEqual(t, uncertifiedAddrs, m.Addrs(id))
+
+		// add the signed record to addr book
+		_, err = cab.ConsumePeerRecord(signedRec, time.Hour)
+		if err != nil {
+			t.Errorf("error adding signed routing record to addrbook: %v", err)
+		}
+
+		// the non-certified addrs should be gone & we should get only certified addrs back from Addrs
+		// AssertAddressesEqual(t, certifiedAddrs, m.Addrs(id))
+		AssertAddressesEqual(t, allAddrs, m.Addrs(id))
+
+		// PeersWithAddrs should return a single peer
+		if len(m.PeersWithAddrs()) != 1 {
+			t.Errorf("expected PeersWithAddrs to return 1, got %d", len(m.PeersWithAddrs()))
+		}
+
+		// adding the same peer record again should result in the record being ignored
+		accepted, err := cab.ConsumePeerRecord(signedRec, time.Hour)
+		if accepted {
+			t.Error("Expected record with duplicate sequence number to be ignored")
+		}
+		if err != nil {
+			t.Errorf("Expected record with duplicate sequence number to be ignored without error, got err: %s", err)
+		}
+
+		// once certified addrs exist, trying to add non-certified addrs should have no effect
+		// m.AddAddrs(id, uncertifiedAddrs, time.Hour)
+		// AssertAddressesEqual(t, certifiedAddrs, m.Addrs(id))
+		m.AddAddrs(id, uncertifiedAddrs, time.Hour)
+		AssertAddressesEqual(t, allAddrs, m.Addrs(id))
+
+		// we should be able to retrieve the signed peer record
+		rec2 := cab.GetPeerRecord(id)
+		if rec2 == nil || !signedRec.Equal(rec2) {
+			t.Error("unable to retrieve signed routing record from addrbook")
+		}
+
+		// Adding a new envelope should clear existing certified addresses.
+		// Only the newly-added ones should remain
+		certifiedAddrs = certifiedAddrs[:3]
+		rec = peer.NewPeerRecord()
+		rec.PeerID = id
+		rec.Addrs = certifiedAddrs
+		signedRec, err = record.Seal(rec, priv)
+		test.AssertNilError(t, err)
+		_, err = cab.ConsumePeerRecord(signedRec, time.Hour)
+		test.AssertNilError(t, err)
+		// AssertAddressesEqual(t, certifiedAddrs, m.Addrs(id))
+		AssertAddressesEqual(t, allAddrs, m.Addrs(id))
+
+		// update TTL on signed addrs to -1 to remove them.
+		// the signed routing record should be deleted
+		// m.SetAddrs(id, certifiedAddrs, -1)
+		m.SetAddrs(id, allAddrs, -1)
+		if len(m.Addrs(id)) != 0 {
+			t.Error("expected zero certified addrs after setting TTL to -1")
+		}
+		if cab.GetPeerRecord(id) != nil {
+			t.Error("expected signed peer record to be removed when addresses expire")
+		}
+
+		// Test that natural TTL expiration clears signed peer records
+		_, err = cab.ConsumePeerRecord(signedRec, time.Second)
+		test.AssertNilError(t, err)
+		AssertAddressesEqual(t, certifiedAddrs, m.Addrs(id))
+
+		time.Sleep(2 * time.Second)
+		if cab.GetPeerRecord(id) != nil {
+			t.Error("expected signed peer record to be removed when addresses expire")
+		}
+
+		// adding a peer record that's signed with the wrong key should fail
+		priv2, _, err := test.RandTestKeyPair(crypto.Ed25519, 256)
+		test.AssertNilError(t, err)
+		env, err := record.Seal(rec, priv2)
+		test.AssertNilError(t, err)
+
+		accepted, err = cab.ConsumePeerRecord(env, time.Second)
+		if accepted || err == nil {
+			t.Error("expected adding a PeerRecord that's signed with the wrong key to fail")
+		}
 	}
 }

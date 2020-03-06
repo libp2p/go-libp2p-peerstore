@@ -26,7 +26,7 @@ type dsProtoBook struct {
 
 var _ pstore.ProtoBook = (*dsProtoBook)(nil)
 
-func NewProtoBook(meta pstore.PeerMetadata) pstore.ProtoBook {
+func NewProtoBook(meta pstore.PeerMetadata) *dsProtoBook {
 	return &dsProtoBook{
 		meta: meta,
 		segments: func() (ret protoSegments) {
