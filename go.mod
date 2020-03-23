@@ -16,6 +16,7 @@ require (
 	github.com/multiformats/go-multihash v0.0.13
 	github.com/pkg/errors v0.9.1
 	github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1
+	go.uber.org/goleak v1.0.0
 	golang.org/x/sys v0.0.0-20200202164722-d101bd2416d5 // indirect
 )
 

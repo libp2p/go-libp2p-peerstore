@@ -11,20 +11,20 @@ import (
 type pstoremem struct {
 	peerstore.Metrics
 
-	memoryKeyBook
-	memoryAddrBook
-	memoryProtoBook
-	memoryPeerMetadata
+	*memoryKeyBook
+	*memoryAddrBook
+	*memoryProtoBook
+	*memoryPeerMetadata
 }
 
 // NewPeerstore creates an in-memory threadsafe collection of peers.
 func NewPeerstore() *pstoremem {
 	return &pstoremem{
 		Metrics:            pstore.NewMetrics(),
-		memoryKeyBook:      *NewKeyBook(),
-		memoryAddrBook:     *NewAddrBook(),
-		memoryProtoBook:    *NewProtoBook(),
-		memoryPeerMetadata: *NewPeerMetadata(),
+		memoryKeyBook:      NewKeyBook(),
+		memoryAddrBook:     NewAddrBook(),
+		memoryProtoBook:    NewProtoBook(),
+		memoryPeerMetadata: NewPeerMetadata(),
 	}
 }
 
