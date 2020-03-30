@@ -240,21 +240,6 @@ func (mab *memoryAddrBook) addAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 			}
 		}
 	}
-
-	// // when adding signed addrs, make sure only the addrs from the input list remain.
-	// if signed {
-	// 	for k := range amap {
-	// 		_, ok := addrSet[k]
-	// 		if !ok {
-	// 			delete(amap, k)
-	// 		}
-	// 	}
-	// }
-
-	// if we've expired all the signed addresses for a peer, remove their signed routing state record
-	if len(addrs) == 0 {
-		delete(s.signedPeerRecords, p)
-	}
 }
 
 // SetAddr calls mgr.SetAddrs(p, addr, ttl)
