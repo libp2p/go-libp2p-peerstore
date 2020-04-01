@@ -295,11 +295,6 @@ func (mab *memoryAddrBook) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 			delete(amap, key)
 		}
 	}
-
-	// if we've expired all the signed addresses for a peer, remove their signed routing state record
-	if len(amap) == 0 {
-		delete(s.signedPeerRecords, p)
-	}
 }
 
 // UpdateAddrs updates the addresses associated with the given peer that have
@@ -329,11 +324,6 @@ func (mab *memoryAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL t
 				amap[k] = a
 			}
 		}
-	}
-
-	// if we've expired all the signed addresses for a peer, remove their signed routing state record
-	if len(amap) == 0 {
-		delete(s.signedPeerRecords, p)
 	}
 }
 
