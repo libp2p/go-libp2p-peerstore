@@ -41,6 +41,9 @@ func NewPeerMetadata(_ context.Context, store ds.Datastore, _ Options) (*dsPeerM
 }
 
 func (pm *dsPeerMetadata) Get(p peer.ID, key string) (interface{}, error) {
+	if err := p.Validate(); err != nil {
+		return nil, err
+	}
 	k := pmBase.ChildString(base32.RawStdEncoding.EncodeToString([]byte(p))).ChildString(key)
 	value, err := pm.ds.Get(k)
 	if err != nil {
@@ -58,6 +61,9 @@ func (pm *dsPeerMetadata) Get(p peer.ID, key string) (interface{}, error) {
 }
 
 func (pm *dsPeerMetadata) Put(p peer.ID, key string, val interface{}) error {
+	if err := p.Validate(); err != nil {
+		return err
+	}
 	k := pmBase.ChildString(base32.RawStdEncoding.EncodeToString([]byte(p))).ChildString(key)
 	var buf pool.Buffer
 	if err := gob.NewEncoder(&buf).Encode(&val); err != nil {

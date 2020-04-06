@@ -279,6 +279,29 @@ func testPeerstoreProtoStore(ps pstore.Peerstore) func(t *testing.T) {
 		if !reflect.DeepEqual(supported, protos[2:]) {
 			t.Fatal("expected only one protocol to remain")
 		}
+
+		// test bad peer IDs
+		badp := peer.ID("")
+
+		err = ps.AddProtocols(badp, protos...)
+		if err == nil {
+			t.Fatal("expected error when using a bad peer ID")
+		}
+
+		_, err = ps.GetProtocols(badp)
+		if err == nil || err == pstore.ErrNotFound {
+			t.Fatal("expected error when using a bad peer ID")
+		}
+
+		_, err = ps.SupportsProtocols(badp, "q", "w", "a", "y", "b")
+		if err == nil || err == pstore.ErrNotFound {
+			t.Fatal("expected error when using a bad peer ID")
+		}
+
+		err = ps.RemoveProtocols(badp)
+		if err == nil || err == pstore.ErrNotFound {
+			t.Fatal("expected error when using a bad peer ID")
+		}
 	}
 }
 
@@ -309,6 +332,10 @@ func testBasicPeerstore(ps pstore.Peerstore) func(t *testing.T) {
 		if !pinfo.Addrs[0].Equal(addrs[0]) {
 			t.Fatal("stored wrong address")
 		}
+
+		// should fail silently...
+		ps.AddAddrs("", addrs, pstore.PermanentAddrTTL)
+		ps.Addrs("")
 	}
 }
 
@@ -354,6 +381,12 @@ func testMetadata(ps pstore.Peerstore) func(t *testing.T) {
 				t.Errorf("expected %q, got %v", 1, v)
 				continue
 			}
+		}
+		if err := ps.Put("", "foobar", "thing"); err == nil {
+			t.Errorf("expected error for bad peer ID")
+		}
+		if _, err := ps.Get("", "foobar"); err == nil || err == pstore.ErrNotFound {
+			t.Errorf("expected error for bad peer ID")
 		}
 	}
 }
