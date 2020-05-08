@@ -163,3 +163,20 @@ func (pb *memoryProtoBook) SupportsProtocols(p peer.ID, protos ...string) ([]str
 
 	return out, nil
 }
+
+func (pb *memoryProtoBook) SupportsAnyProtocol(p peer.ID, protos ...string) (bool, error) {
+	if err := p.Validate(); err != nil {
+		return false, err
+	}
+
+	s := pb.segments.get(p)
+	s.RLock()
+	defer s.RUnlock()
+
+	for _, proto := range protos {
+		if _, ok := s.protocols[p][proto]; ok {
+			return true, nil
+		}
+	}
+	return false, nil
+}
