@@ -243,17 +243,17 @@ func testPeerstoreProtoStore(ps pstore.Peerstore) func(t *testing.T) {
 			t.Fatal("got wrong supported array: ", supported)
 		}
 
-		b, err := ps.SupportsAnyProtocol(p1, "q", "w", "a", "y", "b")
+		b, err := ps.FirstSupportedProtocol(p1, "q", "w", "a", "y", "b")
 		require.NoError(t, err)
-		require.True(t, b)
+		require.Equal(t, "a", b)
 
-		b, err = ps.SupportsAnyProtocol(p1, "a")
+		b, err = ps.FirstSupportedProtocol(p1, "q", "x", "z")
 		require.NoError(t, err)
-		require.True(t, b)
+		require.Empty(t, b)
 
-		b, err = ps.SupportsAnyProtocol(p1, "q")
+		b, err = ps.FirstSupportedProtocol(p1, "a")
 		require.NoError(t, err)
-		require.False(t, b)
+		require.Equal(t, "a", b)
 
 		protos = []string{"other", "yet another", "one more"}
 		err = ps.SetProtocols(p1, protos...)

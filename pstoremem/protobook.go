@@ -164,9 +164,9 @@ func (pb *memoryProtoBook) SupportsProtocols(p peer.ID, protos ...string) ([]str
 	return out, nil
 }
 
-func (pb *memoryProtoBook) SupportsAnyProtocol(p peer.ID, protos ...string) (bool, error) {
+func (pb *memoryProtoBook) FirstSupportedProtocol(p peer.ID, protos ...string) (string, error) {
 	if err := p.Validate(); err != nil {
-		return false, err
+		return "", err
 	}
 
 	s := pb.segments.get(p)
@@ -175,8 +175,8 @@ func (pb *memoryProtoBook) SupportsAnyProtocol(p peer.ID, protos ...string) (boo
 
 	for _, proto := range protos {
 		if _, ok := s.protocols[p][proto]; ok {
-			return true, nil
+			return proto, nil
 		}
 	}
-	return false, nil
+	return "", nil
 }
