@@ -12,7 +12,7 @@ require (
 	github.com/multiformats/go-base32 v0.0.3
 	github.com/multiformats/go-multiaddr v0.2.1
 	github.com/multiformats/go-multiaddr-fmt v0.1.0
-	github.com/multiformats/go-multiaddr-net v0.1.4
+	github.com/multiformats/go-multiaddr-net v0.1.5
 	github.com/multiformats/go-multihash v0.0.13
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.4.0
