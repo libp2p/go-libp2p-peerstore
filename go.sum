@@ -99,6 +99,8 @@ github.com/libp2p/go-libp2p-core v0.5.4-0.20200508062439-98b95a487749 h1:G0zRpRn
 github.com/libp2p/go-libp2p-core v0.5.4-0.20200508062439-98b95a487749/go.mod h1:uN7L2D4EvPCvzSH5SrhR72UWbnSGpt5/a35Sm4upn4Y=
 github.com/libp2p/go-libp2p-core v0.5.4-0.20200511073005-dabf5bbfb028 h1:nQb4SDWcadn/kpWtMwsWweogIzYviVE5qOMT42bkyNE=
 github.com/libp2p/go-libp2p-core v0.5.4-0.20200511073005-dabf5bbfb028/go.mod h1:uN7L2D4EvPCvzSH5SrhR72UWbnSGpt5/a35Sm4upn4Y=
+github.com/libp2p/go-libp2p-core v0.5.4 h1:Z8Tt3R5or2pkl3Wgywfcc0GCNjf18aYWA30OjBpbmRs=
+github.com/libp2p/go-libp2p-core v0.5.4/go.mod h1:uN7L2D4EvPCvzSH5SrhR72UWbnSGpt5/a35Sm4upn4Y=
 github.com/libp2p/go-msgio v0.0.4/go.mod h1:63lBBgOTDKQL6EWazRMCwXsEeEeK9O2Cd+0+6OOuipQ=
 github.com/libp2p/go-openssl v0.0.4 h1:d27YZvLoTyMhIN4njrkr8zMDOM4lfpHIp6A+TK9fovg=
 github.com/libp2p/go-openssl v0.0.4/go.mod h1:unDrJpgy3oFr+rqXsarWifmJuNnJR4chtO1HmaZjggc=

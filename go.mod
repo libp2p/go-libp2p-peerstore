@@ -8,7 +8,7 @@ require (
 	github.com/ipfs/go-ds-leveldb v0.4.2
 	github.com/ipfs/go-log v1.0.3
 	github.com/libp2p/go-buffer-pool v0.0.2
-	github.com/libp2p/go-libp2p-core v0.5.4-0.20200511073005-dabf5bbfb028
+	github.com/libp2p/go-libp2p-core v0.5.4
 	github.com/multiformats/go-base32 v0.0.3
 	github.com/multiformats/go-multiaddr v0.2.1
 	github.com/multiformats/go-multiaddr-fmt v0.1.0
