@@ -122,6 +122,28 @@ func (pb *dsProtoBook) SupportsProtocols(p peer.ID, protos ...string) ([]string,
 	return res, nil
 }
 
+func (pb *dsProtoBook) FirstSupportedProtocol(p peer.ID, protos ...string) (string, error) {
+	if err := p.Validate(); err != nil {
+		return "", err
+	}
+
+	s := pb.segments.get(p)
+	s.RLock()
+	defer s.RUnlock()
+
+	pmap, err := pb.getProtocolMap(p)
+	if err != nil {
+		return "", err
+	}
+	for _, proto := range protos {
+		if _, ok := pmap[proto]; ok {
+			return proto, nil
+		}
+	}
+
+	return "", nil
+}
+
 func (pb *dsProtoBook) RemoveProtocols(p peer.ID, protos ...string) error {
 	if err := p.Validate(); err != nil {
 		return err

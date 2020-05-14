@@ -14,6 +14,7 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 
 	pstore "github.com/libp2p/go-libp2p-core/peerstore"
+	"github.com/stretchr/testify/require"
 )
 
 var peerstoreSuite = map[string]func(pstore.Peerstore) func(*testing.T){
@@ -241,6 +242,18 @@ func testPeerstoreProtoStore(ps pstore.Peerstore) func(t *testing.T) {
 		if supported[0] != "a" || supported[1] != "b" {
 			t.Fatal("got wrong supported array: ", supported)
 		}
+
+		b, err := ps.FirstSupportedProtocol(p1, "q", "w", "a", "y", "b")
+		require.NoError(t, err)
+		require.Equal(t, "a", b)
+
+		b, err = ps.FirstSupportedProtocol(p1, "q", "x", "z")
+		require.NoError(t, err)
+		require.Empty(t, b)
+
+		b, err = ps.FirstSupportedProtocol(p1, "a")
+		require.NoError(t, err)
+		require.Equal(t, "a", b)
 
 		protos = []string{"other", "yet another", "one more"}
 		err = ps.SetProtocols(p1, protos...)
