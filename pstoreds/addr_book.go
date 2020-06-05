@@ -3,10 +3,11 @@ package pstoreds
 import (
 	"context"
 	"fmt"
-	"github.com/libp2p/go-libp2p-core/record"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/libp2p/go-libp2p-core/record"
 
 	ds "github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/query"
@@ -17,7 +18,7 @@ import (
 	pb "github.com/libp2p/go-libp2p-peerstore/pb"
 	"github.com/libp2p/go-libp2p-peerstore/pstoremem"
 
-	"github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru"
 	b32 "github.com/multiformats/go-base32"
 	ma "github.com/multiformats/go-multiaddr"
 )
@@ -316,6 +317,8 @@ func (ab *dsAddrBook) storeSignedPeerRecord(p peer.ID, envelope *record.Envelope
 	if err != nil {
 		return err
 	}
+	pr.Lock()
+	defer pr.Unlock()
 	pr.CertifiedRecord = &pb.AddrBookRecord_CertifiedRecord{
 		Seq: rec.Seq,
 		Raw: envelopeBytes,
@@ -334,6 +337,8 @@ func (ab *dsAddrBook) GetPeerRecord(p peer.ID) *record.Envelope {
 		log.Errorf("unable to load record for peer %s: %v", p.Pretty(), err)
 		return nil
 	}
+	pr.RLock()
+	defer pr.RUnlock()
 	if pr.CertifiedRecord == nil || len(pr.CertifiedRecord.Raw) == 0 || len(pr.Addrs) == 0 {
 		return nil
 	}
