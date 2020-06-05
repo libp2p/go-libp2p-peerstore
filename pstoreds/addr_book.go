@@ -317,6 +317,8 @@ func (ab *dsAddrBook) storeSignedPeerRecord(p peer.ID, envelope *record.Envelope
 	if err != nil {
 		return err
 	}
+	pr.Lock()
+	defer pr.Unlock()
 	pr.CertifiedRecord = &pb.AddrBookRecord_CertifiedRecord{
 		Seq: rec.Seq,
 		Raw: envelopeBytes,
