@@ -159,7 +159,7 @@ func (mab *memoryAddrBook) AddAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 	// if peerRec != nil {
 	// 	return
 	// }
-	mab.addAddrs(p, addrs, ttl, false)
+	mab.addAddrs(p, addrs, ttl)
 }
 
 // ConsumePeerRecord adds addresses from a signed peer.PeerRecord (contained in
@@ -181,34 +181,37 @@ func (mab *memoryAddrBook) ConsumePeerRecord(recordEnvelope *record.Envelope, tt
 	// ensure seq is greater than, or equal to, the last received
 	s := mab.segments.get(rec.PeerID)
 	s.Lock()
+	defer s.Unlock()
 	lastState, found := s.signedPeerRecords[rec.PeerID]
 	if found && lastState.Seq > rec.Seq {
-		s.Unlock()
 		return false, nil
 	}
 	s.signedPeerRecords[rec.PeerID] = &peerRecordState{
 		Envelope: recordEnvelope,
 		Seq:      rec.Seq,
 	}
-	s.Unlock() // need to release the lock, since addAddrs will try to take it
-	mab.addAddrs(rec.PeerID, rec.Addrs, ttl, true)
+	mab.addAddrsUnlocked(s, rec.PeerID, rec.Addrs, ttl, true)
 	return true, nil
 }
 
-func (mab *memoryAddrBook) addAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration, signed bool) {
+func (mab *memoryAddrBook) addAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
 	if err := p.Validate(); err != nil {
 		log.Warningf("tried to set addrs for invalid peer ID %s: %s", p, err)
-		return
-	}
-
-	// if ttl is zero, exit. nothing to do.
-	if ttl <= 0 {
 		return
 	}
 
 	s := mab.segments.get(p)
 	s.Lock()
 	defer s.Unlock()
+
+	mab.addAddrsUnlocked(s, p, addrs, ttl, false)
+}
+
+func (mab *memoryAddrBook) addAddrsUnlocked(s *addrSegment, p peer.ID, addrs []ma.Multiaddr, ttl time.Duration, signed bool) {
+	// if ttl is zero, exit. nothing to do.
+	if ttl <= 0 {
+		return
+	}
 
 	amap, ok := s.addrs[p]
 	if !ok {
