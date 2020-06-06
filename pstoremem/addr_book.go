@@ -178,11 +178,11 @@ func (mab *memoryAddrBook) ConsumePeerRecord(recordEnvelope *record.Envelope, tt
 		return false, fmt.Errorf("signing key does not match PeerID in PeerRecord")
 	}
 
-	// ensure seq is greater than last received
+	// ensure seq is greater than, or equal to, the last received
 	s := mab.segments.get(rec.PeerID)
 	s.Lock()
 	lastState, found := s.signedPeerRecords[rec.PeerID]
-	if found && lastState.Seq >= rec.Seq {
+	if found && lastState.Seq > rec.Seq {
 		s.Unlock()
 		return false, nil
 	}
