@@ -375,10 +375,18 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 		allAddrs := GenerateAddrs(10)
 		certifiedAddrs := allAddrs[:5]
 		uncertifiedAddrs := allAddrs[5:]
-		rec := peer.NewPeerRecord()
-		rec.PeerID = id
-		rec.Addrs = certifiedAddrs
-		signedRec, err := record.Seal(rec, priv)
+		rec1 := peer.NewPeerRecord()
+		rec1.PeerID = id
+		rec1.Addrs = certifiedAddrs
+		signedRec1, err := record.Seal(rec1, priv)
+		if err != nil {
+			t.Errorf("error creating signed routing record: %v", err)
+		}
+
+		rec2 := peer.NewPeerRecord()
+		rec2.PeerID = id
+		rec2.Addrs = certifiedAddrs
+		signedRec2, err := record.Seal(rec2, priv)
 		if err != nil {
 			t.Errorf("error creating signed routing record: %v", err)
 		}
@@ -390,9 +398,12 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 		AssertAddressesEqual(t, uncertifiedAddrs, m.Addrs(id))
 
 		// add the signed record to addr book
-		_, err = cab.ConsumePeerRecord(signedRec, time.Hour)
+		accepted, err := cab.ConsumePeerRecord(signedRec2, time.Hour)
 		if err != nil {
 			t.Errorf("error adding signed routing record to addrbook: %v", err)
+		}
+		if !accepted {
+			t.Errorf("should have accepted signed peer record")
 		}
 
 		// the non-certified addrs should be gone & we should get only certified addrs back from Addrs
@@ -404,36 +415,37 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 			t.Errorf("expected PeersWithAddrs to return 1, got %d", len(m.PeersWithAddrs()))
 		}
 
-		// adding the same peer record again should result in the record being ignored
-		accepted, err := cab.ConsumePeerRecord(signedRec, time.Hour)
+		// Adding an old record should fail
+		accepted, err = cab.ConsumePeerRecord(signedRec1, time.Hour)
 		if accepted {
-			t.Error("Expected record with duplicate sequence number to be ignored")
+			t.Error("We should have failed to accept a record with an old sequence number")
 		}
 		if err != nil {
-			t.Errorf("Expected record with duplicate sequence number to be ignored without error, got err: %s", err)
+			t.Errorf("expected no error, got: %s", err)
 		}
 
 		// once certified addrs exist, trying to add non-certified addrs should have no effect
 		// m.AddAddrs(id, uncertifiedAddrs, time.Hour)
 		// AssertAddressesEqual(t, certifiedAddrs, m.Addrs(id))
+		// XXX: Disabled until signed records are required
 		m.AddAddrs(id, uncertifiedAddrs, time.Hour)
 		AssertAddressesEqual(t, allAddrs, m.Addrs(id))
 
 		// we should be able to retrieve the signed peer record
-		rec2 := cab.GetPeerRecord(id)
-		if rec2 == nil || !signedRec.Equal(rec2) {
+		rec3 := cab.GetPeerRecord(id)
+		if rec3 == nil || !signedRec2.Equal(rec3) {
 			t.Error("unable to retrieve signed routing record from addrbook")
 		}
 
 		// Adding a new envelope should clear existing certified addresses.
 		// Only the newly-added ones should remain
 		certifiedAddrs = certifiedAddrs[:3]
-		rec = peer.NewPeerRecord()
-		rec.PeerID = id
-		rec.Addrs = certifiedAddrs
-		signedRec, err = record.Seal(rec, priv)
+		rec4 := peer.NewPeerRecord()
+		rec4.PeerID = id
+		rec4.Addrs = certifiedAddrs
+		signedRec4, err := record.Seal(rec4, priv)
 		test.AssertNilError(t, err)
-		_, err = cab.ConsumePeerRecord(signedRec, time.Hour)
+		_, err = cab.ConsumePeerRecord(signedRec4, time.Hour)
 		test.AssertNilError(t, err)
 		// AssertAddressesEqual(t, certifiedAddrs, m.Addrs(id))
 		AssertAddressesEqual(t, allAddrs, m.Addrs(id))
@@ -441,6 +453,7 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 		// update TTL on signed addrs to -1 to remove them.
 		// the signed routing record should be deleted
 		// m.SetAddrs(id, certifiedAddrs, -1)
+		// XXX: Disabled until signed records are required
 		m.SetAddrs(id, allAddrs, -1)
 		if len(m.Addrs(id)) != 0 {
 			t.Error("expected zero certified addrs after setting TTL to -1")
@@ -450,7 +463,7 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 		}
 
 		// Test that natural TTL expiration clears signed peer records
-		_, err = cab.ConsumePeerRecord(signedRec, time.Second)
+		_, err = cab.ConsumePeerRecord(signedRec4, time.Second)
 		test.AssertNilError(t, err)
 		AssertAddressesEqual(t, certifiedAddrs, m.Addrs(id))
 
@@ -462,7 +475,7 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 		// adding a peer record that's signed with the wrong key should fail
 		priv2, _, err := test.RandTestKeyPair(crypto.Ed25519, 256)
 		test.AssertNilError(t, err)
-		env, err := record.Seal(rec, priv2)
+		env, err := record.Seal(rec4, priv2)
 		test.AssertNilError(t, err)
 
 		accepted, err = cab.ConsumePeerRecord(env, time.Second)

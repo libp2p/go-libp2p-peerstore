@@ -278,8 +278,9 @@ func (ab *dsAddrBook) ConsumePeerRecord(recordEnvelope *record.Envelope, ttl tim
 		return false, fmt.Errorf("signing key does not match PeerID in PeerRecord")
 	}
 
-	// ensure that the seq number from envelope is > any previously received seq no
-	if ab.latestPeerRecordSeq(rec.PeerID) >= rec.Seq {
+	// ensure that the seq number from envelope is >= any previously received seq no
+	// update when equal to extend the ttls
+	if ab.latestPeerRecordSeq(rec.PeerID) > rec.Seq {
 		return false, nil
 	}
 
