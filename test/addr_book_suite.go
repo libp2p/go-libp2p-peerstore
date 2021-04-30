@@ -210,6 +210,18 @@ func testUpdateTTLs(m pstore.AddrBook) func(t *testing.T) {
 			m.UpdateAddrs(id, time.Hour, time.Minute)
 		})
 
+		t.Run("update to 0 clears addrs", func(t *testing.T) {
+			id := GeneratePeerIDs(1)[0]
+			addrs := GenerateAddrs(1)
+
+			// Shouldn't panic.
+			m.SetAddrs(id, addrs, time.Hour)
+			m.UpdateAddrs(id, time.Hour, 0)
+			if len(m.Addrs(id)) != 0 {
+				t.Error("expected no addresses")
+			}
+		})
+
 		t.Run("update ttls successfully", func(t *testing.T) {
 			ids := GeneratePeerIDs(2)
 			addrs1, addrs2 := GenerateAddrs(2), GenerateAddrs(2)
