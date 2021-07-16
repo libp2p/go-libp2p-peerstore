@@ -103,6 +103,7 @@ func badgerStore(tb testing.TB) (ds.Batching, func()) {
 	return store, closer
 }
 
+//lint:ignore U1000 disabled for now
 func leveldbStore(tb testing.TB) (ds.TxnDatastore, func()) {
 	dataPath, err := ioutil.TempDir(os.TempDir(), "leveldb")
 	if err != nil {

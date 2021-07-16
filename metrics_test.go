@@ -31,11 +31,9 @@ func TestLatencyEWMAFun(t *testing.T) {
 	}
 
 	for {
-		select {
-		case <-time.After(200 * time.Millisecond):
-			m.RecordLatency(id, next())
-			print()
-		}
+		time.Sleep(200 * time.Millisecond)
+		m.RecordLatency(id, next())
+		print()
 	}
 }
 
@@ -55,10 +53,8 @@ func TestLatencyEWMA(t *testing.T) {
 	}
 
 	for i := 0; i < 10; i++ {
-		select {
-		case <-time.After(200 * time.Millisecond):
-			m.RecordLatency(id, next())
-		}
+		time.Sleep(200 * time.Millisecond)
+		m.RecordLatency(id, next())
 	}
 
 	lat := m.LatencyEWMA(id)

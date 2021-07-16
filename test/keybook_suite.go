@@ -126,6 +126,9 @@ func testKeyBookPeers(kb pstore.KeyBook) func(t *testing.T) {
 
 			// Add a private key.
 			priv, _, err := pt.RandTestKeyPair(ic.RSA, 2048)
+			if err != nil {
+				t.Fatal(err)
+			}
 			p2, err := peer.IDFromPrivateKey(priv)
 			if err != nil {
 				t.Fatal(err)

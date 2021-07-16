@@ -110,7 +110,7 @@ func benchmarkAddGetAndClearAddrs(ps pstore.Peerstore, addrs chan *peerpair) fun
 func benchmarkGet1000PeersWithAddrs(ps pstore.Peerstore, addrs chan *peerpair) func(*testing.B) {
 	return func(b *testing.B) {
 		var peers = make([]*peerpair, 1000)
-		for i, _ := range peers {
+		for i := range peers {
 			pp := <-addrs
 			ps.AddAddrs(pp.ID, pp.Addr, pstore.PermanentAddrTTL)
 			peers[i] = pp
