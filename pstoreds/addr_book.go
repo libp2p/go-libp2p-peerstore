@@ -299,7 +299,13 @@ func (ab *dsAddrBook) ConsumePeerRecord(recordEnvelope *record.Envelope, ttl tim
 
 func (ab *dsAddrBook) latestPeerRecordSeq(p peer.ID) uint64 {
 	pr, err := ab.loadRecord(p, true, false)
-	if err != nil || len(pr.Addrs) == 0 || pr.CertifiedRecord == nil || len(pr.CertifiedRecord.Raw) == 0 {
+	if err != nil {
+		return 0
+	}
+	pr.RLock()
+	defer pr.RUnlock()
+
+	if len(pr.Addrs) == 0 || pr.CertifiedRecord == nil || len(pr.CertifiedRecord.Raw) == 0 {
 		return 0
 	}
 	return pr.CertifiedRecord.Seq
@@ -552,12 +558,12 @@ func (ab *dsAddrBook) deleteAddrs(p peer.ID, addrs []ma.Multiaddr) (err error) {
 		return fmt.Errorf("failed to load peerstore entry for peer %v while deleting addrs, err: %v", p, err)
 	}
 
+	pr.Lock()
+	defer pr.Unlock()
+
 	if pr.Addrs == nil {
 		return nil
 	}
-
-	pr.Lock()
-	defer pr.Unlock()
 
 	pr.Addrs = deleteInPlace(pr.Addrs, addrs)
 
