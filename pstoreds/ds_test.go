@@ -18,8 +18,8 @@ import (
 type datastoreFactory func(tb testing.TB) (ds.Batching, func())
 
 var dstores = map[string]datastoreFactory{
-	"Badger": badgerStore,
-	// "Leveldb": leveldbStore,
+	//"Badger": badgerStore,
+	"Leveldb": leveldbStore,
 }
 
 func TestDsPeerstore(t *testing.T) {
@@ -87,6 +87,8 @@ func BenchmarkDsPeerstore(b *testing.B) {
 	}
 }
 
+// Doesn't work on 32bit because badger.
+//lint:ignore U1000 disabled for now
 func badgerStore(tb testing.TB) (ds.Batching, func()) {
 	dataPath, err := ioutil.TempDir(os.TempDir(), "badger")
 	if err != nil {
@@ -103,8 +105,7 @@ func badgerStore(tb testing.TB) (ds.Batching, func()) {
 	return store, closer
 }
 
-//lint:ignore U1000 disabled for now
-func leveldbStore(tb testing.TB) (ds.TxnDatastore, func()) {
+func leveldbStore(tb testing.TB) (ds.Batching, func()) {
 	dataPath, err := ioutil.TempDir(os.TempDir(), "leveldb")
 	if err != nil {
 		tb.Fatal(err)
