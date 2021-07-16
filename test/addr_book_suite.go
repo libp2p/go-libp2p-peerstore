@@ -123,8 +123,8 @@ func testAddAddress(ab pstore.AddrBook) func(*testing.T) {
 			// 1 second left
 			ab.AddAddrs(id, addrs, 3*time.Second)
 			// 3 seconds left
-			time.Sleep(2 * time.Second)
-			// 1 seconds left.
+			time.Sleep(1 * time.Second)
+			// 2 seconds left.
 
 			// We still have the address.
 			AssertAddressesEqual(t, addrs, ab.Addrs(id))
@@ -246,7 +246,7 @@ func testUpdateTTLs(m pstore.AddrBook) func(t *testing.T) {
 			AssertAddressesEqual(t, addrs2, m.Addrs(ids[1]))
 
 			// After a wait, addrs[0] is gone.
-			time.Sleep(1500 * time.Millisecond)
+			time.Sleep(2 * time.Second)
 			AssertAddressesEqual(t, addrs1[1:2], m.Addrs(ids[0]))
 			AssertAddressesEqual(t, addrs2, m.Addrs(ids[1]))
 
@@ -257,7 +257,7 @@ func testUpdateTTLs(m pstore.AddrBook) func(t *testing.T) {
 			AssertAddressesEqual(t, addrs1[1:2], m.Addrs(ids[0]))
 			AssertAddressesEqual(t, addrs2, m.Addrs(ids[1]))
 
-			time.Sleep(1500 * time.Millisecond)
+			time.Sleep(2 * time.Second)
 
 			// First addrs is gone in both.
 			AssertAddressesEqual(t, addrs1[1:], m.Addrs(ids[0]))
