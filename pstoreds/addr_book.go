@@ -300,6 +300,9 @@ func (ab *dsAddrBook) ConsumePeerRecord(recordEnvelope *record.Envelope, ttl tim
 func (ab *dsAddrBook) latestPeerRecordSeq(p peer.ID) uint64 {
 	pr, err := ab.loadRecord(p, true, false)
 	if err != nil {
+		// We ignore the error because we don't want to fail storing a new record in this
+		// case.
+		log.Errorw("unable to load record", "peer", p, "error", err)
 		return 0
 	}
 	pr.RLock()
