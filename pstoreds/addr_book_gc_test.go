@@ -43,7 +43,7 @@ func TestGCLookahead(t *testing.T) {
 	opts.GCLookaheadInterval = 10 * time.Second
 	opts.GCPurgeInterval = 1 * time.Second
 
-	factory := addressBookFactory(t, badgerStore, opts)
+	factory := addressBookFactory(t, leveldbStore, opts)
 	ab, closeFn := factory()
 	gc := ab.(*dsAddrBook).gc
 	defer closeFn()
@@ -90,7 +90,7 @@ func TestGCPurging(t *testing.T) {
 	opts.GCLookaheadInterval = 20 * time.Second
 	opts.GCPurgeInterval = 1 * time.Second
 
-	factory := addressBookFactory(t, badgerStore, opts)
+	factory := addressBookFactory(t, leveldbStore, opts)
 	ab, closeFn := factory()
 	gc := ab.(*dsAddrBook).gc
 	defer closeFn()
@@ -157,7 +157,7 @@ func TestGCDelay(t *testing.T) {
 	opts.GCLookaheadInterval = 1 * time.Minute
 	opts.GCPurgeInterval = 30 * time.Second
 
-	factory := addressBookFactory(t, badgerStore, opts)
+	factory := addressBookFactory(t, leveldbStore, opts)
 	ab, closeFn := factory()
 	defer closeFn()
 
@@ -188,7 +188,7 @@ func TestGCLookaheadDisabled(t *testing.T) {
 	opts.GCLookaheadInterval = 0 // disable lookahead
 	opts.GCPurgeInterval = 9 * time.Hour
 
-	factory := addressBookFactory(t, badgerStore, opts)
+	factory := addressBookFactory(t, leveldbStore, opts)
 	ab, closeFn := factory()
 	defer closeFn()
 
@@ -232,7 +232,7 @@ func BenchmarkLookaheadCycle(b *testing.B) {
 	opts.GCLookaheadInterval = 2 * time.Hour
 	opts.GCPurgeInterval = 6 * time.Hour
 
-	factory := addressBookFactory(b, badgerStore, opts)
+	factory := addressBookFactory(b, leveldbStore, opts)
 	ab, closeFn := factory()
 	defer closeFn()
 
