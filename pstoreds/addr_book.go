@@ -99,13 +99,15 @@ func (r *addrsRecord) clean() (chgd bool) {
 		return true
 	}
 
-	if r.dirty && addrsLen > 1 {
+	// First remove expired.
+	r.Addrs = removeExpired(r.Addrs, now)
+
+	// Then sort if there's anything to do.
+	if r.dirty && len(r.Addrs) > 0 {
 		sort.Slice(r.Addrs, func(i, j int) bool {
 			return r.Addrs[i].Expiry < r.Addrs[j].Expiry
 		})
 	}
-
-	r.Addrs = removeExpired(r.Addrs, now)
 
 	return r.dirty || len(r.Addrs) != addrsLen
 }
@@ -118,17 +120,22 @@ func (r *addrsRecord) hasExpiredAddrs(now int64) bool {
 }
 
 func removeExpired(entries []*pb.AddrBookRecord_AddrEntry, now int64) []*pb.AddrBookRecord_AddrEntry {
-	// since addresses are sorted by expiration, we find the first
-	// survivor and split the slice on its index.
-	pivot := -1
-	for i, addr := range entries {
-		if addr.Expiry > now {
-			break
+	// Filter out expired addresses in-place.
+	newEntries := entries[:0]
+	for _, addr := range entries {
+		// Sometimes clocks do funy things so we check the TTL as well.
+		if addr.Ttl == 0 || addr.Expiry <= now {
+			continue
 		}
-		pivot = i
+		newEntries = append(newEntries, addr)
 	}
 
-	return entries[pivot+1:]
+	// Let Go's GC free the remaining addresses.
+	for i := len(newEntries); i < len(entries); i++ {
+		entries[i] = nil
+	}
+
+	return newEntries
 }
 
 // dsAddrBook is an address book backed by a Datastore with a GC procedure to purge expired entries. It uses an
