@@ -457,8 +457,11 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 		rec4.Addrs = certifiedAddrs
 		signedRec4, err := record.Seal(rec4, priv)
 		test.AssertNilError(t, err)
-		_, err = cab.ConsumePeerRecord(signedRec4, time.Hour)
+		accepted, err = cab.ConsumePeerRecord(signedRec4, time.Hour)
 		test.AssertNilError(t, err)
+		if !accepted {
+			t.Error("expected peer record to be accepted")
+		}
 		// AssertAddressesEqual(t, certifiedAddrs, m.Addrs(id))
 		AssertAddressesEqual(t, allAddrs, m.Addrs(id))
 
@@ -475,7 +478,10 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 		}
 
 		// Test that natural TTL expiration clears signed peer records
-		_, err = cab.ConsumePeerRecord(signedRec4, time.Second)
+		accepted, err = cab.ConsumePeerRecord(signedRec4, time.Second)
+		if !accepted {
+			t.Error("expected peer record to be accepted")
+		}
 		test.AssertNilError(t, err)
 		AssertAddressesEqual(t, certifiedAddrs, m.Addrs(id))
 
