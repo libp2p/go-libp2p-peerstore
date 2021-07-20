@@ -7,8 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/record"
-
 	ds "github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/query"
 	logging "github.com/ipfs/go-log"
@@ -454,6 +452,10 @@ func (ab *dsAddrBook) ClearAddrs(p peer.ID) {
 }
 
 func (ab *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration, mode ttlWriteMode, signed bool) (err error) {
+	if len(addrs) == 0 {
+		return nil
+	}
+
 	pr, err := ab.loadRecord(p, true, false)
 	if err != nil {
 		return fmt.Errorf("failed to load peerstore entry for peer %v while setting addrs, err: %v", p, err)
@@ -468,16 +470,13 @@ func (ab *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 	// }
 
 	newExp := time.Now().Add(ttl).Unix()
-	var addrsMap map[string]*pb.AddrBookRecord_AddrEntry
-	if len(addrs) > 0 {
-		addrsMap = make(map[string]*pb.AddrBookRecord_AddrEntry, len(pr.Addrs))
-		for _, addr := range pr.Addrs {
-			addrsMap[addr.Addr.String()] = addr
-		}
+	addrsMap := make(map[string]*pb.AddrBookRecord_AddrEntry, len(pr.Addrs))
+	for _, addr := range pr.Addrs {
+		addrsMap[string(addr.Addr.Bytes())] = addr
 	}
 
 	updateExisting := func(incoming ma.Multiaddr) *pb.AddrBookRecord_AddrEntry {
-		existingEntry := addrsMap[incoming.String()]
+		existingEntry := addrsMap[string(incoming.Bytes())]
 		if existingEntry == nil {
 			return nil
 		}
