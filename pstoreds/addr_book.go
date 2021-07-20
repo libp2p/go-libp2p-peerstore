@@ -387,7 +387,15 @@ func (ab *dsAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.D
 	pr.Lock()
 	defer pr.Unlock()
 
-	newExp := time.Now().Add(newTTL).Unix()
+	// If the new TTL is 0, we're expected to atomically _delete_ these entries. Unfortunaely,
+	// due to clock shenanigans, time.Now().Add(0).Unix() <= time.Now().Unix() is not always
+	// true on some platforms, in some conditions.
+	//
+	// So we just set the new expiration to 0 in this case.
+	newExp := int64(0)
+	if newTTL > 0 {
+		newExp = time.Now().Add(newTTL).Unix()
+	}
 	for _, entry := range pr.Addrs {
 		if entry.Ttl != int64(oldTTL) {
 			continue
