@@ -102,17 +102,13 @@ func badgerStore(tb testing.TB) (ds.Batching, func()) {
 }
 
 func leveldbStore(tb testing.TB) (ds.Batching, func()) {
-	dataPath, err := ioutil.TempDir(os.TempDir(), "leveldb")
-	if err != nil {
-		tb.Fatal(err)
-	}
-	store, err := leveldb.NewDatastore(dataPath, nil)
+	// Intentionally test in-memory because disks suck, especially in CI.
+	store, err := leveldb.NewDatastore("", nil)
 	if err != nil {
 		tb.Fatal(err)
 	}
 	closer := func() {
 		store.Close()
-		os.RemoveAll(dataPath)
 	}
 	return store, closer
 }
