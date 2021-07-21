@@ -33,8 +33,6 @@ func TestDsPeerstore(t *testing.T) {
 func TestDsAddrBook(t *testing.T) {
 	for name, dsFactory := range dstores {
 		t.Run(name+" Cacheful", func(t *testing.T) {
-			t.Parallel()
-
 			opts := DefaultOpts()
 			opts.GCPurgeInterval = 1 * time.Second
 			opts.CacheSize = 1024
@@ -43,8 +41,6 @@ func TestDsAddrBook(t *testing.T) {
 		})
 
 		t.Run(name+" Cacheless", func(t *testing.T) {
-			t.Parallel()
-
 			opts := DefaultOpts()
 			opts.GCPurgeInterval = 1 * time.Second
 			opts.CacheSize = 0
@@ -106,17 +102,13 @@ func badgerStore(tb testing.TB) (ds.Batching, func()) {
 }
 
 func leveldbStore(tb testing.TB) (ds.Batching, func()) {
-	dataPath, err := ioutil.TempDir(os.TempDir(), "leveldb")
-	if err != nil {
-		tb.Fatal(err)
-	}
-	store, err := leveldb.NewDatastore(dataPath, nil)
+	// Intentionally test in-memory because disks suck, especially in CI.
+	store, err := leveldb.NewDatastore("", nil)
 	if err != nil {
 		tb.Fatal(err)
 	}
 	closer := func() {
 		store.Close()
-		os.RemoveAll(dataPath)
 	}
 	return store, closer
 }
