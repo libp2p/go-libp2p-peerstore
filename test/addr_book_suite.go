@@ -119,8 +119,8 @@ func testAddAddress(ab pstore.AddrBook) func(*testing.T) {
 
 			ab.AddAddrs(id, addrs, 4*time.Second)
 			// 4 seconds left
-			time.Sleep(3 * time.Second)
-			// 1 second left
+			time.Sleep(2 * time.Second)
+			// 2 second left
 			ab.AddAddrs(id, addrs, 3*time.Second)
 			// 3 seconds left
 			time.Sleep(1 * time.Second)
