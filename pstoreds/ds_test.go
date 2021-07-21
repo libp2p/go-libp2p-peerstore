@@ -33,8 +33,6 @@ func TestDsPeerstore(t *testing.T) {
 func TestDsAddrBook(t *testing.T) {
 	for name, dsFactory := range dstores {
 		t.Run(name+" Cacheful", func(t *testing.T) {
-			t.Parallel()
-
 			opts := DefaultOpts()
 			opts.GCPurgeInterval = 1 * time.Second
 			opts.CacheSize = 1024
@@ -43,8 +41,6 @@ func TestDsAddrBook(t *testing.T) {
 		})
 
 		t.Run(name+" Cacheless", func(t *testing.T) {
-			t.Parallel()
-
 			opts := DefaultOpts()
 			opts.GCPurgeInterval = 1 * time.Second
 			opts.CacheSize = 0
