@@ -14,8 +14,6 @@ require (
 	github.com/multiformats/go-base32 v0.0.3
 	github.com/multiformats/go-multiaddr v0.3.3
 	github.com/multiformats/go-multiaddr-fmt v0.1.0
-	github.com/multiformats/go-multihash v0.0.15
 	github.com/stretchr/testify v1.7.0
-	github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1
 	go.uber.org/goleak v1.1.10
 )
