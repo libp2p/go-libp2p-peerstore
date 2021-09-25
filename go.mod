@@ -2,6 +2,8 @@ module github.com/libp2p/go-libp2p-peerstore
 
 go 1.16
 
+retract v0.2.9 // Contains backwards-incompatible changes. Use v0.3.0 instead.
+
 require (
 	github.com/gogo/protobuf v1.3.2
 	github.com/hashicorp/golang-lru v0.5.4
