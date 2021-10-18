@@ -45,7 +45,7 @@ func (pm *dsPeerMetadata) Get(p peer.ID, key string) (interface{}, error) {
 		return nil, err
 	}
 	k := pmBase.ChildString(base32.RawStdEncoding.EncodeToString([]byte(p))).ChildString(key)
-	value, err := pm.ds.Get(k)
+	value, err := pm.ds.Get(context.TODO(), k)
 	if err != nil {
 		if err == ds.ErrNotFound {
 			err = pstore.ErrNotFound
@@ -69,5 +69,5 @@ func (pm *dsPeerMetadata) Put(p peer.ID, key string, val interface{}) error {
 	if err := gob.NewEncoder(&buf).Encode(&val); err != nil {
 		return err
 	}
-	return pm.ds.Put(k, buf.Bytes())
+	return pm.ds.Put(context.TODO(), k, buf.Bytes())
 }

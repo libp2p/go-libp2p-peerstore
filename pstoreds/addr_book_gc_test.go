@@ -1,6 +1,7 @@
 package pstoreds
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -18,7 +19,7 @@ type testProbe struct {
 }
 
 func (tp *testProbe) countLookaheadEntries() (i int) {
-	results, err := tp.ab.(*dsAddrBook).ds.Query(lookaheadQuery)
+	results, err := tp.ab.(*dsAddrBook).ds.Query(context.Background(), lookaheadQuery)
 	if err != nil {
 		tp.t.Fatal(err)
 	}
