@@ -3,7 +3,7 @@ package pstoremem
 import (
 	"sync"
 
-	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/peer"
 
 	pstore "github.com/libp2p/go-libp2p-core/peerstore"
 )
@@ -71,16 +71,15 @@ func (pb *memoryProtoBook) SetProtocols(p peer.ID, protos ...string) error {
 		return err
 	}
 
-	s := pb.segments.get(p)
-	s.Lock()
-	defer s.Unlock()
-
 	newprotos := make(map[string]struct{}, len(protos))
 	for _, proto := range protos {
 		newprotos[pb.internProtocol(proto)] = struct{}{}
 	}
 
+	s := pb.segments.get(p)
+	s.Lock()
 	s.protocols[p] = newprotos
+	s.Unlock()
 
 	return nil
 }

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/peer"
 
 	pstore "github.com/libp2p/go-libp2p-core/peerstore"
 )
@@ -43,14 +43,14 @@ func (pb *dsProtoBook) SetProtocols(p peer.ID, protos ...string) error {
 		return err
 	}
 
-	s := pb.segments.get(p)
-	s.Lock()
-	defer s.Unlock()
-
 	protomap := make(map[string]struct{}, len(protos))
 	for _, proto := range protos {
 		protomap[proto] = struct{}{}
 	}
+
+	s := pb.segments.get(p)
+	s.Lock()
+	defer s.Unlock()
 
 	return pb.meta.Put(p, "protocols", protomap)
 }
