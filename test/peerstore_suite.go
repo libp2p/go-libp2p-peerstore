@@ -425,3 +425,23 @@ func getAddrs(t *testing.T, n int) []ma.Multiaddr {
 	}
 	return addrs
 }
+
+func TestPeerstoreProtoStoreLimits(t *testing.T, ps pstore.Peerstore, limit int) {
+	p := peer.ID("foobar")
+	protocols := make([]string, limit)
+	for i := 0; i < limit; i++ {
+		protocols[i] = fmt.Sprintf("protocol %d", i)
+	}
+
+	t.Run("setting protocols", func(t *testing.T) {
+		require.NoError(t, ps.SetProtocols(p, protocols...))
+		require.EqualError(t, ps.SetProtocols(p, append(protocols, "proto")...), "too many protocols")
+	})
+	t.Run("adding protocols", func(t *testing.T) {
+		p1 := protocols[:limit/2]
+		p2 := protocols[limit/2:]
+		require.NoError(t, ps.SetProtocols(p, p1...))
+		require.NoError(t, ps.AddProtocols(p, p2...))
+		require.EqualError(t, ps.AddProtocols(p, "proto"), "too many protocols")
+	})
+}

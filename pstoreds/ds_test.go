@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	ds "github.com/ipfs/go-datastore"
 	badger "github.com/ipfs/go-ds-badger"
 	leveldb "github.com/ipfs/go-ds-leveldb"
@@ -26,6 +28,18 @@ func TestDsPeerstore(t *testing.T) {
 	for name, dsFactory := range dstores {
 		t.Run(name, func(t *testing.T) {
 			pt.TestPeerstore(t, peerstoreFactory(t, dsFactory, DefaultOpts()))
+		})
+
+		t.Run("protobook limits", func(t *testing.T) {
+			const limit = 10
+			opts := DefaultOpts()
+			opts.MaxProtocols = limit
+			ds, close := dsFactory(t)
+			defer close()
+			ps, err := NewPeerstore(context.Background(), ds, opts)
+			require.NoError(t, err)
+			defer ps.Close()
+			pt.TestPeerstoreProtoStoreLimits(t, ps, limit)
 		})
 	}
 }

@@ -6,13 +6,13 @@ import (
 	"io"
 	"time"
 
-	base32 "github.com/multiformats/go-base32"
+	"github.com/multiformats/go-base32"
 
 	ds "github.com/ipfs/go-datastore"
-	query "github.com/ipfs/go-datastore/query"
+	"github.com/ipfs/go-datastore/query"
 
-	peer "github.com/libp2p/go-libp2p-core/peer"
-	peerstore "github.com/libp2p/go-libp2p-core/peerstore"
+	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/peerstore"
 	pstore "github.com/libp2p/go-libp2p-peerstore"
 )
 
@@ -20,6 +20,9 @@ import (
 type Options struct {
 	// The size of the in-memory cache. A value of 0 or lower disables the cache.
 	CacheSize uint
+
+	// MaxProtocols is the maximum number of protocols we store for one peer.
+	MaxProtocols int
 
 	// Sweep interval to purge expired addresses from the datastore. If this is a zero value, GC will not run
 	// automatically, but it'll be available on demand via explicit calls.
@@ -37,12 +40,14 @@ type Options struct {
 // DefaultOpts returns the default options for a persistent peerstore, with the full-purge GC algorithm:
 //
 // * Cache size: 1024.
+// * MaxProtocols: 1024.
 // * GC purge interval: 2 hours.
 // * GC lookahead interval: disabled.
 // * GC initial delay: 60 seconds.
 func DefaultOpts() Options {
 	return Options{
 		CacheSize:           1024,
+		MaxProtocols:        1024,
 		GCPurgeInterval:     2 * time.Hour,
 		GCLookaheadInterval: 0,
 		GCInitialDelay:      60 * time.Second,
@@ -75,7 +80,10 @@ func NewPeerstore(ctx context.Context, store ds.Batching, opts Options) (*pstore
 		return nil, err
 	}
 
-	protoBook := NewProtoBook(peerMetadata)
+	protoBook, err := NewProtoBook(peerMetadata, WithMaxProtocols(opts.MaxProtocols))
+	if err != nil {
+		return nil, err
+	}
 
 	ps := &pstoreds{
 		Metrics:        pstore.NewMetrics(),
