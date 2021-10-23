@@ -4,8 +4,10 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	ic "github.com/libp2p/go-libp2p-core/crypto"
-	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/peer"
 	pt "github.com/libp2p/go-libp2p-core/test"
 
 	pstore "github.com/libp2p/go-libp2p-core/peerstore"
@@ -16,6 +18,7 @@ var keyBookSuite = map[string]func(kb pstore.KeyBook) func(*testing.T){
 	"AddGetPubKey":          testKeyBookPubKey,
 	"PeersWithKeys":         testKeyBookPeers,
 	"PubKeyAddedOnRetrieve": testInlinedPubKeyAddedOnRetrieve,
+	"Delete":                testKeyBookDelete,
 }
 
 type KeyBookFactory func() (pstore.KeyBook, func())
@@ -173,6 +176,23 @@ func testInlinedPubKeyAddedOnRetrieve(kb pstore.KeyBook) func(t *testing.T) {
 		if !pubKey.Equals(pub) {
 			t.Error("mismatch between original public key and keybook-calculated one")
 		}
+	}
+}
+
+func testKeyBookDelete(kb pstore.KeyBook) func(t *testing.T) {
+	return func(t *testing.T) {
+		// don't use an ed25519 key here, otherwise the key book might try to derive the pubkey from the peer ID
+		priv, pub, err := ic.GenerateKeyPair(ic.RSA, 2048)
+		require.NoError(t, err)
+		p, err := peer.IDFromPublicKey(pub)
+		require.NoError(t, err)
+		require.NoError(t, kb.AddPubKey(p, pub))
+		require.NoError(t, kb.AddPrivKey(p, priv))
+		require.NotNil(t, kb.PrivKey(p))
+		require.NotNil(t, kb.PubKey(p))
+		kb.RemovePeer(p)
+		require.Nil(t, kb.PrivKey(p))
+		require.Nil(t, kb.PubKey(p))
 	}
 }
 

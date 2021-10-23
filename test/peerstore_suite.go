@@ -207,114 +207,97 @@ func testAddrStreamDuplicates(ps pstore.Peerstore) func(t *testing.T) {
 
 func testPeerstoreProtoStore(ps pstore.Peerstore) func(t *testing.T) {
 	return func(t *testing.T) {
-		p1, protos := peer.ID("TESTPEER"), []string{"a", "b", "c", "d"}
+		t.Run("adding and removing protocols", func(t *testing.T) {
+			p1 := peer.ID("TESTPEER")
+			protos := []string{"a", "b", "c", "d"}
 
-		err := ps.AddProtocols(p1, protos...)
-		if err != nil {
-			t.Fatal(err)
-		}
+			require.NoError(t, ps.AddProtocols(p1, protos...))
+			out, err := ps.GetProtocols(p1)
+			require.NoError(t, err)
+			require.Len(t, out, len(protos), "got wrong number of protocols back")
 
-		out, err := ps.GetProtocols(p1)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if len(out) != len(protos) {
-			t.Fatal("got wrong number of protocols back")
-		}
-
-		sort.Strings(out)
-		for i, p := range protos {
-			if out[i] != p {
-				t.Fatal("got wrong protocol")
+			sort.Strings(out)
+			for i, p := range protos {
+				if out[i] != p {
+					t.Fatal("got wrong protocol")
+				}
 			}
-		}
 
-		supported, err := ps.SupportsProtocols(p1, "q", "w", "a", "y", "b")
-		if err != nil {
-			t.Fatal(err)
-		}
+			supported, err := ps.SupportsProtocols(p1, "q", "w", "a", "y", "b")
+			require.NoError(t, err)
+			require.Len(t, supported, 2, "only expected 2 supported")
 
-		if len(supported) != 2 {
-			t.Fatal("only expected 2 supported")
-		}
+			if supported[0] != "a" || supported[1] != "b" {
+				t.Fatal("got wrong supported array: ", supported)
+			}
 
-		if supported[0] != "a" || supported[1] != "b" {
-			t.Fatal("got wrong supported array: ", supported)
-		}
+			b, err := ps.FirstSupportedProtocol(p1, "q", "w", "a", "y", "b")
+			require.NoError(t, err)
+			require.Equal(t, "a", b)
 
-		b, err := ps.FirstSupportedProtocol(p1, "q", "w", "a", "y", "b")
-		require.NoError(t, err)
-		require.Equal(t, "a", b)
+			b, err = ps.FirstSupportedProtocol(p1, "q", "x", "z")
+			require.NoError(t, err)
+			require.Empty(t, b)
 
-		b, err = ps.FirstSupportedProtocol(p1, "q", "x", "z")
-		require.NoError(t, err)
-		require.Empty(t, b)
+			b, err = ps.FirstSupportedProtocol(p1, "a")
+			require.NoError(t, err)
+			require.Equal(t, "a", b)
 
-		b, err = ps.FirstSupportedProtocol(p1, "a")
-		require.NoError(t, err)
-		require.Equal(t, "a", b)
+			protos = []string{"other", "yet another", "one more"}
+			require.NoError(t, ps.SetProtocols(p1, protos...))
 
-		protos = []string{"other", "yet another", "one more"}
-		err = ps.SetProtocols(p1, protos...)
-		if err != nil {
-			t.Fatal(err)
-		}
+			supported, err = ps.SupportsProtocols(p1, "q", "w", "a", "y", "b")
+			require.NoError(t, err)
+			require.Empty(t, supported, "none of those protocols should have been supported")
 
-		supported, err = ps.SupportsProtocols(p1, "q", "w", "a", "y", "b")
-		if err != nil {
-			t.Fatal(err)
-		}
+			supported, err = ps.GetProtocols(p1)
+			require.NoError(t, err)
 
-		if len(supported) != 0 {
-			t.Fatal("none of those protocols should have been supported")
-		}
+			sort.Strings(supported)
+			sort.Strings(protos)
+			if !reflect.DeepEqual(supported, protos) {
+				t.Fatalf("expected previously set protos; expected: %v, have: %v", protos, supported)
+			}
 
-		supported, err = ps.GetProtocols(p1)
-		if err != nil {
-			t.Fatal(err)
-		}
-		sort.Strings(supported)
-		sort.Strings(protos)
-		if !reflect.DeepEqual(supported, protos) {
-			t.Fatalf("expected previously set protos; expected: %v, have: %v", protos, supported)
-		}
+			require.NoError(t, ps.RemoveProtocols(p1, protos[:2]...))
 
-		err = ps.RemoveProtocols(p1, protos[:2]...)
-		if err != nil {
-			t.Fatal(err)
-		}
+			supported, err = ps.GetProtocols(p1)
+			require.NoError(t, err)
+			if !reflect.DeepEqual(supported, protos[2:]) {
+				t.Fatal("expected only one protocol to remain")
+			}
+		})
 
-		supported, err = ps.GetProtocols(p1)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !reflect.DeepEqual(supported, protos[2:]) {
-			t.Fatal("expected only one protocol to remain")
-		}
+		t.Run("bad peer ID", func(t *testing.T) {
+			badp := peer.ID("")
+			require.Error(t, ps.AddProtocols(badp, "proto"), "expected error when using a bad peer ID")
 
-		// test bad peer IDs
-		badp := peer.ID("")
+			if _, err := ps.GetProtocols(badp); err == nil || err == pstore.ErrNotFound {
+				t.Fatal("expected error when using a bad peer ID")
+			}
 
-		err = ps.AddProtocols(badp, protos...)
-		if err == nil {
-			t.Fatal("expected error when using a bad peer ID")
-		}
+			if _, err := ps.SupportsProtocols(badp, "q", "w", "a", "y", "b"); err == nil || err == pstore.ErrNotFound {
+				t.Fatal("expected error when using a bad peer ID")
+			}
 
-		_, err = ps.GetProtocols(badp)
-		if err == nil || err == pstore.ErrNotFound {
-			t.Fatal("expected error when using a bad peer ID")
-		}
+			if err := ps.RemoveProtocols(badp); err == nil || err == pstore.ErrNotFound {
+				t.Fatal("expected error when using a bad peer ID")
+			}
+		})
 
-		_, err = ps.SupportsProtocols(badp, "q", "w", "a", "y", "b")
-		if err == nil || err == pstore.ErrNotFound {
-			t.Fatal("expected error when using a bad peer ID")
-		}
+		t.Run("removing peer", func(t *testing.T) {
+			p := peer.ID("foobar")
+			protos := []string{"a", "b"}
 
-		err = ps.RemoveProtocols(badp)
-		if err == nil || err == pstore.ErrNotFound {
-			t.Fatal("expected error when using a bad peer ID")
-		}
+			require.NoError(t, ps.SetProtocols(p, protos...))
+			out, err := ps.GetProtocols(p)
+			require.NoError(t, err)
+			require.Len(t, out, 2)
+			ps.RemovePeer(p)
+			out, err = ps.GetProtocols(p)
+			require.NoError(t, err)
+			require.Empty(t, out)
+		})
 	}
 }
 
@@ -354,53 +337,53 @@ func testBasicPeerstore(ps pstore.Peerstore) func(t *testing.T) {
 
 func testMetadata(ps pstore.Peerstore) func(t *testing.T) {
 	return func(t *testing.T) {
-		pids := make([]peer.ID, 10)
-		for i := range pids {
-			priv, _, err := crypto.GenerateKeyPair(crypto.RSA, 2048)
-			if err != nil {
-				t.Fatal(err)
+		t.Run("putting and getting", func(t *testing.T) {
+			pids := make([]peer.ID, 3)
+			for i := range pids {
+				priv, _, err := crypto.GenerateKeyPair(crypto.RSA, 2048)
+				require.NoError(t, err)
+				p, err := peer.IDFromPrivateKey(priv)
+				require.NoError(t, err)
+				pids[i] = p
 			}
-			p, err := peer.IDFromPrivateKey(priv)
-			if err != nil {
-				t.Fatal(err)
+			for _, p := range pids {
+				require.NoError(t, ps.Put(p, "AgentVersion", "string"), "failed to put AgentVersion")
+				require.NoError(t, ps.Put(p, "bar", 1), "failed to put bar")
 			}
-			pids[i] = p
-		}
-		for _, p := range pids {
-			if err := ps.Put(p, "AgentVersion", "string"); err != nil {
-				t.Errorf("failed to put %q: %s", "AgentVersion", err)
-			}
-			if err := ps.Put(p, "bar", 1); err != nil {
-				t.Errorf("failed to put %q: %s", "bar", err)
-			}
-		}
-		for _, p := range pids {
-			v, err := ps.Get(p, "AgentVersion")
-			if err != nil {
-				t.Errorf("failed to find %q: %s", "AgentVersion", err)
-				continue
-			}
-			if v != "string" {
-				t.Errorf("expected %q, got %q", "string", p)
-				continue
-			}
+			for _, p := range pids {
+				v, err := ps.Get(p, "AgentVersion")
+				require.NoError(t, err)
+				require.Equal(t, v, "string")
 
-			v, err = ps.Get(p, "bar")
-			if err != nil {
-				t.Errorf("failed to find %q: %s", "bar", err)
-				continue
+				v, err = ps.Get(p, "bar")
+				require.NoError(t, err)
+				require.Equal(t, v, 1)
 			}
-			if v != 1 {
-				t.Errorf("expected %q, got %v", 1, v)
-				continue
+		})
+
+		t.Run("bad peer ID", func(t *testing.T) {
+			require.Error(t, ps.Put("", "foobar", "thing"), "expected error for bad peer ID")
+			if _, err := ps.Get("", "foobar"); err == nil || err == pstore.ErrNotFound {
+				t.Fatalf("expected error for bad peer ID")
 			}
-		}
-		if err := ps.Put("", "foobar", "thing"); err == nil {
-			t.Errorf("expected error for bad peer ID")
-		}
-		if _, err := ps.Get("", "foobar"); err == nil || err == pstore.ErrNotFound {
-			t.Errorf("expected error for bad peer ID")
-		}
+		})
+
+		t.Run("removing a peer", func(t *testing.T) {
+			p := peer.ID("foo")
+			otherP := peer.ID("foobar")
+			require.NoError(t, ps.Put(otherP, "AgentVersion", "v1"))
+			require.NoError(t, ps.Put(p, "AgentVersion", "v1"))
+			require.NoError(t, ps.Put(p, "bar", 1))
+			ps.RemovePeer(p)
+			_, err := ps.Get(p, "AgentVersion")
+			require.ErrorIs(t, err, pstore.ErrNotFound)
+			_, err = ps.Get(p, "bar")
+			require.ErrorIs(t, err, pstore.ErrNotFound)
+			// make sure that entries for otherP were not deleted
+			val, err := ps.Get(otherP, "AgentVersion")
+			require.NoError(t, err)
+			require.Equal(t, val, "v1")
+		})
 	}
 }
 
