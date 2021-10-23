@@ -3,14 +3,9 @@ package pstoremem
 import (
 	"sync"
 
-	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/peer"
 	pstore "github.com/libp2p/go-libp2p-core/peerstore"
 )
-
-var internKeys = map[string]bool{
-	"AgentVersion":    true,
-	"ProtocolVersion": true,
-}
 
 type metakey struct {
 	id  peer.ID
@@ -19,7 +14,7 @@ type metakey struct {
 
 type memoryPeerMetadata struct {
 	// store other data, like versions
-	//ds ds.ThreadSafeDatastore
+	// ds ds.ThreadSafeDatastore
 	ds       map[metakey]interface{}
 	dslock   sync.RWMutex
 	interned map[string]interface{}
@@ -40,7 +35,7 @@ func (ps *memoryPeerMetadata) Put(p peer.ID, key string, val interface{}) error 
 	}
 	ps.dslock.Lock()
 	defer ps.dslock.Unlock()
-	if vals, ok := val.(string); ok && internKeys[key] {
+	if vals, ok := val.(string); ok && (key == "AgentVersion" || key == "ProtocolVersion") {
 		if interned, ok := ps.interned[vals]; ok {
 			val = interned
 		} else {
