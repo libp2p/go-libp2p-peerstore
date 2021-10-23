@@ -213,3 +213,7 @@ func (pb *dsProtoBook) getProtocolMap(p peer.ID) (map[string]struct{}, error) {
 		return cast, nil
 	}
 }
+
+func (pb *dsProtoBook) RemovePeer(p peer.ID) {
+	pb.meta.RemovePeer(p)
+}

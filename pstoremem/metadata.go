@@ -62,3 +62,9 @@ func (ps *memoryPeerMetadata) Get(p peer.ID, key string) (interface{}, error) {
 	}
 	return val, nil
 }
+
+func (ps *memoryPeerMetadata) RemovePeer(p peer.ID) {
+	ps.dslock.Lock()
+	delete(ps.ds, p)
+	ps.dslock.Unlock()
+}

@@ -199,3 +199,10 @@ func (pb *memoryProtoBook) FirstSupportedProtocol(p peer.ID, protos ...string) (
 	}
 	return "", nil
 }
+
+func (pb *memoryProtoBook) RemovePeer(p peer.ID) {
+	s := pb.segments.get(p)
+	s.Lock()
+	delete(s.protocols, p)
+	s.Unlock()
+}

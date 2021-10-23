@@ -6,14 +6,13 @@ import (
 	"io"
 	"time"
 
-	"github.com/multiformats/go-base32"
-
-	ds "github.com/ipfs/go-datastore"
-	"github.com/ipfs/go-datastore/query"
-
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/peerstore"
 	pstore "github.com/libp2p/go-libp2p-peerstore"
+
+	ds "github.com/ipfs/go-datastore"
+	"github.com/ipfs/go-datastore/query"
+	"github.com/multiformats/go-base32"
 )
 
 // Configuration object for the peerstore.
@@ -171,4 +170,17 @@ func (ps *pstoreds) PeerInfo(p peer.ID) peer.AddrInfo {
 		ID:    p,
 		Addrs: ps.dsAddrBook.Addrs(p),
 	}
+}
+
+// RemovePeer removes entries associated with a peer from:
+// * the KeyBook
+// * the ProtoBook
+// * the PeerMetadata
+// * the Metrics
+// It DOES NOT remove the peer from the AddrBook.
+func (ps *pstoreds) RemovePeer(p peer.ID) {
+	ps.dsKeyBook.RemovePeer(p)
+	ps.dsProtoBook.RemovePeer(p)
+	ps.dsPeerMetadata.RemovePeer(p)
+	ps.Metrics.RemovePeer(p)
 }
