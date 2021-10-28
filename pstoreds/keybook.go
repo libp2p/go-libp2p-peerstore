@@ -36,7 +36,7 @@ func (kb *dsKeyBook) PubKey(p peer.ID) ic.PubKey {
 	key := kbBase.ChildString(base32.RawStdEncoding.EncodeToString([]byte(p))).Child(pubSuffix)
 
 	var pk ic.PubKey
-	if value, err := kb.ds.Get(key); err == nil {
+	if value, err := kb.ds.Get(context.TODO(), key); err == nil {
 		pk, err = ic.UnmarshalPublicKey(value)
 		if err != nil {
 			log.Errorf("error when unmarshalling pubkey from datastore for peer %s: %s\n", p.Pretty(), err)
@@ -56,7 +56,7 @@ func (kb *dsKeyBook) PubKey(p peer.ID) ic.PubKey {
 			log.Errorf("error when turning extracted pubkey into bytes for peer %s: %s\n", p.Pretty(), err)
 			return nil
 		}
-		err = kb.ds.Put(key, pkb)
+		err = kb.ds.Put(context.TODO(), key, pkb)
 		if err != nil {
 			log.Errorf("error when adding extracted pubkey to peerstore for peer %s: %s\n", p.Pretty(), err)
 			return nil
@@ -80,7 +80,7 @@ func (kb *dsKeyBook) AddPubKey(p peer.ID, pk ic.PubKey) error {
 		log.Errorf("error while converting pubkey byte string for peer %s: %s\n", p.Pretty(), err)
 		return err
 	}
-	err = kb.ds.Put(key, val)
+	err = kb.ds.Put(context.TODO(), key, val)
 	if err != nil {
 		log.Errorf("error while updating pubkey in datastore for peer %s: %s\n", p.Pretty(), err)
 	}
@@ -89,7 +89,7 @@ func (kb *dsKeyBook) AddPubKey(p peer.ID, pk ic.PubKey) error {
 
 func (kb *dsKeyBook) PrivKey(p peer.ID) ic.PrivKey {
 	key := kbBase.ChildString(base32.RawStdEncoding.EncodeToString([]byte(p))).Child(privSuffix)
-	value, err := kb.ds.Get(key)
+	value, err := kb.ds.Get(context.TODO(), key)
 	if err != nil {
 		log.Errorf("error while fetching privkey from datastore for peer %s: %s\n", p.Pretty(), err)
 		return nil
@@ -116,7 +116,7 @@ func (kb *dsKeyBook) AddPrivKey(p peer.ID, sk ic.PrivKey) error {
 		log.Errorf("error while converting privkey byte string for peer %s: %s\n", p.Pretty(), err)
 		return err
 	}
-	err = kb.ds.Put(key, val)
+	err = kb.ds.Put(context.TODO(), key, val)
 	if err != nil {
 		log.Errorf("error while updating privkey in datastore for peer %s: %s\n", p.Pretty(), err)
 	}

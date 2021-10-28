@@ -95,7 +95,7 @@ func uniquePeerIds(ds ds.Datastore, prefix ds.Key, extractor func(result query.R
 		err     error
 	)
 
-	if results, err = ds.Query(q); err != nil {
+	if results, err = ds.Query(context.TODO(), q); err != nil {
 		log.Error(err)
 		return nil, err
 	}
