@@ -22,8 +22,6 @@ func (s *protoSegments) get(p peer.ID) *protoSegment {
 
 var errTooManyProtocols = errors.New("too many protocols")
 
-type Option func(*memoryProtoBook) error
-
 type memoryProtoBook struct {
 	segments protoSegments
 
@@ -35,7 +33,16 @@ type memoryProtoBook struct {
 
 var _ pstore.ProtoBook = (*memoryProtoBook)(nil)
 
-func NewProtoBook(opts ...Option) (*memoryProtoBook, error) {
+type ProtoBookOption func(book *memoryProtoBook) error
+
+func WithMaxProtocols(num int) ProtoBookOption {
+	return func(pb *memoryProtoBook) error {
+		pb.maxProtos = num
+		return nil
+	}
+}
+
+func NewProtoBook(opts ...ProtoBookOption) (*memoryProtoBook, error) {
 	pb := &memoryProtoBook{
 		interned: make(map[string]string, 256),
 		segments: func() (ret protoSegments) {

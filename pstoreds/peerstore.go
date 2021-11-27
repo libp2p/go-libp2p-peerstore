@@ -6,6 +6,10 @@ import (
 	"io"
 	"time"
 
+	"github.com/libp2p/go-libp2p-core/event"
+
+	"github.com/libp2p/go-libp2p-peerstore/pstoremanager"
+
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/peerstore"
 	pstore "github.com/libp2p/go-libp2p-peerstore"
@@ -22,6 +26,13 @@ type Options struct {
 
 	// MaxProtocols is the maximum number of protocols we store for one peer.
 	MaxProtocols int
+
+	// The EventBus that is used to subscribe to EvtPeerConnectednessChanged events.
+	// This allows the automatic clean up when a peer disconnect.
+	// This configuration option is optional. If no EventBus is set, it's the callers
+	// responsibility to call RemovePeer to ensure that memory consumption of the
+	// peerstore doesn't grow unboundedly.
+	EventBus event.Bus
 
 	// Sweep interval to purge expired addresses from the datastore. If this is a zero value, GC will not run
 	// automatically, but it'll be available on demand via explicit calls.
@@ -60,9 +71,18 @@ type pstoreds struct {
 	*dsAddrBook
 	*dsProtoBook
 	*dsPeerMetadata
+
+	manager *pstoremanager.PeerstoreManager
 }
 
+var _ peerstore.Peerstore = &pstoreds{}
+
 // NewPeerstore creates a peerstore backed by the provided persistent datastore.
+// It is recommended to construct the peerstore with an event bus, using the WithEventBus option.
+// In that case, the peerstore will automatically perform cleanups when a peer disconnects
+// (see the pstoremanager package for details).
+// If constructed without an event bus, it's the caller's responsibility to call RemovePeer to ensure
+// that memory consumption of the peerstore doesn't grow unboundedly.
 func NewPeerstore(ctx context.Context, store ds.Batching, opts Options) (*pstoreds, error) {
 	addrBook, err := NewAddrBook(ctx, store, opts)
 	if err != nil {
@@ -90,6 +110,14 @@ func NewPeerstore(ctx context.Context, store ds.Batching, opts Options) (*pstore
 		dsAddrBook:     addrBook,
 		dsPeerMetadata: peerMetadata,
 		dsProtoBook:    protoBook,
+	}
+	if opts.EventBus != nil {
+		manager, err := pstoremanager.NewPeerstoreManager(ps, opts.EventBus)
+		if err != nil {
+			ps.Close()
+			return nil, err
+		}
+		ps.manager = manager
 	}
 	return ps, nil
 }
@@ -128,6 +156,10 @@ func uniquePeerIds(ds ds.Datastore, prefix ds.Key, extractor func(result query.R
 	return ids, nil
 }
 
+func (ps *pstoreds) Start() {
+	ps.manager.Start()
+}
+
 func (ps *pstoreds) Close() (err error) {
 	var errs []error
 	weakClose := func(name string, c interface{}) {
@@ -137,7 +169,9 @@ func (ps *pstoreds) Close() (err error) {
 			}
 		}
 	}
-
+	if ps.manager != nil {
+		weakClose("manager", ps.manager)
+	}
 	weakClose("keybook", ps.dsKeyBook)
 	weakClose("addressbook", ps.dsAddrBook)
 	weakClose("protobook", ps.dsProtoBook)
