@@ -10,7 +10,7 @@ require (
 	github.com/ipfs/go-datastore v0.5.0
 	github.com/ipfs/go-ds-badger v0.3.0
 	github.com/ipfs/go-ds-leveldb v0.5.0
-	github.com/ipfs/go-log v1.0.5
+	github.com/ipfs/go-log/v2 v2.3.0
 	github.com/libp2p/go-buffer-pool v0.0.2
 	github.com/libp2p/go-libp2p-core v0.8.6
 	github.com/multiformats/go-base32 v0.0.3
