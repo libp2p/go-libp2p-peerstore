@@ -6,6 +6,10 @@ import (
 	"io"
 	"time"
 
+	"github.com/libp2p/go-libp2p-core/event"
+
+	"github.com/libp2p/go-libp2p-peerstore/pstoremanager"
+
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/peerstore"
 	pstore "github.com/libp2p/go-libp2p-peerstore"
@@ -60,10 +64,14 @@ type pstoreds struct {
 	*dsAddrBook
 	*dsProtoBook
 	*dsPeerMetadata
+
+	manager *pstoremanager.PeerstoreManager
 }
 
+var _ peerstore.Peerstore = &pstoreds{}
+
 // NewPeerstore creates a peerstore backed by the provided persistent datastore.
-func NewPeerstore(ctx context.Context, store ds.Batching, opts Options) (*pstoreds, error) {
+func NewPeerstore(ctx context.Context, store ds.Batching, eventBus event.Bus, opts Options) (*pstoreds, error) {
 	addrBook, err := NewAddrBook(ctx, store, opts)
 	if err != nil {
 		return nil, err
@@ -91,6 +99,12 @@ func NewPeerstore(ctx context.Context, store ds.Batching, opts Options) (*pstore
 		dsPeerMetadata: peerMetadata,
 		dsProtoBook:    protoBook,
 	}
+	manager, err := pstoremanager.NewPeerstoreManager(ps, eventBus)
+	if err != nil {
+		ps.Close()
+		return nil, err
+	}
+	ps.manager = manager
 	return ps, nil
 }
 
@@ -128,6 +142,10 @@ func uniquePeerIds(ds ds.Datastore, prefix ds.Key, extractor func(result query.R
 	return ids, nil
 }
 
+func (ps *pstoreds) Start() {
+	ps.manager.Start()
+}
+
 func (ps *pstoreds) Close() (err error) {
 	var errs []error
 	weakClose := func(name string, c interface{}) {
@@ -137,7 +155,7 @@ func (ps *pstoreds) Close() (err error) {
 			}
 		}
 	}
-
+	weakClose("manager", ps.manager)
 	weakClose("keybook", ps.dsKeyBook)
 	weakClose("addressbook", ps.dsAddrBook)
 	weakClose("protobook", ps.dsProtoBook)

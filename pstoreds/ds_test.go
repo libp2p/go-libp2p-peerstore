@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/libp2p/go-eventbus"
+
 	"github.com/stretchr/testify/require"
 
 	ds "github.com/ipfs/go-datastore"
@@ -36,7 +38,7 @@ func TestDsPeerstore(t *testing.T) {
 			opts.MaxProtocols = limit
 			ds, close := dsFactory(t)
 			defer close()
-			ps, err := NewPeerstore(context.Background(), ds, opts)
+			ps, err := NewPeerstore(context.Background(), ds, eventbus.NewBus(), opts)
 			require.NoError(t, err)
 			defer ps.Close()
 			pt.TestPeerstoreProtoStoreLimits(t, ps, limit)
@@ -130,7 +132,7 @@ func leveldbStore(tb testing.TB) (ds.Batching, func()) {
 func peerstoreFactory(tb testing.TB, storeFactory datastoreFactory, opts Options) pt.PeerstoreFactory {
 	return func() (pstore.Peerstore, func()) {
 		store, storeCloseFn := storeFactory(tb)
-		ps, err := NewPeerstore(context.Background(), store, opts)
+		ps, err := NewPeerstore(context.Background(), store, eventbus.NewBus(), opts)
 		if err != nil {
 			tb.Fatal(err)
 		}
