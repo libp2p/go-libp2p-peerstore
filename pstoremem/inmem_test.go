@@ -72,6 +72,6 @@ func BenchmarkInMemoryKeyBook(b *testing.B) {
 func TestMain(m *testing.M) {
 	goleak.VerifyTestMain(
 		m,
-		goleak.IgnoreTopFunction("github.com/ipfs/go-log/writer.(*MirrorWriter).logRoutine"),
+		goleak.IgnoreTopFunction("github.com/ipfs/go-log/v2/writer.(*MirrorWriter).logRoutine"),
 	)
 }
