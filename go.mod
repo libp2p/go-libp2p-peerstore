@@ -14,7 +14,7 @@ require (
 	github.com/ipfs/go-log/v2 v2.3.0
 	github.com/libp2p/go-buffer-pool v0.0.2
 	github.com/libp2p/go-eventbus v0.2.1
-	github.com/libp2p/go-libp2p-core v0.11.1-0.20211128092232-2277c37932ba
+	github.com/libp2p/go-libp2p-core v0.11.1-0.20211128095750-bceb25d4d6b9
 	github.com/multiformats/go-base32 v0.0.3
 	github.com/multiformats/go-multiaddr v0.3.3
 	github.com/multiformats/go-multiaddr-fmt v0.1.0

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/event"
+	"github.com/libp2p/go-libp2p-core/eventbus"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/peerstore"
@@ -45,7 +46,7 @@ type PeerstoreManager struct {
 	cleanupInterval time.Duration
 }
 
-func NewPeerstoreManager(pstore peerstore.Peerstore, eventBus event.Bus, opts ...Option) (*PeerstoreManager, error) {
+func NewPeerstoreManager(pstore peerstore.Peerstore, eventBus eventbus.Bus, opts ...Option) (*PeerstoreManager, error) {
 	sub, err := eventBus.Subscribe(&event.EvtPeerConnectednessChanged{})
 	if err != nil {
 		return nil, err

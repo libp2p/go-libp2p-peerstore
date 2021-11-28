@@ -11,6 +11,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	crypto "github.com/libp2p/go-libp2p-core/crypto"
+	eventbus "github.com/libp2p/go-libp2p-core/eventbus"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	multiaddr "github.com/multiformats/go-multiaddr"
 )
@@ -412,15 +413,15 @@ func (mr *MockPeerstoreMockRecorder) SetProtocols(arg0 interface{}, arg1 ...inte
 }
 
 // Start mocks base method.
-func (m *MockPeerstore) Start() {
+func (m *MockPeerstore) Start(arg0 eventbus.Bus) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Start")
+	m.ctrl.Call(m, "Start", arg0)
 }
 
 // Start indicates an expected call of Start.
-func (mr *MockPeerstoreMockRecorder) Start() *gomock.Call {
+func (mr *MockPeerstoreMockRecorder) Start(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockPeerstore)(nil).Start))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockPeerstore)(nil).Start), arg0)
 }
 
 // SupportsProtocols mocks base method.

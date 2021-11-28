@@ -6,10 +6,9 @@ import (
 	"io"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/event"
-
 	"github.com/libp2p/go-libp2p-peerstore/pstoremanager"
 
+	"github.com/libp2p/go-libp2p-core/eventbus"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/peerstore"
 	pstore "github.com/libp2p/go-libp2p-peerstore"
@@ -71,7 +70,7 @@ type pstoreds struct {
 var _ peerstore.Peerstore = &pstoreds{}
 
 // NewPeerstore creates a peerstore backed by the provided persistent datastore.
-func NewPeerstore(ctx context.Context, store ds.Batching, eventBus event.Bus, opts Options) (*pstoreds, error) {
+func NewPeerstore(ctx context.Context, store ds.Batching, opts Options) (*pstoreds, error) {
 	addrBook, err := NewAddrBook(ctx, store, opts)
 	if err != nil {
 		return nil, err
@@ -92,20 +91,13 @@ func NewPeerstore(ctx context.Context, store ds.Batching, eventBus event.Bus, op
 		return nil, err
 	}
 
-	ps := &pstoreds{
+	return &pstoreds{
 		Metrics:        pstore.NewMetrics(),
 		dsKeyBook:      keyBook,
 		dsAddrBook:     addrBook,
 		dsPeerMetadata: peerMetadata,
 		dsProtoBook:    protoBook,
-	}
-	manager, err := pstoremanager.NewPeerstoreManager(ps, eventBus)
-	if err != nil {
-		ps.Close()
-		return nil, err
-	}
-	ps.manager = manager
-	return ps, nil
+	}, nil
 }
 
 // uniquePeerIds extracts and returns unique peer IDs from database keys.
@@ -142,7 +134,12 @@ func uniquePeerIds(ds ds.Datastore, prefix ds.Key, extractor func(result query.R
 	return ids, nil
 }
 
-func (ps *pstoreds) Start() {
+func (ps *pstoreds) Start(eventBus eventbus.Bus) {
+	manager, err := pstoremanager.NewPeerstoreManager(ps, eventBus)
+	if err != nil {
+		log.Warnw("failed to create peer store manager: %s", err)
+	}
+	ps.manager = manager
 	ps.manager.Start()
 }
 
@@ -155,7 +152,9 @@ func (ps *pstoreds) Close() (err error) {
 			}
 		}
 	}
-	weakClose("manager", ps.manager)
+	if ps.manager != nil {
+		weakClose("manager", ps.manager)
+	}
 	weakClose("keybook", ps.dsKeyBook)
 	weakClose("addressbook", ps.dsAddrBook)
 	weakClose("protobook", ps.dsProtoBook)

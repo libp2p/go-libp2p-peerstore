@@ -4,8 +4,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/libp2p/go-libp2p-core/event"
-
+	"github.com/libp2p/go-libp2p-core/eventbus"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/peerstore"
 
@@ -34,28 +33,27 @@ func WithMaxProtocols(num int) Option {
 }
 
 // NewPeerstore creates an in-memory threadsafe collection of peers.
-func NewPeerstore(eventBus event.Bus, opts ...Option) (*pstoremem, error) {
+func NewPeerstore(opts ...Option) (*pstoremem, error) {
 	pb, err := NewProtoBook(opts...)
 	if err != nil {
 		return nil, err
 	}
-	pstore := &pstoremem{
+	return &pstoremem{
 		Metrics:            pstore.NewMetrics(),
 		memoryKeyBook:      NewKeyBook(),
 		memoryAddrBook:     NewAddrBook(),
 		memoryProtoBook:    pb,
 		memoryPeerMetadata: NewPeerMetadata(),
-	}
-	manager, err := pstoremanager.NewPeerstoreManager(pstore, eventBus)
-	if err != nil {
-		pstore.Close()
-		return nil, err
-	}
-	pstore.manager = manager
-	return pstore, nil
+	}, nil
 }
 
-func (ps *pstoremem) Start() {
+func (ps *pstoremem) Start(eventBus eventbus.Bus) {
+	manager, err := pstoremanager.NewPeerstoreManager(ps, eventBus)
+	if err != nil {
+		log.Warnw("failed to create peer store manager: %s", err)
+		return
+	}
+	ps.manager = manager
 	ps.manager.Start()
 }
 
@@ -68,7 +66,9 @@ func (ps *pstoremem) Close() (err error) {
 			}
 		}
 	}
-	weakClose("manager", ps.manager)
+	if ps.manager != nil {
+		weakClose("manager", ps.manager)
+	}
 	weakClose("keybook", ps.memoryKeyBook)
 	weakClose("addressbook", ps.memoryAddrBook)
 	weakClose("protobook", ps.memoryProtoBook)
