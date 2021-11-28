@@ -4,10 +4,9 @@ import (
 	"context"
 	"io/ioutil"
 	"os"
+	"strconv"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/require"
 
 	ds "github.com/ipfs/go-datastore"
 	badger "github.com/ipfs/go-ds-badger"
@@ -15,17 +14,23 @@ import (
 
 	pstore "github.com/libp2p/go-libp2p-core/peerstore"
 	pt "github.com/libp2p/go-libp2p-peerstore/test"
+
+	"github.com/stretchr/testify/require"
 )
 
 type datastoreFactory func(tb testing.TB) (ds.Batching, func())
 
 var dstores = map[string]datastoreFactory{
-	//"Badger": badgerStore,
+	"Badger":  badgerStore,
 	"Leveldb": leveldbStore,
 }
 
 func TestDsPeerstore(t *testing.T) {
 	for name, dsFactory := range dstores {
+		if name == "Badger" && strconv.IntSize == 32 {
+			t.Skip("Badger doesn't work on 32 bits")
+		}
+
 		t.Run(name, func(t *testing.T) {
 			pt.TestPeerstore(t, peerstoreFactory(t, dsFactory, DefaultOpts()))
 		})
@@ -97,8 +102,6 @@ func BenchmarkDsPeerstore(b *testing.B) {
 	}
 }
 
-// Doesn't work on 32bit because badger.
-//lint:ignore U1000 disabled for now
 func badgerStore(tb testing.TB) (ds.Batching, func()) {
 	dataPath, err := ioutil.TempDir(os.TempDir(), "badger")
 	if err != nil {
