@@ -1,7 +1,6 @@
 package pstoremanager
 
 import (
-	"context"
 	"sync"
 	"time"
 
@@ -38,9 +37,7 @@ type PeerstoreManager struct {
 	pstore peerstore.Peerstore
 	sub    event.Subscription
 
-	ctx       context.Context
-	ctxCancel context.CancelFunc
-	refCount  sync.WaitGroup
+	refCount sync.WaitGroup
 
 	gracePeriod     time.Duration
 	cleanupInterval time.Duration
@@ -56,7 +53,6 @@ func NewPeerstoreManager(pstore peerstore.Peerstore, eventBus eventbus.Bus, opts
 		gracePeriod: time.Minute,
 		sub:         sub,
 	}
-	m.ctx, m.ctxCancel = context.WithCancel(context.Background())
 	for _, opt := range opts {
 		if err := opt(m); err != nil {
 			return nil, err
@@ -80,16 +76,17 @@ func (m *PeerstoreManager) background() {
 	ticker := time.NewTicker(m.cleanupInterval)
 	defer ticker.Stop()
 
+	defer func() {
+		for p := range disconnected {
+			m.pstore.RemovePeer(p)
+		}
+	}()
+
 	for {
 		select {
-		case <-m.ctx.Done():
-			for p := range disconnected {
-				m.pstore.RemovePeer(p)
-			}
-			return
 		case e, ok := <-m.sub.Out():
 			if !ok {
-				continue
+				return
 			}
 			ev := e.(event.EvtPeerConnectednessChanged)
 			p := ev.Peer
@@ -114,7 +111,6 @@ func (m *PeerstoreManager) background() {
 }
 
 func (m *PeerstoreManager) Close() error {
-	m.ctxCancel()
 	err := m.sub.Close()
 	m.refCount.Wait()
 	return err

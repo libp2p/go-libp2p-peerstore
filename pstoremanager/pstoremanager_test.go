@@ -90,6 +90,7 @@ func TestClose(t *testing.T) {
 		Peer:          "foobar",
 		Connectedness: network.NotConnected,
 	}))
+	time.Sleep(10 * time.Millisecond) // make sure the event is sent before we close
 	done := make(chan struct{})
 	pstore.EXPECT().RemovePeer(peer.ID("foobar")).Do(func(peer.ID) { close(done) })
 	require.NoError(t, man.Close())
