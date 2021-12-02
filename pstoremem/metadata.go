@@ -9,18 +9,15 @@ import (
 
 type memoryPeerMetadata struct {
 	// store other data, like versions
-	// ds ds.ThreadSafeDatastore
-	ds       map[peer.ID]map[string]interface{}
-	dslock   sync.RWMutex
-	interned map[string]interface{}
+	ds     map[peer.ID]map[string]interface{}
+	dslock sync.RWMutex
 }
 
 var _ pstore.PeerMetadata = (*memoryPeerMetadata)(nil)
 
 func NewPeerMetadata() *memoryPeerMetadata {
 	return &memoryPeerMetadata{
-		ds:       make(map[peer.ID]map[string]interface{}),
-		interned: make(map[string]interface{}),
+		ds: make(map[peer.ID]map[string]interface{}),
 	}
 }
 
@@ -30,13 +27,6 @@ func (ps *memoryPeerMetadata) Put(p peer.ID, key string, val interface{}) error 
 	}
 	ps.dslock.Lock()
 	defer ps.dslock.Unlock()
-	if vals, ok := val.(string); ok && (key == "AgentVersion" || key == "ProtocolVersion") {
-		if interned, ok := ps.interned[vals]; ok {
-			val = interned
-		} else {
-			ps.interned[vals] = val
-		}
-	}
 	m, ok := ps.ds[p]
 	if !ok {
 		m = make(map[string]interface{})
