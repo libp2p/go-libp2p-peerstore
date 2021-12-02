@@ -3,24 +3,14 @@ package pstoremem
 import (
 	"sync"
 
-	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/peer"
 	pstore "github.com/libp2p/go-libp2p-core/peerstore"
 )
 
-var internKeys = map[string]bool{
-	"AgentVersion":    true,
-	"ProtocolVersion": true,
-}
-
-type metakey struct {
-	id  peer.ID
-	key string
-}
-
 type memoryPeerMetadata struct {
 	// store other data, like versions
-	//ds ds.ThreadSafeDatastore
-	ds       map[metakey]interface{}
+	// ds ds.ThreadSafeDatastore
+	ds       map[peer.ID]map[string]interface{}
 	dslock   sync.RWMutex
 	interned map[string]interface{}
 }
@@ -29,7 +19,7 @@ var _ pstore.PeerMetadata = (*memoryPeerMetadata)(nil)
 
 func NewPeerMetadata() *memoryPeerMetadata {
 	return &memoryPeerMetadata{
-		ds:       make(map[metakey]interface{}),
+		ds:       make(map[peer.ID]map[string]interface{}),
 		interned: make(map[string]interface{}),
 	}
 }
@@ -40,14 +30,19 @@ func (ps *memoryPeerMetadata) Put(p peer.ID, key string, val interface{}) error 
 	}
 	ps.dslock.Lock()
 	defer ps.dslock.Unlock()
-	if vals, ok := val.(string); ok && internKeys[key] {
+	if vals, ok := val.(string); ok && (key == "AgentVersion" || key == "ProtocolVersion") {
 		if interned, ok := ps.interned[vals]; ok {
 			val = interned
 		} else {
 			ps.interned[vals] = val
 		}
 	}
-	ps.ds[metakey{p, key}] = val
+	m, ok := ps.ds[p]
+	if !ok {
+		m = make(map[string]interface{})
+		ps.ds[p] = m
+	}
+	m[key] = val
 	return nil
 }
 
@@ -57,9 +52,19 @@ func (ps *memoryPeerMetadata) Get(p peer.ID, key string) (interface{}, error) {
 	}
 	ps.dslock.RLock()
 	defer ps.dslock.RUnlock()
-	i, ok := ps.ds[metakey{p, key}]
+	m, ok := ps.ds[p]
 	if !ok {
 		return nil, pstore.ErrNotFound
 	}
-	return i, nil
+	val, ok := m[key]
+	if !ok {
+		return nil, pstore.ErrNotFound
+	}
+	return val, nil
+}
+
+func (ps *memoryPeerMetadata) RemovePeer(p peer.ID) {
+	ps.dslock.Lock()
+	delete(ps.ds, p)
+	ps.dslock.Unlock()
 }

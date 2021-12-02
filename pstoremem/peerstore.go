@@ -83,3 +83,16 @@ func (ps *pstoremem) PeerInfo(p peer.ID) peer.AddrInfo {
 		Addrs: ps.memoryAddrBook.Addrs(p),
 	}
 }
+
+// RemovePeer removes entries associated with a peer from:
+// * the KeyBook
+// * the ProtoBook
+// * the PeerMetadata
+// * the Metrics
+// It DOES NOT remove the peer from the AddrBook.
+func (ps *pstoremem) RemovePeer(p peer.ID) {
+	ps.memoryKeyBook.RemovePeer(p)
+	ps.memoryProtoBook.RemovePeer(p)
+	ps.memoryPeerMetadata.RemovePeer(p)
+	ps.Metrics.RemovePeer(p)
+}
