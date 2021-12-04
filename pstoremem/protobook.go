@@ -83,7 +83,7 @@ func (pb *memoryProtoBook) internProtocol(proto string) string {
 
 func (pb *memoryProtoBook) SetProtocols(p peer.ID, protos ...string) error {
 	if err := p.Validate(); err != nil {
-		return err
+		panic(err)
 	}
 	if len(protos) > pb.maxProtos {
 		return errTooManyProtocols
@@ -104,7 +104,7 @@ func (pb *memoryProtoBook) SetProtocols(p peer.ID, protos ...string) error {
 
 func (pb *memoryProtoBook) AddProtocols(p peer.ID, protos ...string) error {
 	if err := p.Validate(); err != nil {
-		return err
+		panic(err)
 	}
 
 	s := pb.segments.get(p)
@@ -128,7 +128,7 @@ func (pb *memoryProtoBook) AddProtocols(p peer.ID, protos ...string) error {
 
 func (pb *memoryProtoBook) GetProtocols(p peer.ID) ([]string, error) {
 	if err := p.Validate(); err != nil {
-		return nil, err
+		panic(err)
 	}
 
 	s := pb.segments.get(p)
@@ -145,7 +145,7 @@ func (pb *memoryProtoBook) GetProtocols(p peer.ID) ([]string, error) {
 
 func (pb *memoryProtoBook) RemoveProtocols(p peer.ID, protos ...string) error {
 	if err := p.Validate(); err != nil {
-		return err
+		panic(err)
 	}
 
 	s := pb.segments.get(p)
@@ -166,7 +166,7 @@ func (pb *memoryProtoBook) RemoveProtocols(p peer.ID, protos ...string) error {
 
 func (pb *memoryProtoBook) SupportsProtocols(p peer.ID, protos ...string) ([]string, error) {
 	if err := p.Validate(); err != nil {
-		return nil, err
+		panic(err)
 	}
 
 	s := pb.segments.get(p)
@@ -185,7 +185,7 @@ func (pb *memoryProtoBook) SupportsProtocols(p peer.ID, protos ...string) ([]str
 
 func (pb *memoryProtoBook) FirstSupportedProtocol(p peer.ID, protos ...string) (string, error) {
 	if err := p.Validate(); err != nil {
-		return "", err
+		panic(err)
 	}
 
 	s := pb.segments.get(p)
