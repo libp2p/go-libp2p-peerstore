@@ -216,15 +216,13 @@ func (mab *memoryAddrBook) addAddrsUnlocked(s *addrSegment, p peer.ID, addrs []m
 	}
 
 	exp := time.Now().Add(ttl)
-	addrSet := make(map[string]struct{}, len(addrs))
 	for _, addr := range addrs {
 		if addr == nil {
 			log.Warnw("was passed nil multiaddr", "peer", p)
 			continue
 		}
-		k := string(addr.Bytes())
-		addrSet[k] = struct{}{}
 
+		k := string(addr.Bytes())
 		// find the highest TTL and Expiry time between
 		// existing records and function args
 		a, found := amap[k] // won't allocate.
