@@ -55,8 +55,8 @@ func (segments *addrSegments) get(p peer.ID) *addrSegment {
 type memoryAddrBook struct {
 	segments addrSegments
 
-	ctx    context.Context
-	cancel func()
+	refCount sync.WaitGroup
+	cancel   func()
 
 	subManager *AddrSubManager
 }
@@ -77,16 +77,16 @@ func NewAddrBook() *memoryAddrBook {
 			return ret
 		}(),
 		subManager: NewAddrSubManager(),
-		ctx:        ctx,
 		cancel:     cancel,
 	}
-
-	go ab.background()
+	ab.refCount.Add(1)
+	go ab.background(ctx)
 	return ab
 }
 
 // background periodically schedules a gc
-func (mab *memoryAddrBook) background() {
+func (mab *memoryAddrBook) background(ctx context.Context) {
+	defer mab.refCount.Done()
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 
@@ -94,8 +94,7 @@ func (mab *memoryAddrBook) background() {
 		select {
 		case <-ticker.C:
 			mab.gc()
-
-		case <-mab.ctx.Done():
+		case <-ctx.Done():
 			return
 		}
 	}
@@ -103,6 +102,7 @@ func (mab *memoryAddrBook) background() {
 
 func (mab *memoryAddrBook) Close() error {
 	mab.cancel()
+	mab.refCount.Wait()
 	return nil
 }
 
