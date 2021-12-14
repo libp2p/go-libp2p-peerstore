@@ -111,7 +111,6 @@ func (mab *memoryAddrBook) gc() {
 	now := time.Now()
 	for _, s := range mab.segments {
 		s.Lock()
-		var collectedPeers []peer.ID
 		for p, amap := range s.addrs {
 			for k, addr := range amap {
 				if addr.ExpiredBy(now) {
@@ -120,12 +119,8 @@ func (mab *memoryAddrBook) gc() {
 			}
 			if len(amap) == 0 {
 				delete(s.addrs, p)
-				collectedPeers = append(collectedPeers, p)
+				delete(s.signedPeerRecords, p)
 			}
-		}
-		// remove signed records for peers whose signed addrs have all been removed
-		for _, p := range collectedPeers {
-			delete(s.signedPeerRecords, p)
 		}
 		s.Unlock()
 	}
