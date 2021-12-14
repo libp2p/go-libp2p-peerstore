@@ -222,15 +222,13 @@ func (mab *memoryAddrBook) addAddrsUnlocked(s *addrSegment, p peer.ID, addrs []m
 			continue
 		}
 
-		k := string(addr.Bytes())
 		// find the highest TTL and Expiry time between
 		// existing records and function args
-		a, found := amap[k] // won't allocate.
-
+		a, found := amap[string(addr.Bytes())] // won't allocate.
 		if !found {
 			// not found, announce it.
 			entry := &expiringAddr{Addr: addr, Expires: exp, TTL: ttl}
-			amap[k] = entry
+			amap[string(addr.Bytes())] = entry
 			mab.subManager.BroadcastAddr(p, addr)
 		} else {
 			// update ttl & exp to whichever is greater between new and existing entry
