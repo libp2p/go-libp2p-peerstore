@@ -111,7 +111,6 @@ func (mab *memoryAddrBook) gc() {
 	now := time.Now()
 	for _, s := range mab.segments {
 		s.Lock()
-		var collectedPeers []peer.ID
 		for p, amap := range s.addrs {
 			for k, addr := range amap {
 				if addr.ExpiredBy(now) {
@@ -120,12 +119,8 @@ func (mab *memoryAddrBook) gc() {
 			}
 			if len(amap) == 0 {
 				delete(s.addrs, p)
-				collectedPeers = append(collectedPeers, p)
+				delete(s.signedPeerRecords, p)
 			}
-		}
-		// remove signed records for peers whose signed addrs have all been removed
-		for _, p := range collectedPeers {
-			delete(s.signedPeerRecords, p)
 		}
 		s.Unlock()
 	}
@@ -221,23 +216,19 @@ func (mab *memoryAddrBook) addAddrsUnlocked(s *addrSegment, p peer.ID, addrs []m
 	}
 
 	exp := time.Now().Add(ttl)
-	addrSet := make(map[string]struct{}, len(addrs))
 	for _, addr := range addrs {
 		if addr == nil {
 			log.Warnw("was passed nil multiaddr", "peer", p)
 			continue
 		}
-		k := string(addr.Bytes())
-		addrSet[k] = struct{}{}
 
 		// find the highest TTL and Expiry time between
 		// existing records and function args
-		a, found := amap[k] // won't allocate.
-
+		a, found := amap[string(addr.Bytes())] // won't allocate.
 		if !found {
 			// not found, announce it.
 			entry := &expiringAddr{Addr: addr, Expires: exp, TTL: ttl}
-			amap[k] = entry
+			amap[string(addr.Bytes())] = entry
 			mab.subManager.BroadcastAddr(p, addr)
 		} else {
 			// update ttl & exp to whichever is greater between new and existing entry
