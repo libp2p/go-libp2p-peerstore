@@ -7,8 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/libp2p/go-libp2p-peerstore/addr"
-
 	"github.com/libp2p/go-libp2p-core/peer"
 	pstore "github.com/libp2p/go-libp2p-core/peerstore"
 	"github.com/libp2p/go-libp2p-core/record"
@@ -486,18 +484,17 @@ func (mgr *AddrSubManager) AddrStream(ctx context.Context, p peer.ID, initial []
 	mgr.subs[p] = append(mgr.subs[p], sub)
 	mgr.mu.Unlock()
 
-	sort.Sort(addr.AddrList(initial))
+	sort.Sort(addrList(initial))
 
 	go func(buffer []ma.Multiaddr) {
 		defer close(out)
 
-		sent := make(map[string]bool, len(buffer))
-		var outch chan ma.Multiaddr
-
+		sent := make(map[string]struct{}, len(buffer))
 		for _, a := range buffer {
-			sent[string(a.Bytes())] = true
+			sent[string(a.Bytes())] = struct{}{}
 		}
 
+		var outch chan ma.Multiaddr
 		var next ma.Multiaddr
 		if len(buffer) > 0 {
 			next = buffer[0]
@@ -516,11 +513,11 @@ func (mgr *AddrSubManager) AddrStream(ctx context.Context, p peer.ID, initial []
 					next = nil
 				}
 			case naddr := <-sub.pubch:
-				if sent[string(naddr.Bytes())] {
+				if _, ok := sent[string(naddr.Bytes())]; ok {
 					continue
 				}
+				sent[string(naddr.Bytes())] = struct{}{}
 
-				sent[string(naddr.Bytes())] = true
 				if next == nil {
 					next = naddr
 					outch = out
@@ -532,7 +529,6 @@ func (mgr *AddrSubManager) AddrStream(ctx context.Context, p peer.ID, initial []
 				return
 			}
 		}
-
 	}(initial)
 
 	return out
