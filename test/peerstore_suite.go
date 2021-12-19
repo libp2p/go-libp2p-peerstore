@@ -268,23 +268,6 @@ func testPeerstoreProtoStore(ps pstore.Peerstore) func(t *testing.T) {
 			}
 		})
 
-		t.Run("bad peer ID", func(t *testing.T) {
-			badp := peer.ID("")
-			require.Error(t, ps.AddProtocols(badp, "proto"), "expected error when using a bad peer ID")
-
-			if _, err := ps.GetProtocols(badp); err == nil || err == pstore.ErrNotFound {
-				t.Fatal("expected error when using a bad peer ID")
-			}
-
-			if _, err := ps.SupportsProtocols(badp, "q", "w", "a", "y", "b"); err == nil || err == pstore.ErrNotFound {
-				t.Fatal("expected error when using a bad peer ID")
-			}
-
-			if err := ps.RemoveProtocols(badp); err == nil || err == pstore.ErrNotFound {
-				t.Fatal("expected error when using a bad peer ID")
-			}
-		})
-
 		t.Run("removing peer", func(t *testing.T) {
 			p := peer.ID("foobar")
 			protos := []string{"a", "b"}
@@ -328,10 +311,6 @@ func testBasicPeerstore(ps pstore.Peerstore) func(t *testing.T) {
 		if !pinfo.Addrs[0].Equal(addrs[0]) {
 			t.Fatal("stored wrong address")
 		}
-
-		// should fail silently...
-		ps.AddAddrs("", addrs, pstore.PermanentAddrTTL)
-		ps.Addrs("")
 	}
 }
 
@@ -358,13 +337,6 @@ func testMetadata(ps pstore.Peerstore) func(t *testing.T) {
 				v, err = ps.Get(p, "bar")
 				require.NoError(t, err)
 				require.Equal(t, v, 1)
-			}
-		})
-
-		t.Run("bad peer ID", func(t *testing.T) {
-			require.Error(t, ps.Put("", "foobar", "thing"), "expected error for bad peer ID")
-			if _, err := ps.Get("", "foobar"); err == nil || err == pstore.ErrNotFound {
-				t.Fatalf("expected error for bad peer ID")
 			}
 		})
 
