@@ -1,4 +1,4 @@
-package addr
+package pstoremem
 
 import (
 	"bytes"
@@ -12,27 +12,20 @@ func isFDCostlyTransport(a ma.Multiaddr) bool {
 	return mafmt.TCP.Matches(a)
 }
 
-type AddrList []ma.Multiaddr
+type addrList []ma.Multiaddr
 
-func (al AddrList) Len() int {
-	return len(al)
-}
+func (al addrList) Len() int      { return len(al) }
+func (al addrList) Swap(i, j int) { al[i], al[j] = al[j], al[i] }
 
-func (al AddrList) Swap(i, j int) {
-	al[i], al[j] = al[j], al[i]
-}
-
-func (al AddrList) Less(i, j int) bool {
+func (al addrList) Less(i, j int) bool {
 	a := al[i]
 	b := al[j]
 
 	// dial localhost addresses next, they should fail immediately
 	lba := manet.IsIPLoopback(a)
 	lbb := manet.IsIPLoopback(b)
-	if lba {
-		if !lbb {
-			return true
-		}
+	if lba && !lbb {
+		return true
 	}
 
 	// dial utp and similar 'non-fd-consuming' addresses first
