@@ -189,11 +189,6 @@ func (mab *memoryAddrBook) ConsumePeerRecord(recordEnvelope *record.Envelope, tt
 }
 
 func (mab *memoryAddrBook) addAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
-	if err := p.Validate(); err != nil {
-		log.Warnw("tried to set addrs for invalid peer ID", "peer", p, "error", err)
-		return
-	}
-
 	s := mab.segments.get(p)
 	s.Lock()
 	defer s.Unlock()
@@ -242,22 +237,12 @@ func (mab *memoryAddrBook) addAddrsUnlocked(s *addrSegment, p peer.ID, addrs []m
 
 // SetAddr calls mgr.SetAddrs(p, addr, ttl)
 func (mab *memoryAddrBook) SetAddr(p peer.ID, addr ma.Multiaddr, ttl time.Duration) {
-	if err := p.Validate(); err != nil {
-		log.Warnw("tried to set addrs for invalid peer ID", "peer", p, "error", err)
-		return
-	}
-
 	mab.SetAddrs(p, []ma.Multiaddr{addr}, ttl)
 }
 
 // SetAddrs sets the ttl on addresses. This clears any TTL there previously.
 // This is used when we receive the best estimate of the validity of an address.
 func (mab *memoryAddrBook) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duration) {
-	if err := p.Validate(); err != nil {
-		log.Warnw("tried to set addrs for invalid peer ID", "peer", p, "error", err)
-		return
-	}
-
 	s := mab.segments.get(p)
 	s.Lock()
 	defer s.Unlock()
@@ -290,11 +275,6 @@ func (mab *memoryAddrBook) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 // UpdateAddrs updates the addresses associated with the given peer that have
 // the given oldTTL to have the given newTTL.
 func (mab *memoryAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.Duration) {
-	if err := p.Validate(); err != nil {
-		log.Warnw("tried to set addrs for invalid peer ID", "peer", p, "error", err)
-		return
-	}
-
 	s := mab.segments.get(p)
 	s.Lock()
 	defer s.Unlock()
@@ -319,11 +299,6 @@ func (mab *memoryAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL t
 
 // Addrs returns all known (and valid) addresses for a given peer
 func (mab *memoryAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
-	if err := p.Validate(); err != nil {
-		// invalid peer ID = no addrs
-		return nil
-	}
-
 	s := mab.segments.get(p)
 	s.RLock()
 	defer s.RUnlock()
@@ -350,11 +325,6 @@ func validAddrs(amap map[string]*expiringAddr) []ma.Multiaddr {
 // given peer id, if one exists.
 // Returns nil if no signed PeerRecord exists for the peer.
 func (mab *memoryAddrBook) GetPeerRecord(p peer.ID) *record.Envelope {
-	if err := p.Validate(); err != nil {
-		// invalid peer ID = no addrs
-		return nil
-	}
-
 	s := mab.segments.get(p)
 	s.RLock()
 	defer s.RUnlock()
@@ -375,11 +345,6 @@ func (mab *memoryAddrBook) GetPeerRecord(p peer.ID) *record.Envelope {
 
 // ClearAddrs removes all previously stored addresses
 func (mab *memoryAddrBook) ClearAddrs(p peer.ID) {
-	if err := p.Validate(); err != nil {
-		// nothing to clear
-		return
-	}
-
 	s := mab.segments.get(p)
 	s.Lock()
 	defer s.Unlock()
@@ -391,13 +356,6 @@ func (mab *memoryAddrBook) ClearAddrs(p peer.ID) {
 // AddrStream returns a channel on which all new addresses discovered for a
 // given peer ID will be published.
 func (mab *memoryAddrBook) AddrStream(ctx context.Context, p peer.ID) <-chan ma.Multiaddr {
-	if err := p.Validate(); err != nil {
-		log.Warnw("tried to set addrs for invalid peer ID", "peer", p, "error", err)
-		ch := make(chan ma.Multiaddr)
-		close(ch)
-		return ch
-	}
-
 	s := mab.segments.get(p)
 	s.RLock()
 	defer s.RUnlock()
