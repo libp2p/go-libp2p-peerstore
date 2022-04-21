@@ -131,7 +131,7 @@ func (pb *memoryProtoBook) GetProtocols(p peer.ID) ([]string, error) {
 	s.RLock()
 	defer s.RUnlock()
 
-	out := make([]string, 0, len(s.protocols))
+	out := make([]string, 0, len(s.protocols[p]))
 	for k := range s.protocols[p] {
 		out = append(out, k)
 	}
