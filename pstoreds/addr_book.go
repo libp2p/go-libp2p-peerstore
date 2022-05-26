@@ -83,11 +83,11 @@ func (r *addrsRecord) flush(write ds.Write) (err error) {
 // * after an entry has been modified (e.g. addresses have been added or removed, TTLs updated, etc.)
 //
 // If the return value is true, the caller should perform a flush immediately to sync the record with the store.
-func (r *addrsRecord) clean() (chgd bool) {
-	now := time.Now().Unix()
+func (r *addrsRecord) clean(now time.Time) (chgd bool) {
+	nowUnix := now.Unix()
 	addrsLen := len(r.Addrs)
 
-	if !r.dirty && !r.hasExpiredAddrs(now) {
+	if !r.dirty && !r.hasExpiredAddrs(nowUnix) {
 		// record is not dirty, and we have no expired entries to purge.
 		return false
 	}
@@ -104,7 +104,7 @@ func (r *addrsRecord) clean() (chgd bool) {
 		})
 	}
 
-	r.Addrs = removeExpired(r.Addrs, now)
+	r.Addrs = removeExpired(r.Addrs, nowUnix)
 
 	return r.dirty || len(r.Addrs) != addrsLen
 }
@@ -144,6 +144,23 @@ type dsAddrBook struct {
 	// controls children goroutine lifetime.
 	childrenDone sync.WaitGroup
 	cancelFn     func()
+
+	clock clock
+}
+
+type clock interface {
+	Now() time.Time
+	After(d time.Duration) <-chan time.Time
+}
+
+type realclock struct{}
+
+func (rc realclock) Now() time.Time {
+	return time.Now()
+}
+
+func (rc realclock) After(d time.Duration) <-chan time.Time {
+	return time.After(d)
 }
 
 var _ pstore.AddrBook = (*dsAddrBook)(nil)
@@ -176,6 +193,11 @@ func NewAddrBook(ctx context.Context, store ds.Batching, opts Options) (ab *dsAd
 		opts:        opts,
 		cancelFn:    cancelFn,
 		subsManager: pstoremem.NewAddrSubManager(),
+		clock:       realclock{},
+	}
+
+	if opts.Clock != nil {
+		ab.clock = opts.Clock
 	}
 
 	if opts.CacheSize > 0 {
@@ -212,7 +234,7 @@ func (ab *dsAddrBook) loadRecord(id peer.ID, cache bool, update bool) (pr *addrs
 		pr.Lock()
 		defer pr.Unlock()
 
-		if pr.clean() && update {
+		if pr.clean(ab.clock.Now()) && update {
 			err = pr.flush(ab.ds)
 		}
 		return pr, err
@@ -231,7 +253,7 @@ func (ab *dsAddrBook) loadRecord(id peer.ID, cache bool, update bool) (pr *addrs
 			return nil, err
 		}
 		// this record is new and local for now (not in cache), so we don't need to lock.
-		if pr.clean() && update {
+		if pr.clean(ab.clock.Now()) && update {
 			err = pr.flush(ab.ds)
 		}
 	default:
@@ -383,7 +405,7 @@ func (ab *dsAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.D
 	pr.Lock()
 	defer pr.Unlock()
 
-	newExp := time.Now().Add(newTTL).Unix()
+	newExp := ab.clock.Now().Add(newTTL).Unix()
 	for _, entry := range pr.Addrs {
 		if entry.Ttl != int64(oldTTL) {
 			continue
@@ -392,7 +414,7 @@ func (ab *dsAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL time.D
 		pr.dirty = true
 	}
 
-	if pr.clean() {
+	if pr.clean(ab.clock.Now()) {
 		pr.flush(ab.ds)
 	}
 }
@@ -461,7 +483,7 @@ func (ab *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 	// 	return nil
 	// }
 
-	newExp := time.Now().Add(ttl).Unix()
+	newExp := ab.clock.Now().Add(ttl).Unix()
 	addrsMap := make(map[string]*pb.AddrBookRecord_AddrEntry, len(pr.Addrs))
 	for _, addr := range pr.Addrs {
 		addrsMap[string(addr.Addr.Bytes())] = addr
@@ -521,7 +543,7 @@ func (ab *dsAddrBook) setAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Duratio
 	// }
 
 	pr.dirty = true
-	pr.clean()
+	pr.clean(ab.clock.Now())
 	return pr.flush(ab.ds)
 }
 
@@ -567,7 +589,7 @@ func (ab *dsAddrBook) deleteAddrs(p peer.ID, addrs []ma.Multiaddr) (err error) {
 	pr.Addrs = deleteInPlace(pr.Addrs, addrs)
 
 	pr.dirty = true
-	pr.clean()
+	pr.clean(ab.clock.Now())
 	return pr.flush(ab.ds)
 }
 

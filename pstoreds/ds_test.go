@@ -15,6 +15,8 @@ import (
 
 	pstore "github.com/libp2p/go-libp2p-core/peerstore"
 	pt "github.com/libp2p/go-libp2p-peerstore/test"
+
+	mockClock "github.com/benbjohnson/clock"
 )
 
 type datastoreFactory func(tb testing.TB) (ds.Batching, func())
@@ -50,16 +52,20 @@ func TestDsAddrBook(t *testing.T) {
 			opts := DefaultOpts()
 			opts.GCPurgeInterval = 1 * time.Second
 			opts.CacheSize = 1024
+			clk := mockClock.NewMock()
+			opts.Clock = clk
 
-			pt.TestAddrBook(t, addressBookFactory(t, dsFactory, opts))
+			pt.TestAddrBook(t, addressBookFactory(t, dsFactory, opts), clk)
 		})
 
 		t.Run(name+" Cacheless", func(t *testing.T) {
 			opts := DefaultOpts()
 			opts.GCPurgeInterval = 1 * time.Second
 			opts.CacheSize = 0
+			clk := mockClock.NewMock()
+			opts.Clock = clk
 
-			pt.TestAddrBook(t, addressBookFactory(t, dsFactory, opts))
+			pt.TestAddrBook(t, addressBookFactory(t, dsFactory, opts), clk)
 		})
 	}
 }

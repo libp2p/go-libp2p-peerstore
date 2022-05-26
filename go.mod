@@ -5,6 +5,7 @@ go 1.17
 retract v0.2.9 // Contains backwards-incompatible changes. Use v0.3.0 instead.
 
 require (
+	github.com/benbjohnson/clock v1.3.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/ipfs/go-datastore v0.5.0

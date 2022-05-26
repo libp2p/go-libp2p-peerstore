@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	mockClock "github.com/benbjohnson/clock"
 	query "github.com/ipfs/go-datastore/query"
 	pstore "github.com/libp2p/go-libp2p-core/peerstore"
 	test "github.com/libp2p/go-libp2p-peerstore/test"
@@ -90,6 +91,8 @@ func TestGCPurging(t *testing.T) {
 	opts.GCInitialDelay = 90 * time.Hour
 	opts.GCLookaheadInterval = 20 * time.Second
 	opts.GCPurgeInterval = 1 * time.Second
+	clk := mockClock.NewMock()
+	opts.Clock = clk
 
 	factory := addressBookFactory(t, leveldbStore, opts)
 	ab, closeFn := factory()
@@ -120,7 +123,7 @@ func TestGCPurging(t *testing.T) {
 		t.Errorf("expected 4 GC lookahead entries, got: %v", i)
 	}
 
-	<-time.After(2 * time.Second)
+	clk.Add(2 * time.Second)
 	gc.purgeLookahead()
 	if i := tp.countLookaheadEntries(); i != 3 {
 		t.Errorf("expected 3 GC lookahead entries, got: %v", i)
@@ -129,13 +132,13 @@ func TestGCPurging(t *testing.T) {
 	// Purge the cache, to exercise a different path in the purge cycle.
 	tp.clearCache()
 
-	<-time.After(5 * time.Second)
+	clk.Add(5 * time.Second)
 	gc.purgeLookahead()
 	if i := tp.countLookaheadEntries(); i != 3 {
 		t.Errorf("expected 3 GC lookahead entries, got: %v", i)
 	}
 
-	<-time.After(5 * time.Second)
+	clk.Add(5 * time.Second)
 	gc.purgeLookahead()
 	if i := tp.countLookaheadEntries(); i != 1 {
 		t.Errorf("expected 1 GC lookahead entries, got: %v", i)
@@ -157,6 +160,8 @@ func TestGCDelay(t *testing.T) {
 	opts.GCInitialDelay = 2 * time.Second
 	opts.GCLookaheadInterval = 1 * time.Minute
 	opts.GCPurgeInterval = 30 * time.Second
+	clk := mockClock.NewMock()
+	opts.Clock = clk
 
 	factory := addressBookFactory(t, leveldbStore, opts)
 	ab, closeFn := factory()
@@ -172,7 +177,7 @@ func TestGCDelay(t *testing.T) {
 	}
 
 	// after the initial delay has passed.
-	<-time.After(3 * time.Second)
+	clk.Add(3 * time.Second)
 	if i := tp.countLookaheadEntries(); i != 1 {
 		t.Errorf("expected 1 lookahead entry, got: %d", i)
 	}
@@ -188,6 +193,8 @@ func TestGCLookaheadDisabled(t *testing.T) {
 	opts.GCInitialDelay = 90 * time.Hour
 	opts.GCLookaheadInterval = 0 // disable lookahead
 	opts.GCPurgeInterval = 9 * time.Hour
+	clk := mockClock.NewMock()
+	opts.Clock = clk
 
 	factory := addressBookFactory(t, leveldbStore, opts)
 	ab, closeFn := factory()
@@ -206,13 +213,13 @@ func TestGCLookaheadDisabled(t *testing.T) {
 	ab.AddAddrs(ids[2], addrs[30:40], 10*time.Hour)
 	ab.AddAddrs(ids[3], addrs[40:], 10*time.Hour)
 
-	time.Sleep(100 * time.Millisecond)
+	clk.Add(100 * time.Millisecond)
 
 	if i := tp.countLookaheadEntries(); i != 0 {
 		t.Errorf("expected no GC lookahead entries, got: %v", i)
 	}
 
-	time.Sleep(500 * time.Millisecond)
+	clk.Add(500 * time.Millisecond)
 	gc := ab.(*dsAddrBook).gc
 	gc.purgeFunc()
 
