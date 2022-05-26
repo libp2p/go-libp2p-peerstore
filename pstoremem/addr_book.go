@@ -49,6 +49,16 @@ func (segments *addrSegments) get(p peer.ID) *addrSegment {
 	return segments[byte(p[len(p)-1])]
 }
 
+type clock interface {
+	Now() time.Time
+}
+
+type realclock struct{}
+
+func (rc realclock) Now() time.Time {
+	return time.Now()
+}
+
 // memoryAddrBook manages addresses.
 type memoryAddrBook struct {
 	segments addrSegments
@@ -57,6 +67,7 @@ type memoryAddrBook struct {
 	cancel   func()
 
 	subManager *AddrSubManager
+	clock      clock
 }
 
 var _ pstore.AddrBook = (*memoryAddrBook)(nil)
@@ -76,10 +87,20 @@ func NewAddrBook() *memoryAddrBook {
 		}(),
 		subManager: NewAddrSubManager(),
 		cancel:     cancel,
+		clock:      realclock{},
 	}
 	ab.refCount.Add(1)
 	go ab.background(ctx)
 	return ab
+}
+
+type AddrBookOption func(book *memoryAddrBook) error
+
+func WithClock(clock clock) AddrBookOption {
+	return func(book *memoryAddrBook) error {
+		book.clock = clock
+		return nil
+	}
 }
 
 // background periodically schedules a gc
@@ -106,7 +127,7 @@ func (mab *memoryAddrBook) Close() error {
 
 // gc garbage collects the in-memory address book.
 func (mab *memoryAddrBook) gc() {
-	now := time.Now()
+	now := mab.clock.Now()
 	for _, s := range mab.segments {
 		s.Lock()
 		for p, amap := range s.addrs {
@@ -208,7 +229,7 @@ func (mab *memoryAddrBook) addAddrsUnlocked(s *addrSegment, p peer.ID, addrs []m
 		s.addrs[p] = amap
 	}
 
-	exp := time.Now().Add(ttl)
+	exp := mab.clock.Now().Add(ttl)
 	for _, addr := range addrs {
 		if addr == nil {
 			log.Warnw("was passed nil multiaddr", "peer", p)
@@ -253,7 +274,7 @@ func (mab *memoryAddrBook) SetAddrs(p peer.ID, addrs []ma.Multiaddr, ttl time.Du
 		s.addrs[p] = amap
 	}
 
-	exp := time.Now().Add(ttl)
+	exp := mab.clock.Now().Add(ttl)
 	for _, addr := range addrs {
 		if addr == nil {
 			log.Warnw("was passed nil multiaddr", "peer", p)
@@ -278,7 +299,7 @@ func (mab *memoryAddrBook) UpdateAddrs(p peer.ID, oldTTL time.Duration, newTTL t
 	s := mab.segments.get(p)
 	s.Lock()
 	defer s.Unlock()
-	exp := time.Now().Add(newTTL)
+	exp := mab.clock.Now().Add(newTTL)
 	amap, found := s.addrs[p]
 	if !found {
 		return
@@ -303,11 +324,10 @@ func (mab *memoryAddrBook) Addrs(p peer.ID) []ma.Multiaddr {
 	s.RLock()
 	defer s.RUnlock()
 
-	return validAddrs(s.addrs[p])
+	return validAddrs(mab.clock.Now(), s.addrs[p])
 }
 
-func validAddrs(amap map[string]*expiringAddr) []ma.Multiaddr {
-	now := time.Now()
+func validAddrs(now time.Time, amap map[string]*expiringAddr) []ma.Multiaddr {
 	good := make([]ma.Multiaddr, 0, len(amap))
 	if amap == nil {
 		return good
@@ -332,7 +352,7 @@ func (mab *memoryAddrBook) GetPeerRecord(p peer.ID) *record.Envelope {
 	// although the signed record gets garbage collected when all addrs inside it are expired,
 	// we may be in between the expiration time and the GC interval
 	// so, we check to see if we have any valid signed addrs before returning the record
-	if len(validAddrs(s.addrs[p])) == 0 {
+	if len(validAddrs(mab.clock.Now(), s.addrs[p])) == 0 {
 		return nil
 	}
 
