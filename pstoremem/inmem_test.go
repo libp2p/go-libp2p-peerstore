@@ -7,6 +7,7 @@ import (
 
 	pstore "github.com/libp2p/go-libp2p-core/peerstore"
 
+	mockClock "github.com/benbjohnson/clock"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
 )
@@ -43,11 +44,12 @@ func TestPeerstoreProtoStoreLimits(t *testing.T) {
 }
 
 func TestInMemoryAddrBook(t *testing.T) {
+	clk := mockClock.NewMock()
 	pt.TestAddrBook(t, func() (pstore.AddrBook, func()) {
-		ps, err := NewPeerstore()
+		ps, err := NewPeerstore(WithClock(clk))
 		require.NoError(t, err)
 		return ps, func() { ps.Close() }
-	})
+	}, clk)
 }
 
 func TestInMemoryKeyBook(t *testing.T) {

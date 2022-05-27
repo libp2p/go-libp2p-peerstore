@@ -1,18 +1,20 @@
 package test
 
 import (
+	"testing"
+	"time"
+
+	mockClock "github.com/benbjohnson/clock"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/record"
 	"github.com/libp2p/go-libp2p-core/test"
 	"github.com/multiformats/go-multiaddr"
-	"testing"
-	"time"
 
 	pstore "github.com/libp2p/go-libp2p-core/peerstore"
 )
 
-var addressBookSuite = map[string]func(book pstore.AddrBook) func(*testing.T){
+var addressBookSuite = map[string]func(book pstore.AddrBook, clk *mockClock.Mock) func(*testing.T){
 	"AddAddress":           testAddAddress,
 	"Clear":                testClearWorks,
 	"SetNegativeTTLClears": testSetNegativeTTLClears,
@@ -26,13 +28,13 @@ var addressBookSuite = map[string]func(book pstore.AddrBook) func(*testing.T){
 
 type AddrBookFactory func() (pstore.AddrBook, func())
 
-func TestAddrBook(t *testing.T, factory AddrBookFactory) {
+func TestAddrBook(t *testing.T, factory AddrBookFactory, clk *mockClock.Mock) {
 	for name, test := range addressBookSuite {
 		// Create a new peerstore.
 		ab, closeFunc := factory()
 
 		// Run the test.
-		t.Run(name, test(ab))
+		t.Run(name, test(ab, clk))
 
 		// Cleanup.
 		if closeFunc != nil {
@@ -41,7 +43,7 @@ func TestAddrBook(t *testing.T, factory AddrBookFactory) {
 	}
 }
 
-func testAddAddress(ab pstore.AddrBook) func(*testing.T) {
+func testAddAddress(ab pstore.AddrBook, clk *mockClock.Mock) func(*testing.T) {
 	return func(t *testing.T) {
 		t.Run("add a single address", func(t *testing.T) {
 			id := GeneratePeerIDs(1)[0]
@@ -90,7 +92,7 @@ func testAddAddress(ab pstore.AddrBook) func(*testing.T) {
 			ab.AddAddrs(id, addrs[2:], time.Hour)
 
 			// after the initial TTL has expired, check that only the third address is present.
-			time.Sleep(1200 * time.Millisecond)
+			clk.Add(1200 * time.Millisecond)
 			AssertAddressesEqual(t, addrs[2:], ab.Addrs(id))
 
 			// make sure we actually set the TTL
@@ -109,7 +111,7 @@ func testAddAddress(ab pstore.AddrBook) func(*testing.T) {
 
 			// after the initial TTL has expired, check that all three addresses are still present (i.e. the TTL on
 			// the modified one was not shortened).
-			time.Sleep(2100 * time.Millisecond)
+			clk.Add(2100 * time.Millisecond)
 			AssertAddressesEqual(t, addrs, ab.Addrs(id))
 		})
 
@@ -119,11 +121,11 @@ func testAddAddress(ab pstore.AddrBook) func(*testing.T) {
 
 			ab.AddAddrs(id, addrs, 4*time.Second)
 			// 4 seconds left
-			time.Sleep(2 * time.Second)
+			clk.Add(2 * time.Second)
 			// 2 second left
 			ab.AddAddrs(id, addrs, 3*time.Second)
 			// 3 seconds left
-			time.Sleep(1 * time.Second)
+			clk.Add(1 * time.Second)
 			// 2 seconds left.
 
 			// We still have the address.
@@ -136,7 +138,7 @@ func testAddAddress(ab pstore.AddrBook) func(*testing.T) {
 	}
 }
 
-func testClearWorks(ab pstore.AddrBook) func(t *testing.T) {
+func testClearWorks(ab pstore.AddrBook, clk *mockClock.Mock) func(t *testing.T) {
 	return func(t *testing.T) {
 		ids := GeneratePeerIDs(2)
 		addrs := GenerateAddrs(5)
@@ -157,7 +159,7 @@ func testClearWorks(ab pstore.AddrBook) func(t *testing.T) {
 	}
 }
 
-func testSetNegativeTTLClears(m pstore.AddrBook) func(t *testing.T) {
+func testSetNegativeTTLClears(m pstore.AddrBook, clk *mockClock.Mock) func(t *testing.T) {
 	return func(t *testing.T) {
 		id := GeneratePeerIDs(1)[0]
 		addrs := GenerateAddrs(100)
@@ -201,7 +203,7 @@ func testSetNegativeTTLClears(m pstore.AddrBook) func(t *testing.T) {
 	}
 }
 
-func testUpdateTTLs(m pstore.AddrBook) func(t *testing.T) {
+func testUpdateTTLs(m pstore.AddrBook, clk *mockClock.Mock) func(t *testing.T) {
 	return func(t *testing.T) {
 		t.Run("update ttl of peer with no addrs", func(t *testing.T) {
 			id := GeneratePeerIDs(1)[0]
@@ -246,7 +248,7 @@ func testUpdateTTLs(m pstore.AddrBook) func(t *testing.T) {
 			AssertAddressesEqual(t, addrs2, m.Addrs(ids[1]))
 
 			// After a wait, addrs[0] is gone.
-			time.Sleep(2 * time.Second)
+			clk.Add(2 * time.Second)
 			AssertAddressesEqual(t, addrs1[1:2], m.Addrs(ids[0]))
 			AssertAddressesEqual(t, addrs2, m.Addrs(ids[1]))
 
@@ -257,7 +259,7 @@ func testUpdateTTLs(m pstore.AddrBook) func(t *testing.T) {
 			AssertAddressesEqual(t, addrs1[1:2], m.Addrs(ids[0]))
 			AssertAddressesEqual(t, addrs2, m.Addrs(ids[1]))
 
-			time.Sleep(2 * time.Second)
+			clk.Add(2 * time.Second)
 
 			// First addrs is gone in both.
 			AssertAddressesEqual(t, addrs1[1:], m.Addrs(ids[0]))
@@ -267,7 +269,7 @@ func testUpdateTTLs(m pstore.AddrBook) func(t *testing.T) {
 	}
 }
 
-func testNilAddrsDontBreak(m pstore.AddrBook) func(t *testing.T) {
+func testNilAddrsDontBreak(m pstore.AddrBook, clk *mockClock.Mock) func(t *testing.T) {
 	return func(t *testing.T) {
 		id := GeneratePeerIDs(1)[0]
 
@@ -276,7 +278,7 @@ func testNilAddrsDontBreak(m pstore.AddrBook) func(t *testing.T) {
 	}
 }
 
-func testAddressesExpire(m pstore.AddrBook) func(t *testing.T) {
+func testAddressesExpire(m pstore.AddrBook, clk *mockClock.Mock) func(t *testing.T) {
 	return func(t *testing.T) {
 		ids := GeneratePeerIDs(2)
 		addrs1 := GenerateAddrs(3)
@@ -295,33 +297,33 @@ func testAddressesExpire(m pstore.AddrBook) func(t *testing.T) {
 		AssertAddressesEqual(t, addrs2, m.Addrs(ids[1]))
 
 		m.SetAddr(ids[0], addrs1[0], 100*time.Microsecond)
-		<-time.After(100 * time.Millisecond)
+		clk.Add(100 * time.Millisecond)
 		AssertAddressesEqual(t, addrs1[1:3], m.Addrs(ids[0]))
 		AssertAddressesEqual(t, addrs2, m.Addrs(ids[1]))
 
 		m.SetAddr(ids[0], addrs1[2], 100*time.Microsecond)
-		<-time.After(100 * time.Millisecond)
+		clk.Add(100 * time.Millisecond)
 		AssertAddressesEqual(t, addrs1[1:2], m.Addrs(ids[0]))
 		AssertAddressesEqual(t, addrs2, m.Addrs(ids[1]))
 
 		m.SetAddr(ids[1], addrs2[0], 100*time.Microsecond)
-		<-time.After(100 * time.Millisecond)
+		clk.Add(100 * time.Millisecond)
 		AssertAddressesEqual(t, addrs1[1:2], m.Addrs(ids[0]))
 		AssertAddressesEqual(t, addrs2[1:], m.Addrs(ids[1]))
 
 		m.SetAddr(ids[1], addrs2[1], 100*time.Microsecond)
-		<-time.After(100 * time.Millisecond)
+		clk.Add(100 * time.Millisecond)
 		AssertAddressesEqual(t, addrs1[1:2], m.Addrs(ids[0]))
 		AssertAddressesEqual(t, nil, m.Addrs(ids[1]))
 
 		m.SetAddr(ids[0], addrs1[1], 100*time.Microsecond)
-		<-time.After(100 * time.Millisecond)
+		clk.Add(100 * time.Millisecond)
 		AssertAddressesEqual(t, nil, m.Addrs(ids[0]))
 		AssertAddressesEqual(t, nil, m.Addrs(ids[1]))
 	}
 }
 
-func testClearWithIterator(m pstore.AddrBook) func(t *testing.T) {
+func testClearWithIterator(m pstore.AddrBook, clk *mockClock.Mock) func(t *testing.T) {
 	return func(t *testing.T) {
 		ids := GeneratePeerIDs(2)
 		addrs := GenerateAddrs(100)
@@ -348,7 +350,7 @@ func testClearWithIterator(m pstore.AddrBook) func(t *testing.T) {
 	}
 }
 
-func testPeersWithAddrs(m pstore.AddrBook) func(t *testing.T) {
+func testPeersWithAddrs(m pstore.AddrBook, clk *mockClock.Mock) func(t *testing.T) {
 	return func(t *testing.T) {
 		// cannot run in parallel as the store is modified.
 		// go runs sequentially in the specified order
@@ -374,7 +376,7 @@ func testPeersWithAddrs(m pstore.AddrBook) func(t *testing.T) {
 	}
 }
 
-func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
+func testCertifiedAddresses(m pstore.AddrBook, clk *mockClock.Mock) func(*testing.T) {
 	return func(t *testing.T) {
 		cab := m.(pstore.CertifiedAddrBook)
 
@@ -485,7 +487,7 @@ func testCertifiedAddresses(m pstore.AddrBook) func(*testing.T) {
 		test.AssertNilError(t, err)
 		AssertAddressesEqual(t, certifiedAddrs, m.Addrs(id))
 
-		time.Sleep(2 * time.Second)
+		clk.Add(2 * time.Second)
 		if cab.GetPeerRecord(id) != nil {
 			t.Error("expected signed peer record to be removed when addresses expire")
 		}
