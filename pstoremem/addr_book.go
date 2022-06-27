@@ -147,17 +147,21 @@ func (mab *memoryAddrBook) gc() {
 
 func (mab *memoryAddrBook) PeersWithAddrs() peer.IDSlice {
 	// deduplicate, since the same peer could have both signed & unsigned addrs
-	pidSet := peer.NewSet()
+	set := make(map[peer.ID]struct{})
 	for _, s := range mab.segments {
 		s.RLock()
 		for pid, amap := range s.addrs {
 			if len(amap) > 0 {
-				pidSet.Add(pid)
+				set[pid] = struct{}{}
 			}
 		}
 		s.RUnlock()
 	}
-	return pidSet.Peers()
+	peers := make(peer.IDSlice, 0, len(set))
+	for pid := range set {
+		peers = append(peers, pid)
+	}
+	return peers
 }
 
 // AddAddr calls AddAddrs(p, []ma.Multiaddr{addr}, ttl)
