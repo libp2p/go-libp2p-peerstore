@@ -6,10 +6,12 @@ import (
 	"time"
 
 	mockClock "github.com/benbjohnson/clock"
-	query "github.com/ipfs/go-datastore/query"
+	"github.com/ipfs/go-datastore/query"
 	pstore "github.com/libp2p/go-libp2p-core/peerstore"
-	test "github.com/libp2p/go-libp2p-peerstore/test"
+	"github.com/libp2p/go-libp2p-peerstore/test"
 	ma "github.com/multiformats/go-multiaddr"
+
+	"github.com/stretchr/testify/require"
 )
 
 var lookaheadQuery = query.Query{Prefix: gcLookaheadBase.String(), KeysOnly: true}
@@ -31,6 +33,7 @@ func (tp *testProbe) countLookaheadEntries() (i int) {
 	}
 	return i
 }
+
 func (tp *testProbe) clearCache() {
 	for _, k := range tp.ab.(*dsAddrBook).cache.Keys() {
 		tp.ab.(*dsAddrBook).cache.Remove(k)
@@ -155,17 +158,18 @@ func TestGCDelay(t *testing.T) {
 	ids := test.GeneratePeerIDs(10)
 	addrs := test.GenerateAddrs(100)
 
+	clk := mockClock.NewMock()
 	opts := DefaultOpts()
-
 	opts.GCInitialDelay = 2 * time.Second
 	opts.GCLookaheadInterval = 1 * time.Minute
 	opts.GCPurgeInterval = 30 * time.Second
-	clk := mockClock.NewMock()
 	opts.Clock = clk
 
 	factory := addressBookFactory(t, leveldbStore, opts)
 	ab, closeFn := factory()
 	defer closeFn()
+	// give the background Go routine some time to start
+	time.Sleep(100 * time.Millisecond)
 
 	tp := &testProbe{t, ab}
 
@@ -173,14 +177,12 @@ func TestGCDelay(t *testing.T) {
 
 	// immediately after we should be having no lookahead entries.
 	if i := tp.countLookaheadEntries(); i != 0 {
-		t.Errorf("expected no lookahead entries, got: %d", i)
+		t.Fatalf("expected no lookahead entries, got: %d", i)
 	}
 
 	// after the initial delay has passed.
 	clk.Add(3 * time.Second)
-	if i := tp.countLookaheadEntries(); i != 1 {
-		t.Errorf("expected 1 lookahead entry, got: %d", i)
-	}
+	require.Eventually(t, func() bool { return tp.countLookaheadEntries() == 1 }, 3000*time.Millisecond, 10*time.Millisecond, "expected 1 lookahead entry")
 }
 
 func TestGCLookaheadDisabled(t *testing.T) {
