@@ -2,7 +2,6 @@ package peerstore
 
 import (
 	"fmt"
-	"math"
 	"math/rand"
 	"testing"
 	"time"
@@ -44,21 +43,21 @@ func TestLatencyEWMA(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	exp := 100.0
-	mu := exp
-	sig := 10.0
-	next := func() time.Duration {
-		mu := (rand.NormFloat64() * sig) + mu
-		return time.Duration(mu)
-	}
+	const exp = 100
+	const mu = exp
+	const sig = 10
+	next := func() time.Duration { return time.Duration(rand.Intn(20) - 10 + mu) }
 
 	for i := 0; i < 10; i++ {
-		time.Sleep(200 * time.Millisecond)
 		m.RecordLatency(id, next())
 	}
 
 	lat := m.LatencyEWMA(id)
-	if math.Abs(exp-float64(lat)) > sig {
-		t.Fatal("latency outside of expected range: ", exp, lat, sig)
+	diff := exp - lat
+	if diff < 0 {
+		diff = -diff
+	}
+	if diff > sig {
+		t.Fatalf("latency outside of expected range. expected %d ± %d, got %d", exp, sig, lat)
 	}
 }
