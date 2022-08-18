@@ -1,3 +1,8 @@
+# DEPRECATION NOTICE
+
+This package has moved into go-libp2p as a sub-package, `github.com/libp2p/go-libp2p/p2p/host/peerstore`.
+
+
 # go-libp2p-peerstore
 [![](https://img.shields.io/badge/made%20by-Protocol%20Labs-blue.svg?style=flat-square)](https://protocol.ai)
 [![](https://img.shields.io/badge/project-libp2p-yellow.svg?style=flat-square)](https://libp2p.io/)
