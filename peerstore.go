@@ -1,22 +1,18 @@
+// Deprecated: This package has moved into go-libp2p as a sub-package: github.com/libp2p/go-libp2p/p2p/host/peerstore.
 package peerstore
 
 import (
-	"github.com/libp2p/go-libp2p-core/peer"
-	pstore "github.com/libp2p/go-libp2p-core/peerstore"
+	"github.com/libp2p/go-libp2p/core/peer"
+	pstore "github.com/libp2p/go-libp2p/core/peerstore"
+	"github.com/libp2p/go-libp2p/p2p/host/peerstore"
 )
 
+// Deprecated: use github.com/libp2p/go-libp2p/p2p/host/peerstore.PeerInfos instead
 func PeerInfos(ps pstore.Peerstore, peers peer.IDSlice) []peer.AddrInfo {
-	pi := make([]peer.AddrInfo, len(peers))
-	for i, p := range peers {
-		pi[i] = ps.PeerInfo(p)
-	}
-	return pi
+	return peerstore.PeerInfos(ps, peers)
 }
 
+// Deprecated: use github.com/libp2p/go-libp2p/p2p/host/peerstore.PeerInfoIDs instead
 func PeerInfoIDs(pis []peer.AddrInfo) peer.IDSlice {
-	ps := make(peer.IDSlice, len(pis))
-	for i, pi := range pis {
-		ps[i] = pi.ID
-	}
-	return ps
+	return peerstore.PeerInfoIDs(pis)
 }
